@@ -1,7 +1,7 @@
 """Score post-processing variants of one generated system on a split (Phase 5 selection on val).
 
     python scripts/eval_post.py <system> --split val --variant NAME "key=val key=val" [--variant ...]
-Each variant runs autochart.post.cli with those --set overrides, then the harness; the table
+Each variant runs riffchart.post.cli with those --set overrides, then the harness; the table
 (mean over songs, per difficulty) is printed and appended to data/eval/post_variants.csv.
 """
 import argparse
@@ -26,11 +26,11 @@ todo = ([(args.system, None)] if args.include_raw else []) + [(f"{args.system}__
 for name, sets in todo:
     if sets is not None:
         shutil.rmtree(Path("data/outputs") / name, ignore_errors=True)
-        cmd = [py, "-m", "autochart.post.cli", args.system, name, "--split", args.split]
+        cmd = [py, "-m", "riffchart.post.cli", args.system, name, "--split", args.split]
         for s in sets.split():
             cmd += ["--set", s]
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.run([py, "-m", "autochart.eval.harness", name, "--split", args.split], check=True,
+    subprocess.run([py, "-m", "riffchart.eval.harness", name, "--split", args.split], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     summ = json.loads((Path("data/eval") / name / f"summary_{args.split}.json").read_text())
     for d in ("expert", "hard", "medium", "easy"):

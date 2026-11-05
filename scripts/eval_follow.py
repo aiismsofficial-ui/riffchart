@@ -2,7 +2,7 @@
 
     python scripts/eval_follow.py [--split val] [--songs 15]
 
-For each song: load the mix, run separation + beat tracking once (AutoCharter.analyse), then chart it with
+For each song: load the mix, run separation + beat tracking once (RiffCharter.analyse), then chart it with
 each variant and write data/outputs/fl_<variant>/<song_id>. Variants:
   base          follow=guitar, ladder off   (the product before this change)
   ladder        follow=guitar, ladder on
@@ -21,9 +21,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from autochart.audio.io import load_mix  # noqa: E402
-from autochart.baselines.common import split_songs, write_song_folder  # noqa: E402
-from autochart.product.core import OUT_SR, AutoCharter, Style  # noqa: E402
+from riffchart.audio.io import load_mix  # noqa: E402
+from riffchart.baselines.common import split_songs, write_song_folder  # noqa: E402
+from riffchart.product.core import OUT_SR, RiffCharter, Style  # noqa: E402
 
 VARIANTS = {"base": ("guitar", False), "ladder": ("guitar", True), "ladder_auto": ("auto", True)}
 ORDER = ("expert", "hard", "medium", "easy")
@@ -46,7 +46,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--split", default="val")
 ap.add_argument("--songs", type=int, default=15)
 args = ap.parse_args()
-ac = AutoCharter()
+ac = RiffCharter()
 songs = split_songs("data", args.split)
 songs = songs[(songs.audio_s > 90) & (songs.audio_s < 330)]
 songs = songs.sort_values("real_hard", ascending=False, kind="stable").head(args.songs)   # human reductions first
@@ -59,7 +59,7 @@ for i, r in enumerate(songs.itertuples(), 1):
     for v, (follow, lad) in VARIANTS.items():
         ac.post_cfg.setdefault("ladder", {})["enabled"] = lad
         song, play, _ = ac.chart_analysis(an, style=Style(follow=follow))
-        write_song_folder(Path("data/outputs") / f"fl_{v}" / r.song_id, song, str(r.name), str(r.artist), "autochart",
+        write_song_folder(Path("data/outputs") / f"fl_{v}" / r.song_id, song, str(r.name), str(r.artist), "riffchart",
                           float(r.audio_s))
         for d, n in inversions(song).items():
             stats[v]["inv"][d] += n
@@ -74,7 +74,7 @@ for i, r in enumerate(songs.itertuples(), 1):
 py = sys.executable
 print("\nscoring...", flush=True)
 for v in VARIANTS:
-    subprocess.run([py, "-m", "autochart.eval.harness", f"fl_{v}", "--split", args.split], check=True,
+    subprocess.run([py, "-m", "riffchart.eval.harness", f"fl_{v}", "--split", args.split], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 print(f"\n{'variant':<12} {'diff':<7} {'F1@50':>6} {'P@50':>6} {'dens':>6} {'vsE':>6} {'inv':>5}")
 for v in VARIANTS:

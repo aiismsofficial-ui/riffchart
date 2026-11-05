@@ -1,7 +1,7 @@
 import numpy as np
 
-from autochart.formats.song import TempoMap
-from autochart.timing.grid import GRID, MUSICAL_POSITIONS, grid_to_sec, grid_to_ticks, phase_class, snap
+from riffchart.formats.song import TempoMap
+from riffchart.timing.grid import GRID, MUSICAL_POSITIONS, grid_to_sec, grid_to_ticks, phase_class, snap
 
 
 def test_musical_positions_cover_16ths_32nds_and_triplets():

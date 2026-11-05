@@ -27,7 +27,7 @@ AUDIO_EXTS = (".ogg", ".opus", ".mp3", ".wav")
 
 
 def find_exe(cli: str | None) -> Path | None:
-    from autochart.product.clonehero import find_exe as _find
+    from riffchart.product.clonehero import find_exe as _find
     return _find(cli)
 
 

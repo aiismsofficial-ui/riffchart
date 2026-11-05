@@ -1,7 +1,7 @@
 [project]
-name = "autochart"
+name = "riffchart"
 version = "0.1.0"
-description = "Audio -> Clone Hero 5-fret guitar autocharter"
+description = "RiffChart: audio -> Clone Hero / YARG 5-fret guitar charts"
 requires-python = ">=3.12,<3.13"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
@@ -43,9 +43,9 @@ dev = [
 ]
 
 [project.scripts]
-autochart-audit = "autochart.data.cli:main"
-autochart = "autochart.product.cli:main"
-autochart-ui = "autochart.ui.server:main"
+riffchart-audit = "riffchart.data.cli:main"
+riffchart = "riffchart.product.cli:main"
+riffchart-ui = "riffchart.ui.server:main"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
@@ -64,7 +64,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/autochart"]
+packages = ["src/riffchart"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

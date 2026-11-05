@@ -1,4 +1,4 @@
-# autochart-ui: the local web app (library screen + chart editor). Runs only on this PC.
+# riffchart-ui (RiffChart): the local web app (library screen + chart editor). Runs only on this PC.
 host: 127.0.0.1            # localhost only: nothing is reachable from other machines
 port: 8765
 open_browser: true
@@ -9,7 +9,7 @@ workspace: data/ui/songs
 # Audio dropped into the browser is copied here until it has been charted, then deleted.
 uploads: data/ui/uploads
 # "Export" copies a finished song folder here. Added to Clone Hero as a song folder.
-export_dir: ~/Documents/autochart songs
+export_dir: ~/Documents/RiffChart songs
 
 # Never written to (export, save, delete are refused inside these folders). Opening charts from them is fine.
 # List your own chart libraries in configs/ui.local.yaml (gitignored; merged over this file).

@@ -1,9 +1,9 @@
 import numpy as np
 import pytest
 
-from autochart.eval.metrics import Events, evaluate, pitch
-from autochart.eval.playability import check
-from autochart.formats.song import OPEN_BIT, NoteType
+from riffchart.eval.metrics import Events, evaluate, pitch
+from riffchart.eval.playability import check
+from riffchart.formats.song import OPEN_BIT, NoteType
 
 S, H, T = NoteType.STRUM, NoteType.HOPO, NoteType.TAP
 RULES = {"stack_s": 0.01, "sustain_gap_s": -0.001, "min_sustain_s": 0.05, "jump_frets": 3,

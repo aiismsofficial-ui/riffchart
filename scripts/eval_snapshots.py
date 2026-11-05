@@ -27,15 +27,15 @@ for spec in args.ckpts:
         sysname = f"snap_{name}_{split}" + (f"_s{args.seed}" if args.seed != "0" else "") + ("_E" if args.diffs else "")
         names.append((sysname, split))
         print(f"{time.strftime('%H:%M:%S')} {name} on {split} ({n} songs)", flush=True)
-        subprocess.run([py, "-m", "autochart.model.generate", "--ckpt", ck, "--split", split, "--limit", n,
+        subprocess.run([py, "-m", "riffchart.model.generate", "--ckpt", ck, "--split", split, "--limit", n,
                         "--name", sysname, "--temperature", args.temperature, "--min-gap", "auto",
                         "--source", args.source, "--seed", args.seed] + (["--diffs", args.diffs] if args.diffs else []),
                        check=True)
-        subprocess.run([py, "-m", "autochart.eval.harness", sysname, "--split", split], check=True,
+        subprocess.run([py, "-m", "riffchart.eval.harness", sysname, "--split", split], check=True,
                        stdout=subprocess.DEVNULL)
 for split, _ in splits:
     systems = [s for s, sp in names if sp == split]
-    out = subprocess.run([py, "-m", "autochart.eval.harness", *systems, "--split", split, "--compare"],
+    out = subprocess.run([py, "-m", "riffchart.eval.harness", *systems, "--split", split, "--compare"],
                          check=True, capture_output=True, text=True).stdout
     print(f"\n## {split}\n{out}", flush=True)
     Path("data/eval").mkdir(exist_ok=True)

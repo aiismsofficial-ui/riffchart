@@ -1,4 +1,4 @@
-# autochart
+# RiffChart
 
 AI autocharter for **Clone Hero** and **YARG**: give it a song, get a playable 5-fret guitar chart in
 all four difficulties (Expert, Hard, Medium, Easy), with star power, HOPOs, taps and sustains. It comes
@@ -48,7 +48,7 @@ Settings live in `configs/*.yaml`. Put anything specific to your PC (your folder
 `configs/ui.local.yaml`:
 
 ```yaml
-export_dir: D:/Clone Hero/Songs/autochart
+export_dir: D:/Clone Hero/Songs/riffchart
 protected:                      # your own chart folders: the app never writes inside these
   - D:/Clone Hero/Songs
 ```
@@ -58,23 +58,23 @@ protected:                      # your own chart folders: the app never writes i
 Once models are available (see below):
 
 ```bash
-.venv/Scripts/autochart-ui                                   # the app, opens http://127.0.0.1:8765/
-.venv/Scripts/autochart "Artist - Song.mp3" --out "D:/Clone Hero/Songs/autochart"
-.venv/Scripts/autochart "D:/music/some album" --out <folder> --style density=-0.3,chords=low
+.venv/Scripts/riffchart-ui                                   # the app, opens http://127.0.0.1:8765/
+.venv/Scripts/riffchart "Artist - Song.mp3" --out "D:/Clone Hero/Songs/riffchart"
+.venv/Scripts/riffchart "D:/music/some album" --out <folder> --style density=-0.3,chords=low
 ```
 
 The command line takes mp3, ogg, opus, flac or wav files, or folders of them, and skips songs that are
-already charted (`--overwrite` to redo). Run `autochart --help` for all options.
+already charted (`--overwrite` to redo). Run `riffchart --help` for all options.
 
 ## Models
 
-autochart needs two trained models: the chart model (`configs/product.yaml: chart_ckpt`) and a
+RiffChart needs two trained models: the chart model (`configs/product.yaml: chart_ckpt`) and a
 fine-tuned beat tracker. They are not in this repository and have not been released yet. Stem
 separation uses [Demucs](https://github.com/facebookresearch/demucs) (`htdemucs_6s`), which downloads
 its own weights on first use.
 
 You can train your own from a library of charts with matching audio. The pipeline (data audit,
-artist-disjoint splits, stem separation, features, training, evaluation) is in `src/autochart/` and
+artist-disjoint splits, stem separation, features, training, evaluation) is in `src/riffchart/` and
 described in [DESIGN.md](DESIGN.md). Your charts and audio stay on your PC: `data/` is gitignored and
 the chart library is only ever read.
 

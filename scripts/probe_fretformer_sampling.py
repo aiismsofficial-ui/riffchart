@@ -6,9 +6,9 @@ from pathlib import Path
 import numpy as np
 import yaml
 
-from autochart.baselines.common import split_songs, write_song_folder
-from autochart.baselines.fretformer import Fretformer, tokens_to_song
-from autochart.eval.harness import score_system, summarize
+from riffchart.baselines.common import split_songs, write_song_folder
+from riffchart.baselines.fretformer import Fretformer, tokens_to_song
+from riffchart.eval.harness import score_system, summarize
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 6
 cfg = yaml.safe_load(open("configs/eval.yaml"))

@@ -17,12 +17,12 @@ import soundfile as sf
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from autochart.baselines.common import split_songs, write_song_folder  # noqa: E402
-from autochart.formats.loader import load_song  # noqa: E402
-from autochart.formats.song import Song  # noqa: E402
-from autochart.paths import project_path  # noqa: E402
-from autochart.post.contour import follow_pitch, track_pitch  # noqa: E402
-from autochart.post.playability import fix_track  # noqa: E402
+from riffchart.baselines.common import split_songs, write_song_folder  # noqa: E402
+from riffchart.formats.loader import load_song  # noqa: E402
+from riffchart.formats.song import Song  # noqa: E402
+from riffchart.paths import project_path  # noqa: E402
+from riffchart.post.contour import follow_pitch, track_pitch  # noqa: E402
+from riffchart.post.playability import fix_track  # noqa: E402
 
 VARIANTS = {"off": None, "default": {}, "conf5": {"min_conf": 0.5}, "conf7": {"min_conf": 0.7},
             "agree5": {"agree_thr": 0.5}, "run3": {"min_run": 3}}
@@ -50,14 +50,14 @@ for i, r in enumerate(rows, 1):
                 tr = fix_track(song, tr, rules[d], audio_s=float(r.audio_s))
             tracks[d] = tr
         out = Song(song.resolution, song.tempo, tracks, song.sections)
-        write_song_folder(Path("data/outputs") / f"ct_{v}" / r.song_id, out, str(r.name), str(r.artist), "autochart",
+        write_song_folder(Path("data/outputs") / f"ct_{v}" / r.song_id, out, str(r.name), str(r.artist), "riffchart",
                           float(r.audio_s))
     print(f"[{i}/{len(rows)}] {r.name[:40]} ({time.perf_counter() - t0:.0f}s)", flush=True)
 py = sys.executable
 KEYS = ("F1@50", "fret_exact", "single_fret", "contour", "hopo_f1", "pv_total")
 print(f"\n{'variant':<9} {'diff':<7} " + " ".join(f"{k:>11}" for k in KEYS) + "   frets changed")
 for v in VARIANTS:
-    subprocess.run([py, "-m", "autochart.eval.harness", f"ct_{v}", "--split", args.split], check=True,
+    subprocess.run([py, "-m", "riffchart.eval.harness", f"ct_{v}", "--split", args.split], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     summ = json.loads((Path("data/eval") / f"ct_{v}" / f"summary_{args.split}.json").read_text())
     for d in ("expert", "hard", "medium", "easy"):

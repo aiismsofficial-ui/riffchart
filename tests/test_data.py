@@ -1,7 +1,7 @@
 import numpy as np
 
-from autochart.data.audit import _peak, hit_stats, note_train, xcorr_lags
-from autochart.data.dedup import _prep, chroma_similarity, norm_text
+from riffchart.data.audit import _peak, hit_stats, note_train, xcorr_lags
+from riffchart.data.dedup import _prep, chroma_similarity, norm_text
 
 
 def test_xcorr_recovers_known_lag():
@@ -37,7 +37,7 @@ def test_alignment_correction_sign():
     """A chart whose notes are 40 ms early must get a +40 ms correction (beyond detector latency)."""
     import pandas as pd
 
-    from autochart.data.split import flag_songs
+    from riffchart.data.split import flag_songs
 
     base = dict(status="ok", n_expert=100, hit50=0.9, local_ratio=1.0, drift_range_ms=5.0, hit_med_off_ms=0.0,
                 chart_end_past_audio_s=-5.0, bpm_min=120.0, bpm_max=120.0, delay_s=0.0)

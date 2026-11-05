@@ -3,10 +3,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from autochart.model.tokenizer import V
-from autochart.product.cli import find_audio, parse_diffs
-from autochart.product.core import CHORD_BIN, Style, estimate_diff, preview_start, safe_name, song_ini
-from autochart.product.meta import SongMeta, from_filename
+from riffchart.model.tokenizer import V
+from riffchart.product.cli import find_audio, parse_diffs
+from riffchart.product.core import CHORD_BIN, Style, estimate_diff, preview_start, safe_name, song_ini
+from riffchart.product.meta import SongMeta, from_filename
 
 
 def test_style_parse_and_tokens():
@@ -34,7 +34,7 @@ def test_song_ini_and_difficulty():
     assert estimate_diff(900, 0.0, 200.0, cuts) == 3                # 4.5 notes/s
     assert estimate_diff(2000, 0.0, 200.0, cuts) == 6
     ini = song_ini(SongMeta("One", "Metallica", year="1988"), 446.2, 120.5, 4)
-    for line in ("name = One", "artist = Metallica", "charter = autochart", "song_length = 446200",
+    for line in ("name = One", "artist = Metallica", "charter = RiffChart", "song_length = 446200",
                  "preview_start_time = 120500", "diff_guitar = 4", "year = 1988"):
         assert line in ini
 

@@ -2,11 +2,11 @@ import mido
 import numpy as np
 import pytest
 
-from autochart.formats.chart_parser import parse_chart_text
-from autochart.formats.chart_writer import write_chart_text
-from autochart.formats.hopo import chart_hopo_threshold, midi_hopo_threshold
-from autochart.formats.midi_parser import parse_midi
-from autochart.formats.song import OPEN_BIT, NoteType, TempoMap
+from riffchart.formats.chart_parser import parse_chart_text
+from riffchart.formats.chart_writer import write_chart_text
+from riffchart.formats.hopo import chart_hopo_threshold, midi_hopo_threshold
+from riffchart.formats.midi_parser import parse_midi
+from riffchart.formats.song import OPEN_BIT, NoteType, TempoMap
 
 S, H, T = NoteType.STRUM, NoteType.HOPO, NoteType.TAP
 
@@ -239,7 +239,7 @@ def test_midi_to_chart_preserves_note_types(tmp_path):
 
 # ---------------------------------------------------------------- beats -> tempo map
 def test_beats_to_tempo_map_hits_every_beat_and_bar():
-    from autochart.timing.tempo_map import beats_to_tempo_map
+    from riffchart.timing.tempo_map import beats_to_tempo_map
 
     rng = np.random.default_rng(0)
     beats = 0.73 + np.cumsum(0.5 + rng.normal(0, 0.01, 40))
@@ -253,7 +253,7 @@ def test_beats_to_tempo_map_hits_every_beat_and_bar():
 
 
 def test_smooth_tempo_map_steady_and_ts_lattice():
-    from autochart.timing.tempo_map import beats_to_tempo_map
+    from riffchart.timing.tempo_map import beats_to_tempo_map
 
     beats = 1.0 + 0.5 * np.arange(64)                 # steady 120 BPM
     downbeats = beats[::4].copy()

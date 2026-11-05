@@ -15,12 +15,12 @@ import torch
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from autochart.baselines.common import split_songs  # noqa: E402
-from autochart.formats.song import DIFFICULTIES  # noqa: E402
-from autochart.model.dataset import Song as SongData  # noqa: E402
-from autochart.model.generate import Charter, events_to_song  # noqa: E402
-from autochart.paths import project_path  # noqa: E402
-from autochart.post.pipeline import postprocess  # noqa: E402
+from riffchart.baselines.common import split_songs  # noqa: E402
+from riffchart.formats.song import DIFFICULTIES  # noqa: E402
+from riffchart.model.dataset import Song as SongData  # noqa: E402
+from riffchart.model.generate import Charter, events_to_song  # noqa: E402
+from riffchart.paths import project_path  # noqa: E402
+from riffchart.post.pipeline import postprocess  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--songs", type=int, default=3)

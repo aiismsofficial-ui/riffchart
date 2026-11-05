@@ -5,13 +5,13 @@ import numpy as np
 import pytest
 import torch
 
-from autochart.formats.song import GuitarTrack, Song, TempoMap
-from autochart.model.generate import Charter, events_to_song
-from autochart.model.net import ChartTransformer, ModelConfig
-from autochart.model.tokenizer import Event
-from autochart.product import section as sec
-from autochart.product.core import Style
-from autochart.timing.grid import GRID, MUSICAL_POSITIONS
+from riffchart.formats.song import GuitarTrack, Song, TempoMap
+from riffchart.model.generate import Charter, events_to_song
+from riffchart.model.net import ChartTransformer, ModelConfig
+from riffchart.model.tokenizer import Event
+from riffchart.product import section as sec
+from riffchart.product.core import Style
+from riffchart.timing.grid import GRID, MUSICAL_POSITIONS
 
 from test_ui import _charted, env  # noqa: F401  (fixture)
 

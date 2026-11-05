@@ -13,10 +13,10 @@ import pandas as pd
 import torch
 import yaml
 
-from autochart.audio.io import load_audio, load_mix
-from autochart.audio.separate import Separator
-from autochart.data.scan import scan_library
-from autochart.paths import load_config
+from riffchart.audio.io import load_audio, load_mix
+from riffchart.audio.separate import Separator
+from riffchart.data.scan import scan_library
+from riffchart.paths import load_config
 
 
 def sdr(ref: np.ndarray, est: np.ndarray) -> float:

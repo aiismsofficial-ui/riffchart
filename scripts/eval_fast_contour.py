@@ -13,11 +13,11 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
-from autochart.baselines.common import split_songs  # noqa: E402
-from autochart.eval.metrics import Events, match, pitch  # noqa: E402
-from autochart.formats.loader import load_song  # noqa: E402
-from autochart.formats.song import popcount  # noqa: E402
-from autochart.formats.textio import song_delay_s  # noqa: E402
+from riffchart.baselines.common import split_songs  # noqa: E402
+from riffchart.eval.metrics import Events, match, pitch  # noqa: E402
+from riffchart.formats.loader import load_song  # noqa: E402
+from riffchart.formats.song import popcount  # noqa: E402
+from riffchart.formats.textio import song_delay_s  # noqa: E402
 
 ap = argparse.ArgumentParser()
 ap.add_argument("systems", nargs="+")

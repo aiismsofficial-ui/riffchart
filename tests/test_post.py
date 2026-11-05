@@ -1,10 +1,10 @@
 import numpy as np
 
-from autochart.eval.metrics import Events
-from autochart.eval.playability import check
-from autochart.formats.song import OPEN_BIT, GuitarTrack, NoteType, Song, TempoMap
-from autochart.post.playability import fix_track, rebuild
-from autochart.post.star_power import copy_phrases, place_star_power
+from riffchart.eval.metrics import Events
+from riffchart.eval.playability import check
+from riffchart.formats.song import OPEN_BIT, GuitarTrack, NoteType, Song, TempoMap
+from riffchart.post.playability import fix_track, rebuild
+from riffchart.post.star_power import copy_phrases, place_star_power
 
 RES = 192
 RULES = {"stack_s": 0.010, "sustain_gap_s": -0.001, "min_sustain_s": 0.050, "jump_frets": 3,
@@ -62,7 +62,7 @@ def test_star_power_rate_and_copy():
 
 
 def test_density_thin_and_thicken_are_predictable():
-    from autochart.post.density import adjust
+    from riffchart.post.density import adjust
 
     class Keep:                                   # stub reducer: prefer chords on the beat
         def predict_proba(self, X):
@@ -84,8 +84,8 @@ def test_density_thin_and_thicken_are_predictable():
 
 
 def test_ladder_keeps_each_difficulty_below_the_one_above():
-    from autochart.formats.song import popcount
-    from autochart.post.ladder import ladder
+    from riffchart.formats.song import popcount
+    from riffchart.post.ladder import ladder
     tm = TempoMap(RES, np.array([0]), np.array([120.0]))
     win = RES * 16
 
@@ -108,7 +108,7 @@ def test_ladder_keeps_each_difficulty_below_the_one_above():
 
 
 def test_follow_fills_quiet_guitar_with_other_instruments():
-    from autochart.product.follow import playable_part
+    from riffchart.product.follow import playable_part
     sr, n = 1000, 40_000
     t = np.arange(n) / sr
     guitar = np.where(t < 20, 0.3, 0.003)[:, None] * np.sin(2 * np.pi * 50 * t)[:, None] * np.ones((1, 2))

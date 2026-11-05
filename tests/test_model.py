@@ -1,7 +1,7 @@
 import torch
 
-from autochart.model.net import ChartTransformer, ModelConfig, rope
-from autochart.model.tokenizer import V
+from riffchart.model.net import ChartTransformer, ModelConfig, rope
+from riffchart.model.tokenizer import V
 
 CFG = ModelConfig(d_model=64, n_heads=4, enc_layers=1, dec_layers=2, dropout=0.0, max_beats=8)
 
@@ -63,8 +63,8 @@ def test_incremental_decoding_matches_full_forward_with_left_padding():
 
 def test_events_to_song_clips_sustain_at_next_chord():
     import numpy as np
-    from autochart.model.generate import events_to_song
-    from autochart.model.tokenizer import Event
+    from riffchart.model.generate import events_to_song
+    from riffchart.model.tokenizer import Event
     beats = 1.0 + 0.5 * np.arange(16)
     evs = [Event(0, 1, 0, 96), Event(24, 2, 0, 0), Event(48, 4, 0, 30)]   # first sustain overshoots by 72
     song = events_to_song({"expert": evs}, beats, beats[::4])
@@ -76,8 +76,8 @@ def test_events_to_song_clips_sustain_at_next_chord():
 
 def test_pitch_channel_starts_identical_to_the_old_model(tmp_path):
     import torch
-    from autochart.model.net import ChartTransformer, ModelConfig
-    from autochart.model.train import init_from
+    from riffchart.model.net import ChartTransformer, ModelConfig
+    from riffchart.model.train import init_from
     kw = dict(d_model=64, n_heads=4, enc_layers=1, dec_layers=1, dropout=0.0)
     torch.manual_seed(0)
     old = ChartTransformer(ModelConfig(in_channels=2, **kw)).eval()
@@ -93,8 +93,8 @@ def test_pitch_channel_starts_identical_to_the_old_model(tmp_path):
 
 def test_pitch_features_shape_and_window():
     import numpy as np
-    from autochart.model.dataset import pitch_window
-    from autochart.model.pitch_feat import BINS, LO, cqt_uint8, dequant
+    from riffchart.model.dataset import pitch_window
+    from riffchart.model.pitch_feat import BINS, LO, cqt_uint8, dequant
     sr = 22050
     t = np.arange(sr * 2) / sr
     y = 0.05 * np.sin(2 * np.pi * 110.0 * t).astype(np.float32)         # A2 = MIDI 45, stem-like level

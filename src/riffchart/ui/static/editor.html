@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RiffChart editor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='6' cy='16' r='4' fill='%2322c55e'/><circle cx='16' cy='16' r='4' fill='%23ef4444'/><circle cx='26' cy='16' r='4' fill='%23eab308'/></svg>">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="editor.css">
+</head>
+<body class="editor">
+<header class="top etop">
+  <a class="back" href="./" title="Back to your songs">&larr; Library</a>
+  <div class="songname"><div class="t" id="title">Loading…</div><div class="a" id="artist"></div></div>
+  <nav class="tabs" id="tabs" aria-label="Difficulty">
+    <button data-diff="expert">Expert</button><button data-diff="hard">Hard</button>
+    <button data-diff="medium">Medium</button><button data-diff="easy">Easy</button>
+    <button data-diff="all" title="All four side by side (V)">All 4</button>
+  </nav>
+  <div class="editbtns">
+    <button id="undo" class="ghost small" title="Undo (Ctrl+Z)" disabled>&#8630; Undo</button>
+    <button id="redo" class="ghost small" title="Redo (Ctrl+Y)" disabled>Redo &#8631;</button>
+    <button id="save" class="small" title="Save notes.chart (Ctrl+S)" disabled>Save</button>
+    <span id="savestate" class="muted"></span>
+  </div>
+  <div class="transport">
+    <button id="play" class="playbtn" title="Play / pause (Space)" aria-label="Play">&#9654;</button>
+    <div class="clock"><div id="time">0:00.000</div><div id="pos" class="muted">Bar 1 · beat 1</div></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <label title="Playback speed ([ and ])">Speed
+    <select id="speed"><option value="0.25">25%</option><option value="0.5">50%</option><option value="0.6">60%</option>
+      <option value="0.75">75%</option><option value="0.85">85%</option><option value="1" selected>100%</option></select></label>
+  <label title="Grid lines between beats">Grid
+    <select id="grid"><option value="4">1/4</option><option value="8">1/8</option><option value="12">1/12</option>
+      <option value="16" selected>1/16</option><option value="24">1/24</option><option value="32">1/32</option>
+      <option value="48">1/48</option><option value="64">1/64</option></select></label>
+  <label title="Zoom (Ctrl + wheel, + and -)">Zoom <input id="zoom" type="range" min="80" max="1600" step="10" value="260"></label>
+  <span class="sep"></span>
+  <label title="Band volume">Band <input id="vsong" type="range" min="0" max="1" step="0.05" value="0.8"></label>
+  <label title="Guitar volume">Guitar <input id="vguitar" type="range" min="0" max="1" step="0.05" value="1"></label>
+  <label title="Extra delay for headphones or speakers that lag (Bluetooth: try 150-250). Raise it if notes reach the line before you hear them.">Audio delay
+    <input id="delay" type="number" min="0" max="1000" step="10" value="0" class="num"> ms</label>
+  <label title="Click on every note (C)"><input id="clap" type="checkbox"> Note clap</label>
+  <label title="Click on every beat (M)"><input id="metro" type="checkbox"> Metronome</label>
+  <span class="sep"></span>
+  <button id="rcbtn" class="ghost small" title="Let the AI chart a section again: try takes and keep the best (R)">&#10022; Re-chart section</button>
+  <button id="issuesbtn" class="ghost small issuesbtn" title="Playability problems in this difficulty (. and , jump to the next / previous)">Checking…</button>
+  <span class="muted" id="info"></span>
+</div>
+
+<div class="stage" id="stage">
+  <canvas id="hw" aria-label="Note highway"></canvas>
+  <canvas id="ov" class="overview" aria-label="Song overview: click to jump"></canvas>
+  <div id="tip" class="tip" hidden></div>
+  <aside id="issues" class="issues" hidden aria-label="Playability problems">
+    <div class="ihead"><b id="ititle">Problems</b>
+      <label class="muted"><input type="checkbox" id="iwarn" checked> warnings</label>
+      <button class="ghost small" id="iclose" aria-label="Close">✕</button></div>
+    <ol id="ilist"></ol>
+  </aside>
+  <aside id="rechart" class="issues rcpanel" hidden aria-label="Re-chart a section">
+    <div class="ihead"><b>Re-chart a section</b>
+      <button class="ghost small" id="rcclose" aria-label="Close">✕</button></div>
+    <div class="rcbody">
+      <div class="rcrange">
+        <div class="rcbound"><span class="muted">From bar</span> <b id="rcfrom">–</b>
+          <button class="ghost small icon" data-adj="a-1" title="One bar earlier">−</button><button class="ghost small icon" data-adj="a1" title="One bar later">+</button></div>
+        <div class="rcbound"><span class="muted">to the end of bar</span> <b id="rcto">–</b>
+          <button class="ghost small icon" data-adj="b-1" title="One bar shorter">−</button><button class="ghost small icon" data-adj="b1" title="One bar longer">+</button></div>
+        <div class="muted rcwhat" id="rcwhat"></div>
+        <div class="rcrow"><button class="ghost small" id="rcsel" title="Bars covering the selected notes">Use selection</button>
+          <button class="ghost small" id="rchere" title="The named section, or 8 bars, at the playhead">At the playhead</button></div>
+      </div>
+      <div class="rcdiffs" id="rcdiffs">
+        <label><input type="checkbox" value="expert" checked> Expert</label><label><input type="checkbox" value="hard" checked> Hard</label>
+        <label><input type="checkbox" value="medium" checked> Medium</label><label><input type="checkbox" value="easy" checked> Easy</label>
+      </div>
+      <button id="rctake" title="Chart this section again (Shift+R)">New take</button>
+      <div class="muted rcstatus" id="rcstatus" role="status"></div>
+      <ol class="rctakes" id="rctakes"></ol>
+      <label class="rcloop"><input type="checkbox" id="rcloop" checked> Loop the section when playing</label>
+      <div class="rcrow rcend"><button class="ghost small" id="rcorig" title="Put the notes that were there before back">Back to original</button>
+        <button class="small" id="rckeep" title="Keep the take you hear now and close (Undo still works)">Keep this take</button></div>
+      <details class="rcstyle" id="rcstyle"><summary>Style for new takes <span class="muted" id="rcstylenote"></span></summary>
+      <label class="rcfield">Note density <output id="rcdensout">normal</output>
+        <span class="slider"><span class="muted">sparser</span><input id="rcdensity" type="range" min="-1" max="1" step="0.1" value="0"><span class="muted">denser</span></span></label>
+      <label class="rcfield">Play along with
+        <select id="rcfollow"><option value="auto">Guitar, and other instruments where it's quiet</option>
+          <option value="guitar">Guitar only</option><option value="all">The whole song's melody</option></select></label>
+      <label class="rcfield">Chords
+        <select id="rcchords"><option value="auto">Follow the song</option><option value="low">Fewer chords</option>
+          <option value="mid">Some chords</option><option value="high">More chords</option></select></label>
+      </details>
+    </div>
+  </aside>
+  <div id="loading" class="loading">Loading chart and audio…</div>
+</div>
+
+<footer class="keys muted">
+  <details>
+    <summary><kbd>Space</kbd> play · <b>click</b> add note · <b>drag</b> move · <b>right-click</b> delete · <b>drag tail end</b> sustain · <kbd>Ctrl</kbd>+<kbd>S</kbd> save — all shortcuts</summary>
+    <div class="keygrid">
+      <div><h4>Navigate</h4>
+        <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> zoom · <kbd>+</kbd><kbd>-</kbd> zoom</p>
+        <p><kbd>&uarr;</kbd><kbd>&darr;</kbd> grid step · <kbd>PgUp</kbd><kbd>PgDn</kbd> bar · <kbd>Home</kbd><kbd>End</kbd></p>
+        <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty</p>
+        <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p></div>
+      <div><h4>Notes</h4>
+        <p><b>Click</b> empty lane: add (snaps to the grid) · <b>right-click</b> a gem: delete it</p>
+        <p><kbd>1</kbd>–<kbd>5</kbd> toggle G R Y B O on the selection, or add at the playhead · <kbd>0</kbd> open</p>
+        <p><b>Drag</b> notes to move (time and lanes) · <kbd>Alt</kbd>+<kbd>&uarr;</kbd><kbd>&darr;</kbd> move a grid step · <kbd>&larr;</kbd><kbd>&rarr;</kbd> shift frets</p>
+        <p><kbd>Del</kbd> delete · <kbd>H</kbd> HOPO/strum · <kbd>T</kbd> tap</p></div>
+      <div><h4>Sustains, phrases</h4>
+        <p><b>Drag</b> the end of a tail · <kbd>Shift</kbd>+<kbd>&uarr;</kbd><kbd>&darr;</kbd> longer/shorter · <kbd>X</kbd> remove</p>
+        <p><kbd>P</kbd> star power on/off over the selection · <kbd>L</kbd> solo on/off</p>
+        <p><kbd>N</kbd> add / rename / delete a section at the playhead</p>
+        <p><kbd>.</kbd> <kbd>,</kbd> next / previous playability problem · <kbd>I</kbd> problem list</p>
+        <p><kbd>R</kbd> re-chart a section · <kbd>Shift</kbd>+<kbd>R</kbd> new take</p></div>
+      <div><h4>Selection, edit</h4>
+        <p><b>Click</b> a gem · <kbd>Shift</kbd>+<b>click</b> add/remove · <b>drag a box</b> on empty space</p>
+        <p><kbd>Ctrl</kbd>+<kbd>A</kbd> all · <kbd>Esc</kbd> none · <kbd>Ctrl</kbd>+<kbd>C</kbd>/<kbd>X</kbd>/<kbd>V</kbd> copy, cut, paste at the playhead</p>
+        <p><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo · <kbd>Ctrl</kbd>+<kbd>S</kbd> save</p></div>
+    </div>
+  </details>
+</footer>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="audio.js"></script>
+<script src="editor.js"></script>
+<script src="edit.js"></script>
+<script src="check.js"></script>
+<script src="rechart.js"></script>
+</body>
+</html>

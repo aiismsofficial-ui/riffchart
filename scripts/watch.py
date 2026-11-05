@@ -39,7 +39,7 @@ while True:
     logs = sorted((p for p in LOGS.glob("*.log") if now - p.stat().st_mtime < args.hours * 3600),
                   key=lambda p: p.stat().st_mtime, reverse=True)
     os.system("cls" if os.name == "nt" else "clear")
-    print(f"autochart jobs  {time.strftime('%H:%M:%S')}   {gpu()}\n")
+    print(f"RiffChart jobs  {time.strftime('%H:%M:%S')}   {gpu()}\n")
     if not logs:
         print("  no log written in the last", args.hours, "h")
     active = [p for p in logs if now - p.stat().st_mtime < 120]

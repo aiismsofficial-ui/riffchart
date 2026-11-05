@@ -1,4 +1,4 @@
-# How autochart works
+# How RiffChart works
 
 ## Charting a song
 
@@ -57,7 +57,7 @@ cached per song, so after the first take each one takes a second or two.
 
 ## Training data pipeline
 
-For training your own models from a library of charts with audio (`autochart-audit`, `src/autochart/data/`):
+For training your own models from a library of charts with audio (`riffchart-audit`, `src/riffchart/data/`):
 
 1. **Scan** song folders (`.chart` or `.mid` plus audio). The library is opened read-only.
 2. **Audit** every song: parse the chart, measure how well notes line up with audio onsets, detect

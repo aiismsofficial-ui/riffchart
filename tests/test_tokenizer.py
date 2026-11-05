@@ -1,10 +1,10 @@
 import numpy as np
 
-from autochart.formats.song import OPEN_BIT, NoteType
-from autochart.model.grid_events import beat_position, beat_time, downbeat_flags, notes_to_units
-from autochart.model.tokenizer import (SUS_LENGTHS, Event, V, decode, encode_beats, encode_window,
+from riffchart.formats.song import OPEN_BIT, NoteType
+from riffchart.model.grid_events import beat_position, beat_time, downbeat_flags, notes_to_units
+from riffchart.model.tokenizer import (SUS_LENGTHS, Event, V, decode, encode_beats, encode_window,
                                        resolve_sustains, style_tokens)
-from autochart.timing.grid import GRID
+from riffchart.timing.grid import GRID
 
 S, H, T = NoteType.STRUM, NoteType.HOPO, NoteType.TAP
 

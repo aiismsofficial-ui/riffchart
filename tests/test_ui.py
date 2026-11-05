@@ -1,4 +1,4 @@
-"""autochart-ui API: queue, library, export, read-only protection, Clone Hero settings (no GPU: fake charter)."""
+"""riffchart-ui API: queue, library, export, read-only protection, Clone Hero settings (no GPU: fake charter)."""
 import json
 import time
 from pathlib import Path
@@ -7,12 +7,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
-from autochart.product import clonehero
-from autochart.product.core import safe_name
-from autochart.product.meta import read_meta
-from autochart.ui.jobs import Options
-from autochart.ui.library import ProtectedPathError, check_writable
-from autochart.ui.server import create_app
+from riffchart.product import clonehero
+from riffchart.product.core import safe_name
+from riffchart.product.meta import read_meta
+from riffchart.ui.jobs import Options
+from riffchart.ui.library import ProtectedPathError, check_writable
+from riffchart.ui.server import create_app
 
 CHART = ("[Song]\n{\n  Resolution = 192\n  Offset = 0\n}\n[SyncTrack]\n{\n  0 = TS 4\n  0 = B 120000\n}\n"
          "[Events]\n{\n}\n[ExpertSingle]\n{\n  0 = N 0 0\n  192 = N 1 0\n  384 = N 2 96\n}\n"
@@ -20,7 +20,7 @@ CHART = ("[Song]\n{\n  Resolution = 192\n  Offset = 0\n}\n[SyncTrack]\n{\n  0 = 
 
 
 class FakeCharter:
-    """Stands in for AutoCharter.chart_file: writes a tiny song folder, reports the stages."""
+    """Stands in for RiffCharter.chart_file: writes a tiny song folder, reports the stages."""
     def __init__(self):
         self.calls = []
 
@@ -38,7 +38,7 @@ class FakeCharter:
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "notes.chart").write_text(CHART, encoding="utf-8")
         (folder / "song.ini").write_text(f"[song]\nname = {m.title}\nartist = {m.artist}\nsong_length = 61000\n"
-                                         "diff_guitar = 3\ncharter = autochart\n", encoding="utf-8")
+                                         "diff_guitar = 3\ncharter = riffchart\n", encoding="utf-8")
         (folder / "song.ogg").write_bytes(b"OggS")
         return SimpleNamespace(folder=folder, n_notes={"expert": 3, "hard": 1}, seconds={"chart": 1.0})
 
@@ -177,7 +177,7 @@ def test_clone_hero_settings_add_folder(tmp_path):
     assert clonehero.add_song_folder(s, new)
     assert clonehero.song_folders(s) == ["C:\\a", "C:\\b", str(new.resolve())]
     assert "[video]\ny = 2" in s.read_text(encoding="utf-8")
-    assert (tmp_path / "settings.ini.bak-autochart").exists()
+    assert (tmp_path / "settings.ini.bak-riffchart").exists()
     assert not clonehero.add_song_folder(s, new)                    # already there: unchanged
     cmd = clonehero.preview_command(Path("C:/CH/Clone Hero.exe"), tmp_path, "hard")
     assert cmd[1:4] == ["--song", str(tmp_path.resolve()), "--player"] and cmd[4] == "Guitar,Hard"
@@ -187,16 +187,16 @@ def test_status_and_static(env):
     c = env.client
     st = c.get("/api/status").json()
     assert st["model"] == "not loaded" and not st["clone_hero"]["export_registered"]
-    assert "autochart" in c.get("/").text
+    assert "RiffChart" in c.get("/").text
     r = c.get("/app.js")
     assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"     # no stale page after updates
     assert c.get("/audio.js").status_code == 200 and "cache-control" not in c.get("/api/status").headers
 
 
 # ---------------------------------------------------------------- editor data (milestone 2)
-from autochart.formats.chart_parser import parse_chart_text            # noqa: E402
-from autochart.formats.chart_writer import write_chart_text            # noqa: E402
-from autochart.ui.chartjson import json_to_song, peaks, song_to_json   # noqa: E402
+from riffchart.formats.chart_parser import parse_chart_text            # noqa: E402
+from riffchart.formats.chart_writer import write_chart_text            # noqa: E402
+from riffchart.ui.chartjson import json_to_song, peaks, song_to_json   # noqa: E402
 
 RICH = ("[Song]\n{\n  Resolution = 192\n  Offset = 0\n}\n[SyncTrack]\n{\n  0 = TS 4\n  0 = B 120000\n"
         "  768 = TS 3\n  768 = B 150000\n}\n[Events]\n{\n  0 = E \"section Intro\"\n  768 = E \"section Verse\"\n}\n"
@@ -271,7 +271,7 @@ def test_save_writes_chart_keeps_history_and_types(env):
     d["sections"] = [[0, "Intro"]]
     r = c.post("/api/songs/Muse - Uprising/chart", json=d)
     assert r.status_code == 200, r.text
-    hist = list((folder / ".autochart" / "history").glob("*-notes.chart"))
+    hist = list((folder / ".riffchart" / "history").glob("*-notes.chart"))
     assert len(hist) == 1 and hist[0].read_text(encoding="utf-8") == before        # old version kept
     d2 = c.get("/api/songs/Muse - Uprising/chart").json()
     # final types survive exactly: 96 is a natural HOPO sent as strum, so the file needs a forced flag
@@ -292,7 +292,7 @@ def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):
     (folder / "notes.mid").write_bytes(b"MThd")
     assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
     assert not (folder / "notes.mid").exists() and (folder / "notes.mid.bak").exists()
-    assert any(p.name.endswith("notes.mid") for p in (folder / ".autochart" / "history").iterdir())
+    assert any(p.name.endswith("notes.mid") for p in (folder / ".riffchart" / "history").iterdir())
 
 
 def test_export_skips_history(env):
@@ -300,7 +300,7 @@ def test_export_skips_history(env):
     d = c.get("/api/songs/Muse - Uprising/chart").json()
     c.post("/api/songs/Muse - Uprising/chart", json=d)
     c.post("/api/songs/Muse - Uprising/export", json={})
-    assert not (env.cfg["export_dir"] / "Muse - Uprising" / ".autochart").exists()
+    assert not (env.cfg["export_dir"] / "Muse - Uprising" / ".riffchart").exists()
 
 
 # ---------------------------------------------------------------- playability check (milestone 4)
@@ -332,9 +332,9 @@ def test_check_locates_issues(env):
 
 def test_find_issues_matches_check_counts():
     import numpy as np
-    from autochart.eval.metrics import Events
-    from autochart.eval.playability import RULES, check, find_issues
-    from autochart.ui.checker import load_rules
+    from riffchart.eval.metrics import Events
+    from riffchart.eval.playability import RULES, check, find_issues
+    from riffchart.ui.checker import load_rules
     rng = np.random.default_rng(0)
     t = np.sort(rng.uniform(0, 30, 400))
     ev = Events(t, rng.integers(1, 64, 400).astype(np.uint8), rng.choice([0, 0, 0.02, 0.3], 400), rng.integers(0, 3, 400).astype(np.uint8))
@@ -347,7 +347,7 @@ def test_find_issues_matches_check_counts():
 
 # ---------------------------------------------------------------- library actions (UI rework)
 def test_clean_names_from_downloads():
-    from autochart.product.meta import SongMeta, clean
+    from riffchart.product.meta import SongMeta, clean
     assert clean(SongMeta("whiskey & coke (Official Visualizer) - LØLØ", "LØLØ")) == SongMeta("whiskey & coke", "LØLØ")
     assert clean(SongMeta("One [Remastered 2008]", "Metallica")).title == "One"
     assert clean(SongMeta("Song (feat. X) [Official HD Video]", "Y")).title == "Song (feat. X)"
