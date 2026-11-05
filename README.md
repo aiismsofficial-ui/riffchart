@@ -35,7 +35,11 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
 
 ## Setup (Windows)
 
-Requirements: Python 3.12, an NVIDIA GPU with a recent driver (CUDA 13 wheels), [uv](https://docs.astral.sh/uv/).
+Requirements: Windows 10/11, Python 3.12, [uv](https://docs.astral.sh/uv/), 16 GB RAM recommended, ~6 GB disk.
+A graphics card is optional: RiffChart runs on the CPU (a 4-minute song took ~90 s on an Intel i7-14700KF)
+and is about twice as fast on an NVIDIA GTX 16 / RTX 20-series card or newer with 6 GB+ (~40 s on an RTX 5090).
+AMD Radeon RX 9000 / 7900 cards may work with AMD's ROCm build of PyTorch for Windows (untested).
+`device: auto | cuda | cpu` in `configs/product.yaml` picks where it runs (auto: the GPU if there is one).
 
 ```bash
 python -m pip install --user uv

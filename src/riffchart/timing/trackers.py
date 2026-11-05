@@ -10,9 +10,9 @@ _CACHE: dict = {}
 def _a2f(checkpoint: str, device: str = "cuda"):
     from beat_this.inference import Audio2Frames
 
-    if checkpoint not in _CACHE:
-        _CACHE[checkpoint] = Audio2Frames(checkpoint_path=checkpoint, device=device)
-    return _CACHE[checkpoint]
+    if (checkpoint, device) not in _CACHE:
+        _CACHE[(checkpoint, device)] = Audio2Frames(checkpoint_path=checkpoint, device=device)
+    return _CACHE[(checkpoint, device)]
 
 
 def _post(beat_logits: torch.Tensor, down_logits: torch.Tensor) -> tuple[np.ndarray, np.ndarray]:
@@ -33,7 +33,7 @@ def refine(times: np.ndarray, logits: torch.Tensor, fps: int = 50) -> np.ndarray
     return (f + np.clip(off, -0.5, 0.5)) / fps
 
 
-def get_tracker(name: str, ckpt: str | None = None):
+def get_tracker(name: str, ckpt: str | None = None, device: str = "cuda"):
     do_refine = name.endswith("_refined")
     name = name.removesuffix("_refined")
     if name == "beatthis":
@@ -50,7 +50,7 @@ def get_tracker(name: str, ckpt: str | None = None):
         raise ValueError(name)
 
     def run(y: np.ndarray, sr: int):
-        logits = [_a2f(c)(y, sr) for c in ckpts]
+        logits = [_a2f(c, device)(y, sr) for c in ckpts]
         b = torch.stack([torch.as_tensor(l[0]) for l in logits]).mean(0)
         d = torch.stack([torch.as_tensor(l[1]) for l in logits]).mean(0)
         bt, dt = _post(b, d)

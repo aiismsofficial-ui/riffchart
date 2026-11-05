@@ -143,7 +143,10 @@ def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int) -> str
 
 
 class RiffCharter:
-    def __init__(self, config: str | Path = "configs/product.yaml", device: str = "cuda"):
+    def __init__(self, config: str | Path = "configs/product.yaml", device: str | None = None):
+        # NVIDIA (CUDA) and AMD (ROCm builds of PyTorch) GPUs both show up as "cuda"; otherwise the CPU
+        device = device or self.cfg_device(config) or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device
         self.cfg = yaml.safe_load(open(project_path(config), encoding="utf-8"))
         self.post_cfg = yaml.safe_load(open(project_path(self.cfg["post_config"]), encoding="utf-8"))
         rules = yaml.safe_load(open(project_path(self.post_cfg.get("eval_config", "configs/eval.yaml")),
@@ -155,7 +158,13 @@ class RiffCharter:
         self.sep = Separator(s["model"], device=device, overlap=s["overlap"], shifts=s["shifts"])
         self.charter = Charter(str(project_path(self.cfg["chart_ckpt"])), device=device)
         self.mel = Mel(device)
-        self.tracker = get_tracker(self.cfg["beat_tracker"])
+        self.tracker = get_tracker(self.cfg["beat_tracker"], device=device)
+
+    @staticmethod
+    def cfg_device(config) -> str | None:
+        """`device:` in the product config (auto | cuda | cpu); auto / missing = pick automatically."""
+        d = (yaml.safe_load(open(project_path(config), encoding="utf-8")) or {}).get("device", "auto")
+        return None if d in (None, "auto") else str(d)
 
     def chart_file(self, path: str | Path, out_root: str | Path, difficulties=DIFFICULTIES,
                    style: Style | None = None, write_stems: bool | None = None, overwrite: bool = False,

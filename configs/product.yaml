@@ -1,4 +1,5 @@
 # Phase 6 product settings (paths are relative to the project root)
+device: auto              # auto (GPU if available: NVIDIA, or AMD with a ROCm build of PyTorch; else CPU) | cuda | cpu
 chart_ckpt: data/checkpoints/chart/full_v2/step60000.pt    # v2, final snapshot
 beat_tracker: finetuned                                     # Phase 3 fine-tuned Beat This (fp32)
 separation:
