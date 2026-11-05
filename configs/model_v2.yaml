@@ -1,0 +1,56 @@
+run: full_v2
+out_root: data/checkpoints/chart
+model:
+  d_model: 512
+  qk_norm: true
+  n_heads: 8
+  enc_layers: 6
+  dec_layers: 8
+  dropout: 0.1
+  tokens_per_beat: 16
+model_style: true
+model_source: true        # SRC token: which training library (main / extra) a chart came from
+data:
+  context_beats: 16
+  target_beats: 32
+  max_tokens: 1536
+  difficulty_weights:
+    expert: 0.40
+    hard: 0.20
+    medium: 0.20
+    easy: 0.20
+  grid_probs:
+    human: 0.4
+    ft: 0.3
+    pt: 0.3
+  beat_jitter_s: 0.004
+  style_dropout: 0.3
+  train_song_limit: null
+  metrical_aug: 0.15
+augment:
+  gain: 1.0
+  tilt: 0.7
+  balance: 1.0
+  drop_guitar: 0.08
+  drop_mix: 0.05
+train:
+  steps: 60000
+  batch_size: 32
+  grad_accum: 2             # 2 x 16: the longest 32-window batches need >28 GB (run 2 spilled / OOM)
+  lr: 0.0002               # run 1 at 3e-4 diverged at step ~8.6k (bigger model than v1)
+  min_lr_ratio: 0.05
+  weight_decay: 0.05
+  betas:
+  - 0.9
+  - 0.95
+  warmup_steps: 3000
+  spike_factor: 10.0
+  grad_clip: 1.0
+  num_workers: 12
+  compile: true
+  eval_every: 2500
+  diverge_factor: 1.5        # val loss above 1.5x best -> roll back to last.pt, halve lr
+  keep_every: 10000
+  val_windows: 512
+  log_every: 50
+  seed: 0

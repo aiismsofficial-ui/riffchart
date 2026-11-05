@@ -1,0 +1,384 @@
+"""autochart-ui API: queue, library, export, read-only protection, Clone Hero settings (no GPU: fake charter)."""
+import json
+import time
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
+
+from autochart.product import clonehero
+from autochart.product.core import safe_name
+from autochart.product.meta import read_meta
+from autochart.ui.jobs import Options
+from autochart.ui.library import ProtectedPathError, check_writable
+from autochart.ui.server import create_app
+
+CHART = ("[Song]\n{\n  Resolution = 192\n  Offset = 0\n}\n[SyncTrack]\n{\n  0 = TS 4\n  0 = B 120000\n}\n"
+         "[Events]\n{\n}\n[ExpertSingle]\n{\n  0 = N 0 0\n  192 = N 1 0\n  384 = N 2 96\n}\n"
+         "[HardSingle]\n{\n  0 = N 0 0\n}\n")
+
+
+class FakeCharter:
+    """Stands in for AutoCharter.chart_file: writes a tiny song folder, reports the stages."""
+    def __init__(self):
+        self.calls = []
+
+    def chart_file(self, path, out_root, difficulties, style, write_stems=True, overwrite=False, on_stage=None,
+                   meta=None, folder_name=None):
+        self.calls.append((Path(path), list(difficulties), style))
+        m = meta or read_meta(path)
+        folder = Path(out_root) / (folder_name or safe_name(f"{m.artist} - {m.title}"))
+        if (folder / "notes.chart").exists() and not overwrite:
+            return None
+        for s in ("load", "separate", "beats", "chart", "post", "write"):
+            on_stage and on_stage(s)
+        if Path(path).stem == "broken":
+            raise RuntimeError("cannot decode")
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "notes.chart").write_text(CHART, encoding="utf-8")
+        (folder / "song.ini").write_text(f"[song]\nname = {m.title}\nartist = {m.artist}\nsong_length = 61000\n"
+                                         "diff_guitar = 3\ncharter = autochart\n", encoding="utf-8")
+        (folder / "song.ogg").write_bytes(b"OggS")
+        return SimpleNamespace(folder=folder, n_notes={"expert": 3, "hard": 1}, seconds={"chart": 1.0})
+
+
+@pytest.fixture
+def env(tmp_path):
+    lib_ro = tmp_path / "my library"
+    (lib_ro / "Band - Old").mkdir(parents=True)
+    (lib_ro / "Band - Old" / "song.ogg").write_bytes(b"x")
+    settings = tmp_path / "settings.ini"
+    settings.write_text("[general]\nx = 1\n\n[directories]\npath0 = C:\\songs\n\n[video]\ny = 2\n", encoding="utf-8")
+    cfg = {"workspace": tmp_path / "ws" / "songs", "uploads": tmp_path / "ws" / "uploads",
+           "export_dir": tmp_path / "export", "protected": [lib_ro], "clone_hero_settings": settings,
+           "log_file": tmp_path / "ui.log",
+           "stage_weights": {"load": .1, "separate": .2, "beats": .1, "chart": .5, "post": .05, "write": .05}}
+    fake = FakeCharter()
+    app = create_app(cfg, make_charter=lambda: fake)
+    c = TestClient(app)
+    yield SimpleNamespace(client=c, cfg=cfg, fake=fake, app=app, lib_ro=lib_ro, tmp=tmp_path)
+    app.state.queue.shutdown()
+
+
+def wait_idle(c, timeout=10):
+    t = time.time()
+    while time.time() - t < timeout:
+        jobs = c.get("/api/jobs").json()
+        if jobs and all(j["status"] not in ("queued", "running") for j in jobs):
+            return jobs
+        time.sleep(0.05)
+    raise TimeoutError(jobs)
+
+
+def test_options_validation():
+    assert Options.parse({"difficulties": ["easy", "expert"]}).difficulties == ["expert", "easy"]
+    for bad in ({"difficulties": []}, {"density": 3}, {"chords": "lots"}):
+        with pytest.raises(ValueError):
+            Options.parse(bad)
+
+
+def test_upload_charts_lists_and_exports(env):
+    c = env.client
+    r = c.post("/api/jobs/upload", files=[("files", ("Album/Muse - Uprising.mp3", b"ID3", "audio/mpeg")),
+                                          ("files", ("cover.jpg", b"x", "image/jpeg"))],
+               data={"options": json.dumps({"difficulties": ["expert", "hard"], "density": -0.5, "chords": "low"})})
+    assert r.status_code == 200, r.text
+    assert len(r.json()["added"]) == 1 and "cover.jpg" in r.json()["skipped"][0]
+    jobs = wait_idle(c)
+    assert [j["status"] for j in jobs] == ["done"] and jobs[0]["song"] == "Muse - Uprising"
+    path, diffs, style = env.fake.calls[0]
+    assert diffs == ["expert", "hard"] and style.density == -0.5 and style.chords == "low"
+    assert not path.exists()                                       # upload copy cleaned up after charting
+
+    songs = c.get("/api/songs").json()
+    assert len(songs) == 1
+    s = songs[0]
+    assert (s["title"], s["artist"], s["notes"], s["length_s"]) == ("Uprising", "Muse", {"expert": 3, "hard": 1}, 61.0)
+    assert not s["exported"]
+
+    r = c.post("/api/songs/Muse - Uprising/export", json={})
+    assert r.status_code == 200
+    assert (env.cfg["export_dir"] / "Muse - Uprising" / "notes.chart").read_text(encoding="utf-8") == CHART
+    assert c.post("/api/songs/Muse - Uprising/export", json={}).status_code == 409     # no silent overwrite
+    assert c.post("/api/songs/Muse - Uprising/export", json={"overwrite": True}).status_code == 200
+    assert c.get("/api/songs").json()[0]["exported"]
+    assert c.get("/api/songs/Muse - Uprising/file/song.ogg").content == b"OggS"
+
+
+def test_skip_existing_then_retry_overwrites(env):
+    c = env.client
+    up = lambda: c.post("/api/jobs/upload", files=[("files", ("A - B.ogg", b"x", "audio/ogg"))])   # noqa: E731
+    up(); wait_idle(c)
+    up(); jobs = wait_idle(c)
+    assert [j["status"] for j in jobs] == ["done", "skipped"]
+    # skipped -> retry re-charts with overwrite (the upload copy is gone, so retry needs the file: refused)
+    assert c.post(f"/api/jobs/{jobs[1]['id']}/retry").status_code == 409
+    assert c.post("/api/jobs/clear").json()["removed"] == 2 and c.get("/api/jobs").json() == []
+
+
+def test_failed_job_keeps_upload_for_retry(env):
+    c = env.client
+    c.post("/api/jobs/upload", files=[("files", ("broken.wav", b"x", "audio/wav"))])
+    jobs = wait_idle(c)
+    assert jobs[0]["status"] == "failed" and "cannot decode" in jobs[0]["message"]
+    assert Path(jobs[0]["source"]).exists()
+    assert c.post(f"/api/jobs/{jobs[0]['id']}/retry").status_code == 200
+    assert wait_idle(c)[0]["status"] == "failed"
+
+
+def test_add_by_path_reads_library_without_writing(env):
+    c = env.client
+    before = sorted(p.name for p in env.lib_ro.rglob("*"))
+    r = c.post("/api/jobs/paths", json={"paths": [str(env.lib_ro), str(env.tmp / "nope")]})
+    assert len(r.json()["added"]) == 1 and "not found" in r.json()["skipped"][0]
+    assert wait_idle(c)[0]["song"] == "Band - Old"
+    assert sorted(p.name for p in env.lib_ro.rglob("*")) == before                     # library untouched
+
+
+def test_protected_folders_refuse_writes(env, tmp_path):
+    with pytest.raises(ProtectedPathError):
+        check_writable(env.lib_ro / "x", [env.lib_ro])
+    with pytest.raises(ProtectedPathError):
+        check_writable(env.tmp, [env.lib_ro])                       # a parent of the library also counts
+    check_writable(env.tmp / "elsewhere", [env.lib_ro])
+    cfg = dict(env.cfg, export_dir=env.lib_ro / "exports", workspace=tmp_path / "ws2")
+    app = create_app(cfg, make_charter=FakeCharter, start_worker=False)
+    lib = app.state.lib
+    (lib.workspace / "S").mkdir()
+    (lib.workspace / "S" / "notes.chart").write_text(CHART, encoding="utf-8")
+    with pytest.raises(ProtectedPathError):
+        lib.export("S")
+    with pytest.raises(ProtectedPathError):
+        create_app(dict(env.cfg, workspace=env.lib_ro / "ws"), make_charter=FakeCharter, start_worker=False)
+
+
+def test_song_ids_cannot_escape_workspace(env):
+    c = env.client
+    for bad in ("..", "..%2F..%2Fsettings.ini", "nope"):
+        assert c.get(f"/api/songs/{bad}").status_code in (404, 405)
+    assert c.post("/api/songs/nope/export", json={}).status_code == 404
+
+
+def test_queue_survives_restart(env):
+    q = env.app.state.queue
+    q.shutdown(); time.sleep(0.1)
+    j = q.add(env.tmp / "x.mp3", "x", Options())
+    j.status = "running"; q._save()
+    app2 = create_app(env.cfg, make_charter=FakeCharter, start_worker=False)
+    j2 = app2.state.queue.jobs[j.id]
+    assert j2.status == "queued" and j2.message == "restarted"
+
+
+def test_clone_hero_settings_add_folder(tmp_path):
+    s = tmp_path / "settings.ini"
+    s.write_text("[general]\nx = 1\n\n[directories]\npath0 = C:\\a\npath1 = C:\\b\n\n[video]\ny = 2\n", encoding="utf-8")
+    new = tmp_path / "exports"
+    assert clonehero.add_song_folder(s, new)
+    assert clonehero.song_folders(s) == ["C:\\a", "C:\\b", str(new.resolve())]
+    assert "[video]\ny = 2" in s.read_text(encoding="utf-8")
+    assert (tmp_path / "settings.ini.bak-autochart").exists()
+    assert not clonehero.add_song_folder(s, new)                    # already there: unchanged
+    cmd = clonehero.preview_command(Path("C:/CH/Clone Hero.exe"), tmp_path, "hard")
+    assert cmd[1:4] == ["--song", str(tmp_path.resolve()), "--player"] and cmd[4] == "Guitar,Hard"
+
+
+def test_status_and_static(env):
+    c = env.client
+    st = c.get("/api/status").json()
+    assert st["model"] == "not loaded" and not st["clone_hero"]["export_registered"]
+    assert "autochart" in c.get("/").text
+    r = c.get("/app.js")
+    assert r.status_code == 200 and r.headers["cache-control"] == "no-cache"     # no stale page after updates
+    assert c.get("/audio.js").status_code == 200 and "cache-control" not in c.get("/api/status").headers
+
+
+# ---------------------------------------------------------------- editor data (milestone 2)
+from autochart.formats.chart_parser import parse_chart_text            # noqa: E402
+from autochart.formats.chart_writer import write_chart_text            # noqa: E402
+from autochart.ui.chartjson import json_to_song, peaks, song_to_json   # noqa: E402
+
+RICH = ("[Song]\n{\n  Resolution = 192\n  Offset = 0\n}\n[SyncTrack]\n{\n  0 = TS 4\n  0 = B 120000\n"
+        "  768 = TS 3\n  768 = B 150000\n}\n[Events]\n{\n  0 = E \"section Intro\"\n  768 = E \"section Verse\"\n}\n"
+        "[ExpertSingle]\n{\n  0 = N 0 0\n  48 = N 1 0\n  96 = N 2 0\n  96 = N 3 0\n  192 = N 7 96\n"
+        "  384 = N 4 0\n  384 = N 5 0\n  480 = N 0 0\n  480 = N 6 0\n  768 = S 2 384\n  768 = N 1 192\n"
+        "  1152 = E solo\n  1152 = N 2 0\n  1344 = E soloend\n}\n[EasySingle]\n{\n  0 = N 0 0\n}\n")
+
+
+def test_chart_json_round_trip_is_lossless():
+    a = parse_chart_text(RICH)
+    d = song_to_json(a, {"delay": "50"})
+    assert d["offset_s"] == 0.05 and d["sections"] == [[0, "Intro"], [768, "Verse"]]
+    assert d["ts"] == [[0, 4, 4], [768, 3, 4]] and d["tempo"] == [[0, 120.0], [768, 150.0]]
+    ex = d["tracks"]["expert"]
+    assert ex["star_power"] == [[768, 384]] and ex["solos"] and ex["notes"][0] == [0, 1, 0, 0]
+    assert json.loads(json.dumps(d)) == d                                # plain JSON
+    b = json_to_song(json.loads(json.dumps(d)))
+    assert write_chart_text(b) == write_chart_text(a)                    # same .chart out
+
+
+def test_json_to_song_merges_duplicates_and_drops_bad_rows():
+    d = song_to_json(parse_chart_text(RICH))
+    d["tracks"]["expert"]["notes"] += [[0, 2, 96, 0], [5000, 0, 0, 0], [-10, 1, 0, 0]]
+    tr = json_to_song(d).tracks["expert"]
+    assert int(tr.mask[0]) == 0b11 and int(tr.sustain[0]) == 96          # G + R chord at tick 0
+    assert 5000 not in tr.tick and (tr.tick >= 0).all()
+
+
+def test_peaks_envelope_and_cache(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    sr = 8000
+    x = np.zeros(sr * 2, np.float32)
+    x[sr:] = 0.5 * np.sin(np.arange(sr) / sr * 2 * np.pi * 220)        # silent second, then a tone
+    f = tmp_path / "guitar.wav"
+    sf.write(f, x, sr)
+    p = peaks(f, tmp_path / "cache", per_s=100)
+    import base64
+    q = np.frombuffer(base64.b64decode(p["data"]), np.uint8)
+    assert p["name"] == "guitar" and len(q) == 200 and abs(p["duration_s"] - 2.0) < 0.02
+    assert q[:95].max() == 0 and q[110:].min() > 200
+    assert len(list((tmp_path / "cache").glob("*.json"))) == 1
+    assert peaks(f, tmp_path / "cache", per_s=100) == p                  # served from cache
+
+
+def test_chart_and_peaks_endpoints(env):
+    c = env.client
+    c.post("/api/jobs/upload", files=[("files", ("Muse - Uprising.mp3", b"ID3", "audio/mpeg"))])
+    wait_idle(c)
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    assert d["title"] == "Uprising" and d["stems"] == ["song.ogg"] and d["resolution"] == 192
+    assert [n[0] for n in d["tracks"]["expert"]["notes"]] == [0, 192, 384]
+    pk = c.get("/api/songs/Muse - Uprising/peaks").json()
+    assert pk[0]["name"] == "song" and "error" in pk[0]                  # fake ogg: reported, not a 500
+    assert c.get("/editor.html").status_code == 200
+
+
+# ---------------------------------------------------------------- saving (milestone 3)
+def _charted(env, name="Muse - Uprising"):
+    env.client.post("/api/jobs/upload", files=[("files", (f"{name}.mp3", b"ID3", "audio/mpeg"))])
+    wait_idle(env.client)
+    return env.cfg["workspace"] / name
+
+
+def test_save_writes_chart_keeps_history_and_types(env):
+    c, folder = env.client, _charted(env)
+    before = (folder / "notes.chart").read_text(encoding="utf-8")
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    ex = d["tracks"]["expert"]
+    ex["notes"] = [[0, 1, 0, 0], [48, 2, 0, 1], [96, 4, 0, 0], [192, 0b11000, 96, 0], [480, 32, 0, 2]]
+    ex["star_power"] = [[0, 100]]
+    d["sections"] = [[0, "Intro"]]
+    r = c.post("/api/songs/Muse - Uprising/chart", json=d)
+    assert r.status_code == 200, r.text
+    hist = list((folder / ".autochart" / "history").glob("*-notes.chart"))
+    assert len(hist) == 1 and hist[0].read_text(encoding="utf-8") == before        # old version kept
+    d2 = c.get("/api/songs/Muse - Uprising/chart").json()
+    # final types survive exactly: 96 is a natural HOPO sent as strum, so the file needs a forced flag
+    assert d2["tracks"]["expert"]["notes"] == ex["notes"]
+    lines = (folder / "notes.chart").read_text(encoding="utf-8")
+    assert "  96 = N 5 0" in lines and "  48 = N 5 0" not in lines and "  480 = N 6 0" in lines
+    assert d2["tracks"]["expert"]["star_power"] == [[0, 100]] and d2["sections"] == [[0, "Intro"]]
+    assert d2["tracks"]["hard"] == d["tracks"]["hard"]                                # untouched difficulty
+    assert "Name = \"Uprising\"" in (folder / "notes.chart").read_text(encoding="utf-8")
+
+
+def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):
+    c, folder = env.client, _charted(env)
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    assert c.post("/api/songs/Muse - Uprising/chart", json={"tracks": {}}).status_code == 400
+    empty = dict(d, tracks={k: dict(v, notes=[]) for k, v in d["tracks"].items()})
+    assert c.post("/api/songs/Muse - Uprising/chart", json=empty).status_code == 400
+    (folder / "notes.mid").write_bytes(b"MThd")
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    assert not (folder / "notes.mid").exists() and (folder / "notes.mid.bak").exists()
+    assert any(p.name.endswith("notes.mid") for p in (folder / ".autochart" / "history").iterdir())
+
+
+def test_export_skips_history(env):
+    c, folder = env.client, _charted(env)
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    c.post("/api/songs/Muse - Uprising/chart", json=d)
+    c.post("/api/songs/Muse - Uprising/export", json={})
+    assert not (env.cfg["export_dir"] / "Muse - Uprising" / ".autochart").exists()
+
+
+# ---------------------------------------------------------------- playability check (milestone 4)
+def test_check_locates_issues(env):
+    c = env.client
+    tempo = [[0, 120.0]]                       # 192 ticks = 0.5 s
+    notes = [[0, 1, 300, 0],                   # sustain runs past the next note (tick 192)
+             [192, 2, 0, 0],
+             [194, 4, 0, 0],                   # 5 ms later: stacked
+             [384, 4, 0, 1],                   # HOPO... after a different fret: fine
+             [400, 4, 0, 1],                   # HOPO on the same fret as before -> bad_hopo (and too fast)
+             [768, 0b11111, 0, 0],             # 5-fret chord: too big
+             [960, 1, 4, 0]]                   # 4-tick tail: below the sustain cutoff, not a tail
+    body = {"resolution": 192, "tempo": tempo, "ts": [[0, 4, 4]], "sections": [], "offset_s": 0,
+            "audio_s": 60, "tracks": {"expert": {"notes": notes, "star_power": [], "solos": []}}}
+    r = c.post("/api/check", json=body).json()
+    got = {(x["rule"], x["tick"]) for x in r["expert"]["issues"]}
+    assert ("sustain_overlap", 0) in got and ("stacked", 194) in got and ("bad_hopo", 400) in got
+    assert ("chord_size", 768) in got and ("too_fast", 400) in got
+    assert not any(t == 960 for _, t in got)
+    assert r["expert"]["errors"] == sum(x["severity"] == "error" for x in r["expert"]["issues"])
+    assert r["hard"] == {"issues": [], "errors": 0, "warnings": 0}
+    x = next(x for x in r["expert"]["issues"] if x["rule"] == "sustain_overlap")
+    assert "after the next note" in x["detail"] and x["title"]
+    body["audio_s"] = 1.0                      # notes after the audio end
+    assert any(x["rule"] == "out_of_audio" for x in c.post("/api/check", json=body).json()["expert"]["issues"])
+    assert c.post("/api/check", json={"tracks": 1}).status_code == 400
+
+
+def test_find_issues_matches_check_counts():
+    import numpy as np
+    from autochart.eval.metrics import Events
+    from autochart.eval.playability import RULES, check, find_issues
+    from autochart.ui.checker import load_rules
+    rng = np.random.default_rng(0)
+    t = np.sort(rng.uniform(0, 30, 400))
+    ev = Events(t, rng.integers(1, 64, 400).astype(np.uint8), rng.choice([0, 0, 0.02, 0.3], 400), rng.integers(0, 3, 400).astype(np.uint8))
+    rules = load_rules()["expert"]
+    c = check(ev, rules, 30.0)
+    issues = find_issues(ev, rules, 30.0)
+    for r in RULES:
+        assert abs(c[f"pv_{r}"] * 0.5 - sum(1 for k, _ in issues if k == r)) < 1e-9
+
+
+# ---------------------------------------------------------------- library actions (UI rework)
+def test_clean_names_from_downloads():
+    from autochart.product.meta import SongMeta, clean
+    assert clean(SongMeta("whiskey & coke (Official Visualizer) - LØLØ", "LØLØ")) == SongMeta("whiskey & coke", "LØLØ")
+    assert clean(SongMeta("One [Remastered 2008]", "Metallica")).title == "One"
+    assert clean(SongMeta("Song (feat. X) [Official HD Video]", "Y")).title == "Song (feat. X)"
+    assert clean(SongMeta("Video Killed the Radio Star", "The Buggles")).title == "Video Killed the Radio Star"
+    assert clean(SongMeta("Sellout (Live)", "Biohazard")).title == "Sellout (Live)"
+    assert clean(SongMeta("a - b (Lyrics)", "Unknown Artist")) == SongMeta("b", "a")
+
+
+def test_rechart_in_place_keeps_names_and_history(env):
+    import numpy as np
+    import soundfile as sf
+    c, folder = env.client, _charted(env)
+    sr = 8000
+    sf.write(folder / "song.ogg", np.zeros((sr, 2), np.float32), sr, format="OGG", subtype="VORBIS")
+    sf.write(folder / "guitar.ogg", 0.1 * np.ones((sr, 2), np.float32), sr, format="OGG", subtype="VORBIS")
+    c.post("/api/songs/Muse - Uprising/meta", json={"title": "Uprising (my edit)", "artist": "Muse"})
+    r = c.post("/api/songs/Muse - Uprising/rechart", json={"options": {"density": -0.5, "difficulties": ["expert"]}})
+    assert r.status_code == 200, r.text
+    jobs = wait_idle(c)
+    assert jobs[-1]["status"] == "done" and jobs[-1]["song"] == "Muse - Uprising"
+    path, diffs, style = env.fake.calls[-1]
+    assert style.density == -0.5 and diffs == ["expert"] and not path.exists()     # temp mix removed
+    assert [s["id"] for s in c.get("/api/songs").json()] == ["Muse - Uprising"]   # same folder, no duplicate
+
+
+def test_rename_and_remove_song(env):
+    c, folder = env.client, _charted(env)
+    r = c.post("/api/songs/Muse - Uprising/meta", json={"title": "Uprising", "artist": "MUSE"})
+    assert r.json()["artist"] == "MUSE" and "artist = MUSE" in (folder / "song.ini").read_text(encoding="utf-8")
+    assert c.post("/api/songs/Muse - Uprising/meta", json={"title": " "}).status_code == 400
+    assert c.delete("/api/songs/Muse - Uprising").status_code == 200
+    assert c.get("/api/songs").json() == [] and not folder.exists()
+    trash = list((env.cfg["workspace"].parent / "trash").iterdir())
+    assert len(trash) == 1 and (trash[0] / "notes.chart").exists()                 # moved, not deleted

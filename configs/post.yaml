@@ -1,0 +1,18 @@
+# Phase 5 post-processing (values chosen on the validation split, see NOTES.md Phase 5)
+eval_config: configs/eval.yaml   # playability thresholds (same rules the checker scores)
+fix: true
+repeats:
+  enabled: false
+  thr: 0.90                      # bar similarity for repeated-section consistency
+lower: direct                    # direct (model's own Hard/Medium/Easy) | reduce (from Expert)
+reduce_thr:                      # keep-probability threshold of the reducer
+  hard: 0.5
+  medium: 0.5
+  easy: 0.5
+star_power: true
+sp_rate_per_min: 2.3             # human Expert median on train
+ladder:                          # easier difficulties stay below harder ones (post/ladder.py)
+  enabled: true                  # val check 2026-11-04 (NOTES "difficulty ladder")
+  caps: {hard: 0.90, medium: 0.75, easy: 0.60}   # max chords vs Expert (human medians 0.78 / 0.56 / 0.43)
+  window_beats: 16               # local rule: per 16 beats, no more chords / multi-fret chords than the next harder
+  denser_cap_step: 0.12          # density +1 raises the caps by this much

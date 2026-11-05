@@ -1,0 +1,30 @@
+# Phase 3: fine-tune Beat This! (final0) on the train split's human tempo maps
+data_root: "data"
+features: "data/features/beatmel"      # <song_id>.npy, fp16 (frames, 128), 50 fps
+targets: "data/features/beat_targets.npz"
+out_dir: "data/checkpoints/beat_finetune"
+init_checkpoint: "final0"
+
+train:
+  steps: 4000
+  batch_size: 16
+  crop_frames: 1500          # 30 s, the model's training length
+  lr: 1.0e-4                 # original from-scratch lr was 8e-4
+  weight_decay: 0.01
+  warmup_steps: 200
+  pos_weights: {beat: 19, downbeat: 86}   # from the final0 checkpoint hyperparameters
+  tolerance: 3               # shift-tolerant BCE, frames each side (same as Beat This)
+  eval_every: 500
+  num_workers: 4
+  seed: 0
+
+augment:
+  tempo_range: 0.10          # random time-stretch of the mel crop (targets scaled to match)
+  time_masks: 2              # SpecAugment-style masks
+  time_mask_max: 40          # frames
+  freq_masks: 2
+  freq_mask_max: 16          # mel bins
+
+region:
+  pre_s: 2.0                 # supervise from 2 s before the first human note
+  post_s: 1.0                # ... to 1 s after the last; outside the charted region beats are unknown

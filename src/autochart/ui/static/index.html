@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>autochart</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='6' cy='16' r='4' fill='%2322c55e'/><circle cx='16' cy='16' r='4' fill='%23ef4444'/><circle cx='26' cy='16' r='4' fill='%23eab308'/></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="dots"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span>autochart</div>
+  <div class="status" id="status"></div>
+</header>
+
+<main>
+  <section class="card add">
+    <div class="addrow">
+      <div id="drop" class="drop" tabindex="0">
+        <div class="drop-big">＋ Add songs: drop audio files or folders here</div>
+        <div class="drop-small">mp3, ogg, opus, flac or wav &middot; <label class="link">browse files<input id="pick" type="file" multiple accept=".mp3,.ogg,.opus,.flac,.wav" hidden></label>
+          &middot; each song takes about 30 seconds</div>
+      </div>
+      <form id="pathform" class="pathrow">
+        <input id="pathin" type="text" placeholder="…or paste a file or folder path, e.g. D:\Music\Album" autocomplete="off">
+        <button type="submit">Add</button>
+      </form>
+    </div>
+    <details class="settings" id="settings">
+      <summary>Chart settings: <span id="setsum"></span></summary>
+      <div class="opts">
+        <fieldset>
+          <legend>Difficulties</legend>
+          <label><input type="checkbox" name="diff" value="expert" checked> Expert</label>
+          <label><input type="checkbox" name="diff" value="hard" checked> Hard</label>
+          <label><input type="checkbox" name="diff" value="medium" checked> Medium</label>
+          <label><input type="checkbox" name="diff" value="easy" checked> Easy</label>
+        </fieldset>
+        <fieldset>
+          <legend>Note density <output id="densout">normal</output></legend>
+          <div class="slider"><span>sparser</span><input id="density" type="range" min="-1" max="1" step="0.1" value="0"><span>denser</span></div>
+        </fieldset>
+        <fieldset>
+          <legend>Chords</legend>
+          <select id="chords">
+            <option value="auto" selected>Follow the song</option>
+            <option value="low">Fewer chords</option>
+            <option value="mid">Some chords</option>
+            <option value="high">More chords</option>
+          </select>
+        </fieldset>
+        <fieldset>
+          <legend>Play along with</legend>
+          <select id="follow" title="What the notes follow. For songs without much guitar, pick the second or third option.">
+            <option value="auto" selected>Guitar, and other instruments where it's quiet</option>
+            <option value="guitar">Guitar only</option>
+            <option value="all">The whole song's melody (little or no guitar)</option>
+          </select>
+        </fieldset>
+        <fieldset>
+          <legend>Audio</legend>
+          <label title="Write the guitar as its own track so Clone Hero mutes it when you miss"><input id="stems" type="checkbox" checked> Separate guitar track</label>
+          <label title="Songs already in your library are skipped unless this is ticked (or use Re-chart in a song's ⋯ menu)"><input id="overwrite" type="checkbox"> Re-chart songs already in the library</label>
+        </fieldset>
+      </div>
+    </details>
+  </section>
+
+  <section class="card" id="queuecard" hidden>
+    <div class="cardhead">
+      <h2>Queue <span class="muted" id="queuesum"></span></h2>
+      <button class="ghost" id="clearjobs">Clear finished</button>
+    </div>
+    <ul id="jobs" class="jobs"></ul>
+  </section>
+
+  <section class="card">
+    <div class="cardhead">
+      <h2>Your songs <span class="muted" id="songcount"></span></h2>
+      <input id="filter" type="search" placeholder="Filter" autocomplete="off">
+    </div>
+    <div id="exportbar" class="exportbar"></div>
+    <div class="tablewrap">
+      <table class="songs">
+        <thead><tr><th>Song</th><th class="num" title="Notes per difficulty: Expert / Hard / Medium / Easy">Notes E / H / M / E</th><th class="num">Length</th><th class="num" title="Estimated guitar difficulty (0-6)">Diff</th><th>Charted</th><th></th></tr></thead>
+        <tbody id="songs"></tbody>
+      </table>
+      <p class="empty" id="nosongs" hidden>No songs yet. Drop some audio above to get started.</p>
+    </div>
+  </section>
+</main>
+
+<dialog id="rechart" class="dialog">
+  <h3 id="rc-title">Re-chart</h3>
+  <p class="muted">Charts the song again from its audio with these settings. Your current chart, including any edits,
+    is kept in the song's history first.</p>
+  <div class="opts">
+    <fieldset>
+      <legend>Difficulties</legend>
+      <label><input type="checkbox" name="rcdiff" value="expert" checked> Expert</label>
+      <label><input type="checkbox" name="rcdiff" value="hard" checked> Hard</label>
+      <label><input type="checkbox" name="rcdiff" value="medium" checked> Medium</label>
+      <label><input type="checkbox" name="rcdiff" value="easy" checked> Easy</label>
+    </fieldset>
+    <fieldset>
+      <legend>Note density <output id="rc-densout">normal</output></legend>
+      <div class="slider"><span>sparser</span><input id="rc-density" type="range" min="-1" max="1" step="0.1" value="0"><span>denser</span></div>
+    </fieldset>
+    <fieldset>
+      <legend>Play along with</legend>
+      <select id="rc-follow">
+        <option value="auto">Guitar, and other instruments where it's quiet</option>
+        <option value="guitar">Guitar only</option>
+        <option value="all">The whole song's melody (little or no guitar)</option>
+      </select>
+    </fieldset>
+    <fieldset>
+      <legend>Chords</legend>
+      <select id="rc-chords">
+        <option value="auto">Follow the song</option><option value="low">Fewer chords</option>
+        <option value="mid">Some chords</option><option value="high">More chords</option>
+      </select>
+    </fieldset>
+  </div>
+  <div class="dlgbtns"><button class="ghost" id="rc-cancel">Cancel</button><button id="rc-go">Re-chart</button></div>
+</dialog>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

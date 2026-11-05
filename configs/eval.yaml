@@ -1,0 +1,26 @@
+# Phase 2 evaluation settings
+data_root: "data"
+library_root: "path/to/your/chart/library"   # set it in configs/eval.local.yaml
+outputs_root: "data/outputs"     # data/outputs/<system>/<song_id>/notes.chart
+split: test
+
+# Lower difficulties are only scored on songs whose human chart is a real reduction
+# (not a copy of Expert), see Phase 1 notes.
+difficulties: [expert, hard, medium, easy]
+
+# Playability thresholds per difficulty, calibrated on the TRAIN split's human charts (never on
+# test): min_ioi_s ~ human 0.5th percentile of inter-onset intervals, chord limits from the human
+# chord-size distribution (4+ note chords are ~0.1%). Human charts are scored with the same rules.
+playability:
+  common: &common
+    stack_s: 0.010
+    sustain_gap_s: -0.001   # flag only sustains running past the next onset (legato endings are normal)
+    min_sustain_s: 0.050
+    jump_frets: 3
+  expert: {<<: *common, max_chord: 3, max_span: 4, min_ioi_s: 0.055, jump_ioi_s: 0.060}
+  hard:   {<<: *common, max_chord: 3, max_span: 4, min_ioi_s: 0.070, jump_ioi_s: 0.080}
+  medium: {<<: *common, max_chord: 3, max_span: 4, min_ioi_s: 0.065, jump_ioi_s: 0.080}
+  easy:   {<<: *common, max_chord: 3, max_span: 4, min_ioi_s: 0.065, jump_ioi_s: 0.080}
+
+tempo:
+  beat_tolerance_s: 0.07   # mir_eval default F-measure window

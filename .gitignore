@@ -1,0 +1,35 @@
+# Local only: copyrighted charts/audio, models, outputs, logs (see README "Data stays local")
+.venv/
+/data/
+/logs/
+/runs/
+/checkpoints/
+/playtest/
+__pycache__/
+*.pyc
+.pytest_cache/
+.claude/settings.local.json
+# this PC's folders and personal settings (merged over the tracked configs)
+configs/*.local.yaml
+
+# never commit audio, charts or model weights, wherever they end up
+*.ogg
+*.opus
+*.mp3
+*.wav
+*.flac
+*.m4a
+*.mid
+*.midi
+*.chart
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.npz
+*.npy
+*.parquet
+
+# promo renders (contain song audio / screenshots)
+/promo/

@@ -1,0 +1,2 @@
+# Path to Clone Hero.exe if it is not in a usual place (or set CLONE_HERO_EXE); this PC: preview.local.yaml
+clone_hero_exe: ""

@@ -1,0 +1,22 @@
+# autochart-ui: the local web app (library screen + chart editor). Runs only on this PC.
+host: 127.0.0.1            # localhost only: nothing is reachable from other machines
+port: 8765
+open_browser: true
+product_config: configs/product.yaml
+
+# Songs charted in the app live here (working copies the editor edits).
+workspace: data/ui/songs
+# Audio dropped into the browser is copied here until it has been charted, then deleted.
+uploads: data/ui/uploads
+# "Export" copies a finished song folder here. Added to Clone Hero as a song folder.
+export_dir: ~/Documents/autochart songs
+
+# Never written to (export, save, delete are refused inside these folders). Opening charts from them is fine.
+# List your own chart libraries in configs/ui.local.yaml (gitignored; merged over this file).
+protected: []
+
+# Clone Hero: the exe comes from configs/preview.yaml (clone_hero_exe); its settings.ini for song folders.
+clone_hero_settings: ~/Documents/Clone Hero/settings.ini
+
+# Rough share of a song's charting time per stage, for the progress bar.
+stage_weights: {load: 0.04, separate: 0.15, beats: 0.12, chart: 0.60, post: 0.06, write: 0.03}

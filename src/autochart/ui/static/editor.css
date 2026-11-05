@@ -1,0 +1,111 @@
+body.editor { height: 100vh; display: grid; grid-template-rows: auto auto 1fr auto; overflow: hidden; }
+.etop { position: static; padding: 8px 16px; gap: 14px; }
+.back { color: var(--text); text-decoration: none; font-size: 14px; font-weight: 600; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--line); white-space: nowrap; }
+.back:hover { background: var(--panel2); }
+.songname { min-width: 0; flex: 1; }
+.songname .t { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.songname .a { color: var(--muted); font-size: 13px; }
+.tabs { display: flex; gap: 2px; background: var(--panel2); padding: 3px; border-radius: 9px; }
+.tabs button { background: transparent; color: var(--muted); padding: 5px 12px; font-weight: 600; border-radius: 7px; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+.tabs button:not(.on):hover { color: var(--text); background: var(--line); filter: none; }
+.transport { display: flex; align-items: center; gap: 10px; }
+.playbtn { width: 38px; height: 38px; border-radius: 50%; padding: 0; font-size: 15px; }
+.clock { font-variant-numeric: tabular-nums; min-width: 128px; }
+.clock #time { font-weight: 700; font-size: 16px; }
+.clock #pos { font-size: 12px; }
+.toolbar { display: flex; align-items: center; gap: 16px; padding: 7px 16px; border-bottom: 1px solid var(--line);
+  background: var(--panel); flex-wrap: wrap; font-size: 13px; }
+.toolbar label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.toolbar select { padding: 3px 6px; font-size: 13px; }
+.toolbar input[type=range] { width: 90px; accent-color: var(--accent); }
+.toolbar .sep { width: 1px; height: 20px; background: var(--line); }
+.stage { position: relative; min-height: 0; background: var(--bg); }
+#hw { position: absolute; left: 0; top: 0; right: 64px; bottom: 0; width: calc(100% - 64px); height: 100%; display: block; }
+.overview { position: absolute; right: 0; top: 0; width: 64px; height: 100%; border-left: 1px solid var(--line);
+  cursor: pointer; display: block; background: var(--panel); }
+.loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); background: var(--bg); }
+.tip { position: absolute; pointer-events: none; background: var(--panel2); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 9px; font-size: 12px; white-space: nowrap; z-index: 4; box-shadow: 0 4px 14px rgba(0,0,0,.35); }
+.keys { display: flex; gap: 14px; flex-wrap: wrap; padding: 6px 16px; border-top: 1px solid var(--line);
+  background: var(--panel); font-size: 12px; }
+.keys details { width: 100%; }
+.keys summary { cursor: pointer; padding: 2px 0; }
+.keys summary b { color: var(--text); font-weight: 600; }
+.keygrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 4px 22px; padding: 8px 0 4px; }
+.keygrid h4 { margin: 4px 0; color: var(--text); font-size: 12px; }
+.keygrid p { margin: 3px 0; line-height: 1.9; }
+.editbtns { display: flex; align-items: center; gap: 6px; }
+#savestate { font-size: 12px; min-width: 104px; }
+kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
+  padding: 0 5px; font: 11px ui-monospace, Consolas, monospace; color: var(--text); }
+@media (max-width: 760px) {
+  .etop { flex-wrap: wrap; } .tabs { order: 3; width: 100%; } .tabs button { flex: 1; padding: 5px 4px; }
+  .keys { display: none; } body.editor { grid-template-rows: auto auto 1fr; }
+}
+.loading[hidden], .tip[hidden] { display: none; }
+
+.issuesbtn { font-weight: 600; }
+.issuesbtn.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 45%, var(--line)); }
+.issuesbtn.err { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); }
+.issuesbtn.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--line)); }
+.issues { position: absolute; top: 8px; right: 72px; width: min(360px, calc(100% - 90px)); max-height: calc(100% - 16px);
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 8px 28px rgba(0,0,0,.4); z-index: 6; }
+.issues[hidden] { display: none; }
+.ihead { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line); }
+.ihead b { flex: 1; }
+.ihead label { display: inline-flex; gap: 5px; align-items: center; font-size: 12px; }
+.issues ol { list-style: none; margin: 0; padding: 4px; overflow-y: auto; }
+.issues li { padding: 7px 9px; border-radius: 7px; cursor: pointer; display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 9px; }
+.issues li:hover, .issues li.cur { background: var(--panel2); }
+.issues li .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--bad); grid-row: span 2; }
+.issues li.warning .dot { background: var(--warn); }
+.issues li .ttl { font-weight: 600; font-size: 13px; }
+.issues li .when { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.issues li .det { grid-column: 2 / span 2; color: var(--muted); font-size: 12px; }
+.issues .none { color: var(--muted); padding: 14px; text-align: center; }
+.tabs button .cnt { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 5px; border-radius: 8px;
+  background: var(--bad); color: #fff; font-size: 10px; line-height: 15px; vertical-align: 1px; }
+
+.toolbar input.num { width: 62px; padding: 3px 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; }
+/* narrower windows: title on its own row, then tabs / edit buttons / transport */
+@media (max-width: 1100px) {
+  .etop { flex-wrap: wrap; row-gap: 8px; }
+  .songname { flex: 1 1 calc(100% - 140px); }
+  .keys details summary { white-space: normal; }
+}
+
+/* re-chart a section (M5): shares the floating-panel look of the problem list */
+.rcpanel { width: min(340px, calc(100% - 90px)); }
+.rcbody { display: flex; flex-direction: column; gap: 11px; padding: 12px; overflow-y: auto; }
+.rcrange { display: flex; flex-direction: column; gap: 6px; }
+.rcbound { display: flex; align-items: center; gap: 6px; }
+.rcbound b { min-width: 28px; font-variant-numeric: tabular-nums; }
+.rcbound button.icon { padding: 1px 9px; }
+.rcbound span.muted { min-width: 108px; }
+.rcwhat { font-size: 12px; }
+.rcrow { display: flex; gap: 8px; flex-wrap: wrap; }
+.rcend { justify-content: flex-end; }
+.rcdiffs { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; }
+.rcdiffs label, .rcloop { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; }
+.rcfield { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.rcfield output { color: var(--muted); font-size: 12px; }
+.rcfield select { background: var(--panel2); border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px; }
+.rcfield .slider { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.rcfield .slider input { flex: 1; }
+.rcstatus { font-size: 12px; min-height: 1em; }
+.rctakes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.rctakes:empty { display: none; }
+.rctakes li { padding: 7px 9px; border-radius: 7px; cursor: pointer; display: grid; grid-template-columns: 10px 1fr auto; gap: 2px 9px; }
+.rctakes li:hover { background: var(--panel2); }
+.rctakes li.cur { background: var(--panel2); outline: 1px solid var(--accent); }
+.rctakes li .dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--line); }
+.rctakes li.cur .dot { background: var(--accent); }
+.rctakes li .ttl { font-weight: 600; font-size: 13px; }
+.rctakes li .when { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.rctakes li .det { grid-column: 2 / span 2; color: var(--muted); font-size: 12px; }
+.rcstyle { border-top: 1px solid var(--line); padding-top: 9px; }
+.rcstyle summary { cursor: pointer; font-size: 13px; }
+.rcstyle summary .muted { font-size: 12px; margin-left: 4px; }
+.rcstyle[open] { display: flex; flex-direction: column; gap: 10px; }
