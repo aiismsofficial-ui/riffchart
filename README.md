@@ -63,7 +63,8 @@ AMD Radeon RX 9000 / 7900 cards may work with AMD's ROCm build of PyTorch for Wi
 **Install:** download the latest release's ZIP (Releases, on the right of the GitHub page, or Code > Download
 ZIP), unzip it somewhere like `C:\RiffChart`, and double-click **install.bat**. If Windows says "Windows
 protected your PC", click **More info**, then **Run anyway**. It shows that for any script downloaded from
-the internet. It needs no admin rights and installs nothing system-wide. Everything goes in that
+the internet. To avoid that, right-click the ZIP before unzipping, choose **Properties**, tick **Unblock**
+and click OK. It needs no admin rights and installs nothing system-wide. Everything goes in that
 folder:
 - **uv:** the tool that installs Python and the app's packages.
 - **Python 3.12.**
