@@ -1,8 +1,8 @@
 # RiffChart installer for Windows 10 / 11. Double-click install.bat (it runs this script).
 #
 # Everything goes into this folder: uv (the Python tool), Python 3.12, the app's packages (.venv) and the
-# models. Nothing is installed system-wide and nothing needs admin rights. To uninstall, delete this folder and
-# the RiffChart shortcuts (Desktop and Start menu).
+# models. Nothing is installed system-wide and nothing needs admin rights. To uninstall, run
+# uninstall.bat.
 #
 #   install.ps1 [-Cpu | -Cuda] [-NoShortcut] [-NoStart] [-Yes]
 #     -Cpu / -Cuda  skip the question (PyTorch for any PC, or for NVIDIA graphics cards)

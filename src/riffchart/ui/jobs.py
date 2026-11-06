@@ -238,9 +238,14 @@ class JobQueue:
         order = list(self.weights)
         done_w = {s: sum(self.weights[x] for x in order[: i]) for i, s in enumerate(order)}
 
-        def on_stage(name: str) -> None:
+        def on_stage(name: str, frac: float | None = None) -> None:
+            base = done_w.get(name, j.progress)
+            if frac is not None:                        # partway through a slow stage
+                if j.stage == name:
+                    j.progress = min(base + self.weights.get(name, 0.0) * frac, 0.99)
+                return
             j.stage, j.message = name, ""
-            j.progress = min(done_w.get(name, j.progress), 0.99)
+            j.progress = min(base, 0.99)
             self.log(f"{j.name[:60]}: {STAGE_LABEL.get(name, name)} [{self.counts()}]")
 
         try:
@@ -251,10 +256,14 @@ class JobQueue:
                 from ..product.meta import SongMeta
                 kw = {"folder_name": j.target, "meta": SongMeta(**{k: j.meta.get(k, "") for k in
                                                                    ("title", "artist", "album", "genre", "year")})}
-            with self.gpu:
-                r = self.charter.chart_file(j.source, self.workspace, o.difficulties,
-                                            Style(o.density, o.chords, o.follow), write_stems=o.stems,
-                                            overwrite=o.overwrite or bool(j.target), on_stage=on_stage, **kw)
+            from .. import progress
+            try:
+                with self.gpu:
+                    r = self.charter.chart_file(j.source, self.workspace, o.difficulties,
+                                                Style(o.density, o.chords, o.follow), write_stems=o.stems,
+                                                overwrite=o.overwrite or bool(j.target), on_stage=on_stage, **kw)
+            finally:
+                progress.set_hook(None)                  # nothing reports into a finished job
             if r is None:
                 j.status, j.message = "skipped", "already in your library (tick 're-chart' to redo it)"
                 from ..product.core import safe_name

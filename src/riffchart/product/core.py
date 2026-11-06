@@ -111,6 +111,15 @@ def write_ogg(path: Path, data: np.ndarray, sr: int, quality: float) -> None:
     tmp.replace(path)
 
 
+def _takes_two_args(fn) -> bool:
+    import inspect
+    try:
+        inspect.signature(fn).bind("stage", 0.5)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
 def preview_start(mix_mono: np.ndarray, sr: int, downbeats: np.ndarray, audio_s: float) -> float:
     """Start of the loudest 30 s stretch beginning on a downbeat in the 15-70% part of the song
     (choruses are usually the loudest sections)."""
@@ -198,9 +207,14 @@ class RiffCharter:
         sec: dict[str, float] = {}
         t = time.perf_counter()
 
+        from .. import progress
+        takes_frac = on_stage is not None and _takes_two_args(on_stage)
+
         def stage(name):
             if on_stage:
                 on_stage(name)
+            # the slow stages report how far they are (separation, the chart model's windows)
+            progress.set_hook((lambda f, n=name: on_stage(n, f)) if takes_frac else None)
 
         def done(name):
             nonlocal t

@@ -99,7 +99,9 @@ class Charter:
         if isinstance(pos_bias, dict):
             pb = torch.tensor([float(pos_bias.get(d, 0.0)) for d in difficulties], device=self.device)[:, None]
             pos_bias = pb if bool((pb != 0).any()) else 0.0
+        from .. import progress
         for T0 in range(int(start_beat), total, n_tgt):
+            progress.report((T0 - start_beat) / max(1, total - start_beat))
             s = T0 - n_ctx
             x = (model_window(mel, pitch, beats, s, nb, self.use_pitch) - self.mean) / self.std
             x = torch.from_numpy(select_input(x, self.cfg).astype(np.float32))[None].to(self.device)

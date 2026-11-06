@@ -62,7 +62,8 @@ folder:
 - **Shortcuts:** RiffChart on the Desktop and in the Start menu.
 
 Expect about 3 GB with an NVIDIA card, or 1.5 GB for the CPU version. Run install.bat again at any time to repair
-or update; finished steps are skipped. Uninstall: delete the folder and the two shortcuts.
+or update; finished steps are skipped. To uninstall, run **uninstall.bat**. It removes the app and its
+models but keeps your charted songs unless you choose otherwise; then delete the folder.
 
 **Start:** the RiffChart shortcut, or `RiffChart.bat`. It opens the app in your browser; close the RiffChart
 window to stop it.

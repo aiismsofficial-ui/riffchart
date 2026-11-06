@@ -27,7 +27,14 @@ class Separator:
         mean, std = ref.mean(), ref.std() + 1e-8
         x = (x - mean) / std
         kw = {"segment": self.segment} if self.segment else {}
+        from .. import progress
+        n = x.shape[-1]
+
+        def on_segment(d: dict) -> None:                 # Demucs reports each segment it starts and ends
+            if d.get("state") == "end":
+                models = max(1, int(d.get("models", 1)))
+                progress.report((d.get("model_idx_in_bag", 0) + min(1.0, d.get("segment_offset", 0) / n)) / models)
         out = apply_model(self.model, x[None], device=self.device, shifts=self.shifts, split=True,
-                          overlap=self.overlap, progress=False, **kw)[0]
+                          overlap=self.overlap, progress=False, callback=on_segment, **kw)[0]
         out = out * std + mean
         return {name: out[i].T.float().cpu().numpy() for i, name in enumerate(self.sources)}
