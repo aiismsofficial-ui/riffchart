@@ -133,6 +133,13 @@ the chart library is only ever read.
 
 See [DESIGN.md](DESIGN.md) for the pipeline, the model and the post-processing.
 
+## Support RiffChart
+
+RiffChart is free and made by one person in their spare time. If it saves you hours of charting, you can
+[tip the dev on Ko-fi](https://ko-fi.com/aiismsofficial) &#9829;. Tips help keep it going
+(bass and drums are next on the list). Bug reports, song requests and charts that came out wrong are just as welcome:
+open an issue.
+
 ## Licence
 
 The code is GPL-3.0 (see `LICENSE`). The model files are CC BY-NC 4.0: free to use and share with credit,

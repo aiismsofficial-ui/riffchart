@@ -704,3 +704,11 @@ def test_find_clone_hero_exe(tmp_path, monkeypatch, env):
     r = env.client.post("/api/setup", json=body)
     assert r.status_code == 200 and r.json()["clone_hero"]["exe"] == str(ch / "Clone Hero.exe")
     assert env.client.post("/api/setup", json=dict(body, clone_hero_exe=str(tmp_path / "nope"))).status_code == 400
+
+
+def test_tip_link_only_when_https(env):
+    assert env.client.get("/api/status").json()["tip_url"] == ""
+    env.cfg["tip_url"] = "https://ko-fi.com/someone"
+    assert env.client.get("/api/status").json()["tip_url"] == "https://ko-fi.com/someone"
+    env.cfg["tip_url"] = "javascript:alert(1)"
+    assert env.client.get("/api/status").json()["tip_url"] == ""

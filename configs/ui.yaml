@@ -18,5 +18,8 @@ protected: []
 # Clone Hero: the exe comes from configs/preview.yaml (clone_hero_exe); its settings.ini for song folders.
 clone_hero_settings: ~/Documents/Clone Hero/settings.ini
 
+# "Tip the dev" link (library header, and a one-time note after the first chart). Empty: hidden.
+tip_url: https://ko-fi.com/aiismsofficial
+
 # Rough share of a song's charting time per stage, for the progress bar.
 stage_weights: {load: 0.04, separate: 0.15, beats: 0.12, chart: 0.60, post: 0.06, write: 0.03}

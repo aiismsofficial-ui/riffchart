@@ -102,7 +102,11 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                                "export_registered": any(Path(p).resolve() == lib.export_dir.resolve()
                                                         for p in folders if p),
                                "running": clonehero.is_running()},
-                "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done()}
+                "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done(), "tip_url": tip_url()}
+
+    def tip_url() -> str:
+        u = str(cfg.get("tip_url") or "").strip()
+        return u if u.startswith("https://") else ""
 
     # ---- first-run setup (also "Settings" in the library header)
     def setup_done() -> bool:

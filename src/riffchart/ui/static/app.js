@@ -165,9 +165,26 @@ function renderJobs() {
   for (const j of jobs) {
     if (j.status !== "done" || seenDone.has(j.id)) continue;
     seenDone.add(j.id);
-    if (firstJobsLoaded) toastHtml(`<b>${esc(j.name)}</b> is ready · <a href="${editorUrl(j.song)}">Open in editor</a>`);
+    if (firstJobsLoaded) {
+      toastHtml(`<b>${esc(j.name)}</b> is ready · <a href="${editorUrl(j.song)}">Open in editor</a>`);
+      maybeTipNote();
+    }
   }
   firstJobsLoaded = true;
+}
+
+// once ever, a little while after a song finishes: RiffChart is free, a tip is welcome (never shown again)
+const TIP_SHOWN = "riffchart.tipNoteShown";
+function maybeTipNote() {
+  const url = status && status.tip_url;
+  if (!url) return;
+  try { if (localStorage.getItem(TIP_SHOWN)) return; localStorage.setItem(TIP_SHOWN, "1"); } catch { return; }
+  setTimeout(() => {
+    toastHtml(`Your chart is ready! RiffChart is free and made by one person. If it saves you time, you can ` +
+      `<a href="${esc(url)}" target="_blank" rel="noopener">tip the dev &#9829;</a>`);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => $("#toast").classList.remove("show", "interactive"), 15000);
+  }, 9500);
 }
 
 function toastHtml(html) {
@@ -342,6 +359,8 @@ $("#tidy-go").addEventListener("click", async () => {
 // ---------- status + export folder
 function renderStatus() {
   if (!status) return;
+  const tip = $("#tiplink");
+  if (tip) { tip.hidden = !status.tip_url; if (status.tip_url) tip.href = status.tip_url; }
   const m = status.model, ch = status.clone_hero;
   const mLabel = { ready: "model ready", loading: "loading model…", "not loaded": "model loads on first song", failed: "model failed to load" }[m] || m;
   const mCls = { ready: "ok", loading: "busy", failed: "bad" }[m] || "";
