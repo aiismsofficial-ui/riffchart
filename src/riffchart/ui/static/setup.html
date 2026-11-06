@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Setup · RiffChart</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='6' cy='16' r='4' fill='%2322c55e'/><circle cx='16' cy='16' r='4' fill='%23ef4444'/><circle cx='26' cy='16' r='4' fill='%23eab308'/></svg>">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="setup.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><a href="./" class="back" id="back" title="Back to your songs">←</a><span class="dots"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span><span id="heading">Settings</span></div>
+</header>
+
+<main class="su-main">
+  <p class="su-intro" id="intro" hidden>Welcome to RiffChart. Check these four things and you're ready to chart. You can change all of
+    this later under <b>Settings</b>.</p>
+
+  <section class="card">
+    <h2><span class="su-n">1</span> Clone Hero</h2>
+    <label class="su-field">Clone Hero's settings file
+      <input type="text" id="settings" autocomplete="off" spellcheck="false"></label>
+    <p class="muted su-state" id="chstate"></p>
+  </section>
+
+  <section class="card">
+    <h2><span class="su-n">2</span> Where finished songs go</h2>
+    <p class="muted">Export copies each finished song here. Clone Hero plays them from this folder.</p>
+    <label class="su-field">Songs folder
+      <input type="text" id="export" autocomplete="off" spellcheck="false"></label>
+    <label class="su-check" id="regrow"><input type="checkbox" id="register" checked> Add this folder to Clone Hero's song folders</label>
+    <p class="muted su-state" id="regstate"></p>
+  </section>
+
+  <section class="card">
+    <h2><span class="su-n">3</span> Folders RiffChart never changes</h2>
+    <p class="muted">Your own chart collections. RiffChart can open charts from them but will never save, export or delete
+      anything inside them.</p>
+    <div id="protlist" class="su-list"></div>
+    <form id="addprot" class="su-add"><input type="text" id="protin" placeholder="Add a folder, e.g. D:\Clone Hero\Songs" autocomplete="off" spellcheck="false">
+      <button class="ghost small">Add</button></form>
+  </section>
+
+  <section class="card">
+    <h2><span class="su-n">4</span> What Clone Hero shows while you play</h2>
+    <p class="muted">RiffChart gives each song a background, a highway and (for music videos) a video. Clone Hero only shows
+      them when these options are on.</p>
+    <div id="opts" class="su-list"></div>
+    <p class="muted su-state">Clone Hero has to be closed to change these (it saves its settings when it exits).
+      Its settings file is backed up first.</p>
+  </section>
+
+  <div class="su-actions"><span class="muted" id="savestate"></span><button id="save">Save</button></div>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="setup.js"></script>
+</body>
+</html>

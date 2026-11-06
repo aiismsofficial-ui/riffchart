@@ -31,6 +31,7 @@ from ..formats.chart_writer import write_chart_text
 from .chartjson import json_to_song, peaks, song_to_json
 from .checker import load_rules, song_issues
 from .jobs import JobQueue, Options
+from . import setup
 from ..product import covers
 from ..product import highways
 from ..product.visuals import (VIDEO_FILES, default_highway, hw_mode, refresh_background, refresh_highway,
@@ -49,6 +50,7 @@ def load_config(path: str | Path = "configs/ui.yaml") -> dict:
     cfg["export_dir"] = Path(cfg["export_dir"]).expanduser()
     cfg["protected"] = [Path(p).expanduser() for p in cfg.get("protected") or []]
     cfg["clone_hero_settings"] = Path(cfg["clone_hero_settings"]).expanduser() if cfg.get("clone_hero_settings") else None
+    cfg["_config"] = project_path(path)                 # setup writes <config>.local.yaml next to it
     return cfg
 
 
@@ -100,7 +102,72 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                                "export_registered": any(Path(p).resolve() == lib.export_dir.resolve()
                                                         for p in folders if p),
                                "running": clonehero.is_running()},
-                "audio_ext": sorted(AUDIO_EXT)}
+                "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done()}
+
+    # ---- first-run setup (also "Settings" in the library header)
+    def setup_done() -> bool:
+        if cfg.get("setup_done") or not cfg.get("_config"):
+            return True                                  # tests / embedded use: nothing to set up
+        return bool(setup.read_local(cfg["_config"]).get("export_dir"))
+
+    def setup_state() -> dict:
+        st = cfg.get("clone_hero_settings") or setup.default_settings()
+        st = Path(st)
+        folders = [p for p in clonehero.song_folders(st) if p.strip()] if st.exists() else []
+        exe = clonehero.find_exe()
+        return {"done": setup_done(), "export_dir": str(lib.export_dir),
+                "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
+                "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
+                "clone_hero": {"settings": str(st), "found": st.exists(), "exe": str(exe) if exe else None,
+                               "running": clonehero.is_running(), "folders": folders,
+                               "options": setup.read_options(st), "labels": setup.CH_OPTIONS}}
+
+    @app.get("/api/setup")
+    def get_setup():
+        return setup_state()
+
+    @app.post("/api/setup")
+    def save_setup(body: dict = Body(...)):
+        """{export_dir, clone_hero_settings, protected: [folders], register: bool, options: {song_videos: bool,
+        ...}}. Saved to <config>.local.yaml and used right away. Clone Hero's settings.ini is only changed
+        while Clone Hero is closed (it rewrites the file when it exits), with a backup."""
+        if not cfg.get("_config"):
+            raise HTTPException(400, "this app was started without a config file to save to")
+        try:
+            export = Path(str(body.get("export_dir") or "").strip()).expanduser()
+            st = Path(str(body.get("clone_hero_settings") or "").strip()).expanduser() if body.get("clone_hero_settings") else None
+            prot = [Path(str(p).strip()).expanduser() for p in body.get("protected") or [] if str(p).strip()]
+        except (TypeError, ValueError):
+            raise HTTPException(400, "folder paths must be text")
+        if not export.is_absolute():
+            raise HTTPException(400, "choose a full folder path for your finished songs, like D:\\Clone Hero\\RiffChart songs")
+        for p in prot:
+            if not p.is_absolute() or not p.is_dir():
+                raise HTTPException(400, f"{p} is not a folder on this PC")
+        try:
+            check_writable(export / "x", prot)
+            check_writable(lib.workspace, prot)
+        except ProtectedPathError:
+            raise HTTPException(400, "the songs folder can't be inside a folder you protect from changes")
+        opts = {k: bool(v) for k, v in (body.get("options") or {}).items() if k in setup.CH_OPTIONS}
+        cur = setup.read_options(st) if st and st.exists() else {}
+        opts_change = {k: v for k, v in opts.items() if (cur.get(k) if cur.get(k) is not None else 1) != int(v)}
+        register = bool(body.get("register"))
+        touches_ch = st is not None and st.exists() and (register or opts_change)
+        if touches_ch and clonehero.is_running():
+            raise HTTPException(409, "close Clone Hero first: it overwrites its settings when it exits")
+        export.mkdir(parents=True, exist_ok=True)
+        setup.write_local(cfg["_config"], {"export_dir": str(export), "clone_hero_settings": str(st) if st else None,
+                                           "protected": [str(p) for p in prot], "setup_done": True})
+        cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True)
+        lib.export_dir, lib.protected = export, prot
+        done = {"registered": False, "options_changed": False}
+        if touches_ch:
+            if register:
+                done["registered"] = clonehero.add_song_folder(st, export)
+            if opts_change:
+                done["options_changed"] = setup.set_options(st, {k: int(v) for k, v in opts_change.items()})
+        return dict(setup_state(), **done)
 
     # ---- jobs
     @app.get("/api/jobs")

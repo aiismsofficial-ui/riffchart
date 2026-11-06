@@ -1,0 +1,18 @@
+.back { color: var(--muted); text-decoration: none; margin-right: 4px; font-size: 20px; }
+.back:hover { color: var(--text); }
+.su-main { max-width: 760px; }
+.su-intro { font-size: 15px; margin: 0; }
+.su-n { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--accent);
+  color: var(--accent-ink); font-size: 12px; margin-right: 8px; }
+.card p { margin: 0 0 10px; }
+.su-field { display: grid; gap: 4px; font-weight: 600; font-size: 13px; }
+.su-field input { font-weight: 400; width: 100%; }
+.su-state { margin: 8px 0 0 !important; font-size: 13px; }
+.su-check { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
+.su-check[hidden] { display: none; }
+.su-check code { font-size: 12px; background: var(--panel2); padding: 2px 6px; border-radius: 4px; word-break: break-all; }
+.su-list { display: grid; gap: 2px; margin-bottom: 8px; }
+.su-add { display: flex; gap: 8px; }
+.su-add input { flex: 1; }
+.su-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.warnc { color: var(--warn); }

@@ -58,6 +58,10 @@ uv sync --extra dev --python 3.12
 .venv/Scripts/python -m pytest -q
 ```
 
+The first time the app starts it asks where finished songs should go, which of your chart folders it must
+never change, and whether to switch on Clone Hero's song videos, backgrounds and highways (Settings in the
+app's header changes these later). It saves the answers to `configs/ui.local.yaml`.
+
 Settings live in `configs/*.yaml`. Put anything specific to your PC (your folders) in a matching
 `configs/<name>.local.yaml`, which is gitignored and merged over the tracked file. For example
 `configs/ui.local.yaml`:

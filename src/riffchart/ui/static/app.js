@@ -365,7 +365,9 @@ function renderStatus() {
 async function refreshStatus() {
   try {
     const had = status && status.clone_hero.exe;
-    status = await api("/api/status"); renderStatus();
+    status = await api("/api/status");
+    if (status.setup_done === false) { location.href = "setup.html"; return; }   // first run
+    renderStatus();
     if (!!had !== !!status.clone_hero.exe) renderSongs();
   } catch { /* server restarting */ }
 }

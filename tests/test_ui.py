@@ -636,3 +636,46 @@ def test_convert_video_endpoint(env):
             break
         time.sleep(0.05)
     assert v["file"] == "video.webm" and v["codec"] == "vp8" and v["ok"] and "converting" not in v
+
+
+def test_first_run_setup(env, monkeypatch):
+    from riffchart.ui import setup
+    monkeypatch.setattr(clonehero, "is_running", lambda: False)
+    conf = env.tmp / "ui.yaml"
+    (env.tmp / "ui.local.yaml").write_text("# my notes\nport: 9000\nexport_dir: old\n", encoding="utf-8")
+    env.cfg["_config"] = conf
+    st = env.cfg["clone_hero_settings"]
+    st.write_text(st.read_text(encoding="utf-8") + "\n[custom]\nsong_highway = 0\nsong_videos = 1\n", encoding="utf-8")
+    s = env.client.get("/api/setup").json()
+    assert s["clone_hero"]["found"] and s["clone_hero"]["folders"] == ["C:\\songs"]
+    assert s["clone_hero"]["options"] == {"song_videos": 1, "song_backgrounds": None, "song_highway": 0}
+    songs = env.tmp / "Finished songs"
+    body = {"export_dir": str(songs), "clone_hero_settings": str(st), "protected": [str(env.lib_ro)], "register": True,
+            "options": {"song_videos": True, "song_backgrounds": True, "song_highway": True}}
+    r = env.client.post("/api/setup", json=body).json()
+    assert r["registered"] and r["options_changed"] and r["done"] and songs.is_dir()
+    text = st.read_text(encoding="utf-8")
+    assert "song_highway = 1" in text and "song_backgrounds" not in text.split("[custom]")[0]
+    assert str(songs.resolve()) in text and (env.tmp / "settings.ini.bak-riffchart").exists()
+    local = (env.tmp / "ui.local.yaml").read_text(encoding="utf-8")
+    assert local.startswith("# my notes\nport: 9000\n") and "export_dir: old" not in local
+    loaded = setup.read_local(conf)
+    assert loaded["export_dir"] == str(songs) and loaded["protected"] == [str(env.lib_ro)] and loaded["setup_done"]
+    assert env.client.get("/api/status").json()["export_dir"] == str(songs)        # used right away
+    # refused: songs folder inside a protected one; Clone Hero running while its settings would change
+    bad = dict(body, export_dir=str(env.lib_ro / "x"))
+    assert env.client.post("/api/setup", json=bad).status_code == 400
+    assert env.client.post("/api/setup", json=dict(body, export_dir="relative")).status_code == 400
+    monkeypatch.setattr(clonehero, "is_running", lambda: True)
+    assert env.client.post("/api/setup", json=dict(body, options={"song_videos": False})).status_code == 409
+    assert env.client.post("/api/setup", json=dict(body, register=False, options={})).status_code == 200
+
+
+def test_set_ch_options_only_touches_custom(tmp_path):
+    from riffchart.ui.setup import read_options, set_options
+    st = tmp_path / "settings.ini"
+    st.write_text("[game]\nsong_videos = 7\n\n[video]\nx = 1\n", encoding="utf-8")
+    assert set_options(st, {"song_videos": 1, "nonsense": 1}) and not set_options(st, {"song_videos": 1})
+    t = st.read_text(encoding="utf-8")
+    assert "[game]\nsong_videos = 7" in t and t.rstrip().endswith("[custom]\nsong_videos = 1") and "nonsense" not in t
+    assert read_options(st)["song_videos"] == 1
