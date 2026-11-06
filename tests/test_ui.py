@@ -447,3 +447,19 @@ def test_cover_art_from_tags(tmp_path):
     fl.save()
     assert cover_art(f) == JPG                                                # front cover wins
     assert cover_art(tmp_path / "missing.mp3") is None
+
+
+def test_tidy_names_preview_and_apply(env):
+    c, folder = env.client, _charted(env)
+    ini = folder / "song.ini"
+    ini.write_text(ini.read_text(encoding="utf-8").replace("name = Uprising", "name = Uprising - MuseVEVO"),
+                   encoding="utf-8")
+    ch = c.get("/api/tidy").json()
+    assert [(x["old"]["title"], x["new"]["title"]) for x in ch] == [("Uprising - MuseVEVO", "Uprising")]
+    c.post("/api/songs/Muse - Uprising/export", json={})
+    r = c.post("/api/tidy", json={"ids": ["Muse - Uprising"], "export": True}).json()
+    assert r["renamed"] == ["Muse - Uprising"] and r["exported"] == ["Muse - Uprising"] and not r["failed"]
+    assert "name = Uprising\n" in ini.read_text(encoding="utf-8")
+    assert "name = Uprising\n" in (env.cfg["export_dir"] / "Muse - Uprising" / "song.ini").read_text(encoding="utf-8")
+    assert c.get("/api/tidy").json() == []
+    assert c.post("/api/tidy", json={"ids": ["nope"]}).json()["renamed"] == []

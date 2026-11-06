@@ -306,6 +306,39 @@ $("#rc-go").addEventListener("click", async () => {
   } catch (err) { toast(err.message, true); }
 });
 
+// ---------- tidy names left by downloads ("song-128-ytshorts.savetube.me", "Title - ArtistVEVO")
+let tidyList = [];
+async function refreshTidy() {
+  try { tidyList = await api("/api/tidy"); } catch { return; }
+  const b = $("#tidy");
+  b.hidden = !tidyList.length;
+  b.textContent = `Tidy names (${tidyList.length})…`;
+}
+function tidyName(m) {
+  return `${esc(m.artist)} — ${esc(m.title)}${m.album ? ` <span class="art">· ${esc(m.album)}</span>` : ""}`;
+}
+$("#tidy").addEventListener("click", async () => {
+  await refreshTidy();
+  if (!tidyList.length) { toast("All song names look fine"); return; }
+  $("#tidylist").innerHTML = tidyList.map((c, i) => `<label><input type="checkbox" data-i="${i}" checked>
+    <span><div class="old">${tidyName(c.old)}</div><div class="new">${tidyName(c.new)}</div></span></label>`).join("");
+  $("#tidyexport").parentElement.hidden = !tidyList.some((c) => c.exported);
+  $("#tidydlg").showModal();
+});
+$("#tidy-cancel").addEventListener("click", () => $("#tidydlg").close());
+$("#tidy-go").addEventListener("click", async () => {
+  const ids = [...document.querySelectorAll("#tidylist input:checked")].map((x) => tidyList[+x.dataset.i].id);
+  if (!ids.length) { $("#tidydlg").close(); return; }
+  try {
+    const r = await post("/api/tidy", { ids, export: $("#tidyexport").checked });
+    $("#tidydlg").close();
+    toast(`Renamed ${r.renamed.length} song${r.renamed.length === 1 ? "" : "s"}` +
+      (r.exported.length ? `, updated ${r.exported.length} in Clone Hero (rescan songs there)` : "") +
+      (r.failed.length ? `. ${r.failed.length} failed: ${r.failed[0].error}` : ""), r.failed.length > 0);
+    refreshSongs(true); refreshTidy();
+  } catch (err) { toast(err.message, true); }
+});
+
 // ---------- status + export folder
 function renderStatus() {
   if (!status) return;
@@ -347,7 +380,7 @@ async function refreshSongs(force = false) {
   try {
     const s = await api("/api/songs");
     const key = JSON.stringify(s);
-    if (force || key !== lastSongsKey) { songs = s; lastSongsKey = key; renderSongs(); }
+    if (force || key !== lastSongsKey) { songs = s; lastSongsKey = key; renderSongs(); refreshTidy(); }
   } catch { /* server restarting */ }
 }
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,27 +41,89 @@ def from_filename(path: Path) -> SongMeta:
 
 # video-site leftovers in titles: "(Official Video)", "[Official Audio]", "(Lyric Video)", "(HD)", ...
 _JUNK = re.compile(r"\s*[\(\[](?:[^\)\]]*\b(?:official|lyrics?|visuali[sz]er|audio|video|hd|hq|4k|remaster(?:ed)?"
-                   r"(?: \d{4})?|explicit|clean|music video|mv)\b[^\)\]]*)[\)\]]", re.I)
+                   r"(?: \d{4})?|explicit|clean|music video|mv|cc|subtitles|subbed)\b[^\)\]]*)[\)\]]", re.I)
 
 # downloaders append the video id: "Song [dQw4w9WgXcQ]"
 _YTID = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
 
+# converter sites: "song-128-ytshorts.savetube.me", "y2mate.com - Song", "Song (320 kbps)"
+_TLD = r"(?:me|com|net|org|cc|io|to|app|co|ch|nu|is|tv|cx|ws|fm|pro|lol|site|online|biz|info)"
+_SITE_END = re.compile(rf"[\s_-]*(?:[A-Za-z0-9]+\.)+{_TLD}$", re.I)
+_SITE_START = re.compile(rf"^(?:[A-Za-z0-9]+\.)+{_TLD}\s*[-_]\s*", re.I)
+_BITRATE = re.compile(r"[\s_-]*[\(\[]?\b(?:64|96|128|160|192|256|320)\s*(?:k|kbps)?[\)\]]?$", re.I)
+_SLUG_JUNK = re.compile(r"(?:\s+(?:official|lyrics?|visuali[sz]er|lyric|music|video|audio|hd|4k|mv))+$", re.I)
+# an uploader that is a record label, not the artist: "Roadrunner Records" + "Devildriver - Clouds ..."
+_LABEL = re.compile(r"\b(?:records|recordings|entertainment|music group)$", re.I)
+# "... Rock Cover by Our Last Night" outside brackets (in a file name)
+_COVER_BY = re.compile(r"\s+(?:(\w+)\s+)?cover\s+by\s+([^()\[\]]+)$", re.I)
+
+
+def _fold(s: str) -> str:
+    """For comparing names: no accents, case or punctuation ("Måneskin" == "maneskin")."""
+    s = unicodedata.normalize("NFKD", s)
+    return "".join(c for c in s if c.isalnum() and not unicodedata.combining(c)).casefold()
+
+
+def _unquote(s: str) -> str:
+    m = re.fullmatch(r"(['\"‘’“”]+)(.+?)(['\"‘’“”]+)", s)
+    return m.group(2).strip() if m else s
+
+
+def _tidy_text(s: str, slug: bool = True) -> str:
+    """Site names, bitrates and file-name slugs ("front-porch-step-drown", "Choosin_Texas_-_Ella").
+    slug=False for artists: "blink-182" is a band name, not a slug."""
+    s = _YTID.sub("", _JUNK.sub("", s)).strip()
+    for _ in range(2):
+        s = _BITRATE.sub("", _SITE_END.sub("", _SITE_START.sub("", s))).strip()
+    if not slug:
+        pass
+    elif " " not in s and "_" in s:
+        s = re.sub(r"\s+", " ", s.replace("_", " ")).strip()
+    elif " " not in s and s.count("-") >= 1 and s == s.lower() and re.search(r"[a-z]", s):
+        s = _SLUG_JUNK.sub("", s.replace("-", " ")).strip()
+        s = " ".join(w[:1].upper() + w[1:] for w in s.split())
+    return re.sub(r"\s{2,}", " ", s).strip(" -_")
+
+
+def _channel_part(p: str, artist_f: str) -> bool:
+    """A title part that is the uploader's channel: "ManeskinVEVO", "Artist - Topic", the artist itself."""
+    f = _fold(p)
+    if not f:
+        return True
+    if f == artist_f or (artist_f and f in (artist_f + "vevo", artist_f + "official", artist_f + "tv")):
+        return True
+    return " " not in p.strip() and p.strip().endswith("VEVO")
+
 
 def clean(meta: SongMeta) -> SongMeta:
-    """Tidy names from downloads: drop "(Official Visualizer)"-style suffixes and a title that repeats
-    the artist ("Artist - Title - Artist", "Title - Artist")."""
-    artist = _YTID.sub("", _JUNK.sub("", meta.artist)).strip() or meta.artist
-    title = _YTID.sub("", _JUNK.sub("", meta.title)).strip() or meta.title
+    """Tidy names from downloads: "(Official Visualizer)"-style suffixes, converter-site names and bitrates,
+    file-name slugs, "ArtistVEVO" / channel parts, a title that repeats the artist ("Artist - Title - Artist",
+    "Title - Artist") and a trailing part already named in the title ("Song (Cover by X) - X")."""
+    artist = _tidy_text(meta.artist, slug=False) or meta.artist
     artist = re.sub(r"\s+-\s+Topic$", "", artist).strip() or artist
-    a = artist.casefold()
-    parts = [p.strip() for p in title.split(" - ")]
+    title = _tidy_text(meta.title) or meta.title
+    unknown = artist.casefold() in ("", "unknown artist")
+    a = _fold(artist)
+    parts = [_unquote(p.strip()) for p in re.split(r"\s+-\s+|\s+-$|^-\s+", title)]
+    parts = [p for p in parts if p.strip(" -")]
     if len(parts) > 1:
-        rest = [p for p in parts if p.casefold() != a]
-        if rest and len(rest) < len(parts):
-            title = " - ".join(rest)
-    if artist.casefold() in ("", "unknown artist") and len(parts) == 2:
+        rest = [p for p in parts if not _channel_part(p, "" if unknown else a)]
+        while len(rest) > 1 and len(_fold(rest[-1])) >= 4 and _fold(rest[-1]) in _fold(" ".join(rest[:-1])):
+            rest = rest[:-1]                                # "... (Rock Cover by Our Last Night) - Our Last Night"
+        if rest:
+            parts = rest
+    title = " - ".join(parts) or title
+    cover = _COVER_BY.search(title)
+    if unknown and cover:                                   # "Song - Artist Rock Cover by Band": the band plays it
+        artist = cover.group(2).strip()
+        title = title[:cover.start()].strip() + f" ({(cover.group(1) or '').strip().title() + ' ' if cover.group(1) else ''}Cover)"
+        return SongMeta(title, artist, "", meta.genre, meta.year)
+    if (unknown or _LABEL.search(artist)) and len(parts) == 2:
         artist, title = parts
-    return SongMeta(title, artist, meta.album, meta.genre, meta.year)
+    album = _tidy_text(meta.album) if meta.album else ""
+    if album and _fold(album) in (_fold(meta.title), _fold(title), _fold(f"{artist} - {title}")):
+        album = ""                                          # downloaders often copy the video title here
+    return SongMeta(title, artist, album, meta.genre, meta.year)
 
 
 def read_meta(path: str | Path) -> SongMeta:

@@ -161,3 +161,13 @@ button.icon { padding: 4px 9px; }
 .details .dt-fields input, .details .dt-fields select { width: 100%; box-sizing: border-box; font-size: 14px; color: var(--text); }
 .details .dt-state { margin-top: 12px; }
 @media (max-width: 560px) { .details .dt-body { grid-template-columns: 1fr; } }
+/* tidy names dialog */
+.headtools { display: flex; align-items: center; gap: 8px; }
+.tidy { width: min(760px, calc(100vw - 32px)); }
+.tidylist { max-height: 55vh; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
+.tidylist label { display: grid; grid-template-columns: 20px 1fr; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; }
+.tidylist label:last-child { border-bottom: 0; }
+.tidylist .old { color: var(--muted); text-decoration: line-through; }
+.tidylist .new { color: var(--text); font-weight: 600; }
+.tidylist .new .art { color: var(--muted); font-weight: 400; }
+.tidyexp { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }

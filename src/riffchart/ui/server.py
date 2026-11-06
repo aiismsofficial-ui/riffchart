@@ -393,6 +393,44 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             (folder / n).unlink(missing_ok=True)
         return lib.info(song_id)
 
+    def tidy_changes() -> list[dict]:
+        """Songs whose names the download tidier would change: [{id, old, new}] (title / artist / album)."""
+        from ..product.meta import SongMeta, clean
+        out = []
+        for s in lib.list():
+            if s.get("error"):
+                continue
+            old = {"title": s["title"], "artist": s["artist"], "album": s.get("album", "")}
+            m = clean(SongMeta(old["title"], old["artist"], old["album"]))
+            new = {"title": m.title, "artist": m.artist, "album": m.album}
+            if new != old:
+                out.append({"id": s["id"], "old": old, "new": new, "exported": s.get("exported", False)})
+        return out
+
+    @app.get("/api/tidy")
+    def tidy_preview():
+        return tidy_changes()
+
+    @app.post("/api/tidy")
+    def tidy_apply(body: dict = Body(...)):
+        """Apply the tidied names to the chosen songs; "export": true also updates their Clone Hero copies."""
+        want = set(body.get("ids") or [])
+        done, exported, failed = [], [], []
+        for ch in tidy_changes():
+            if ch["id"] not in want:
+                continue
+            try:
+                folder = song_folder(ch["id"])
+                check_writable(folder, lib.protected)
+                write_ini_fields(folder / "song.ini", clean_meta(ch["new"]))
+                done.append(ch["id"])
+                if body.get("export") and ch["exported"]:
+                    lib.export(ch["id"], overwrite=True)
+                    exported.append(ch["id"])
+            except (HTTPException, ValueError, OSError) as e:
+                failed.append({"id": ch["id"], "error": getattr(e, "detail", None) or str(e)})
+        return {"renamed": done, "exported": exported, "failed": failed}
+
     @app.delete("/api/songs/{song_id}")
     def remove_song(song_id: str):
         """Remove a song from the app's library: moved to data/ui/trash, not deleted. Exports are kept."""

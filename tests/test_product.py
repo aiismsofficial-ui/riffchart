@@ -103,3 +103,31 @@ def test_decode_video_site_formats(tmp_path, ext, codec, video):
     spec = np.abs(np.fft.rfft(mid[:, 0]))
     assert abs(np.argmax(spec) * r / len(mid) - 440) < 5      # left channel kept its tone
     assert 0.3 < np.abs(mid).max() < 0.7
+
+
+@pytest.mark.parametrize("artist,title,album,want", [
+    ("Unknown Artist", "front-porch-step-drown-128-ytshorts.savetube.me", "", ("Unknown Artist", "Front Porch Step Drown", "")),
+    ("Unknown Artist", "night-drive-lyric-video-128-ytshorts.savetube.me", "", ("Unknown Artist", "Night Drive", "")),
+    ("Måneskin", "TIMEZONE - ManeskinVEVO", "", ("Måneskin", "TIMEZONE", "")),
+    ("Bullet For My Valentine", "Your Betrayal - bulletvalentineVEVO", "", ("Bullet For My Valentine", "Your Betrayal", "")),
+    ("Some Uploader", "Rammstein - ''Pussy'' - - - (English CC)", "", ("Some Uploader", "Rammstein - Pussy", "")),
+    ("Kate Bush", "Running Up That Hill (Rock Cover by Our Last Night) - Our Last Night", "",
+     ("Kate Bush", "Running Up That Hill (Rock Cover by Our Last Night)", "")),
+    ("Unknown Artist", "Choosin_Texas_-_Ella_Langley_Rock_Cover_by_Our_Last_Night", "",
+     ("Our Last Night", "Choosin Texas - Ella Langley (Rock Cover)", "")),
+    ("Roadrunner Records", "Devildriver - Clouds Over California", "Devildriver - Clouds Over California [OFFICIAL VIDEO]",
+     ("Devildriver", "Clouds Over California", "")),
+    ("LØLØ", "whiskey & coke (Official Visualizer) - LØLØ", "", ("LØLØ", "whiskey & coke", "")),
+    ("Unknown Artist", "y2mate.com - Muse - Uprising (320 kbps)", "", ("Muse", "Uprising", "")),
+    # already fine: left alone
+    ("Silverstein", "Bad Habits - UNFD", "", ("Silverstein", "Bad Habits - UNFD", "")),
+    ("coolchannel", "Night Drive - The Midnight Hours", "", ("coolchannel", "Night Drive - The Midnight Hours", "")),
+    ("DRAGONFORCE", "Through the Fire and Flames", "Inhuman Rampage", ("DRAGONFORCE", "Through the Fire and Flames", "Inhuman Rampage")),
+    ("AC/DC", "T.N.T.", "", ("AC/DC", "T.N.T.", "")),
+    ("blink-182", "all-the-small-things", "", ("blink-182", "All The Small Things", "")),
+    ("Metallica", "One", "", ("Metallica", "One", "")),
+])
+def test_tidy_download_names(artist, title, album, want):
+    m = clean(SongMeta(title, artist, album))
+    assert (m.artist, m.title, m.album) == want
+    assert clean(m) == m                                     # tidying twice changes nothing

@@ -77,7 +77,10 @@
   <section class="card">
     <div class="cardhead">
       <h2>Your songs <span class="muted" id="songcount"></span></h2>
-      <input id="filter" type="search" placeholder="Filter" autocomplete="off">
+      <div class="headtools">
+        <button id="tidy" class="ghost small" hidden title="Fix names left by downloads and converter sites">Tidy names…</button>
+        <input id="filter" type="search" placeholder="Filter" autocomplete="off">
+      </div>
     </div>
     <div id="exportbar" class="exportbar"></div>
     <div class="tablewrap">
@@ -89,6 +92,15 @@
     </div>
   </section>
 </main>
+
+<dialog id="tidydlg" class="dialog tidy">
+  <h3>Tidy song names</h3>
+  <p class="muted">These names look like they came from a download or converter site. Untick anything that was
+    right already. You can fix any song by hand later in its Song details.</p>
+  <div id="tidylist" class="tidylist"></div>
+  <label class="tidyexp"><input type="checkbox" id="tidyexport" checked> Also update the copies in Clone Hero</label>
+  <div class="dlgbtns"><button class="ghost" id="tidy-cancel">Cancel</button><button id="tidy-go">Rename</button></div>
+</dialog>
 
 <dialog id="rechart" class="dialog">
   <h3 id="rc-title">Re-chart</h3>
