@@ -201,13 +201,18 @@ def write_own_background(folder: Path, data: bytes) -> str:
 # ---------------------------------------------------------------- highway (Clone Hero: "Song Highways" setting)
 HW_FILES = ("highway.png", "highway.jpg")
 HW_SIZE = (512, 1024)                           # Clone Hero's recommended size; it tiles down the highway
-HW_MODES = ("riffchart", "cover", "own", "none")
+HW_MODES = ("riffchart", "cover", "design", "own", "none")
 RIFFCHART_COLORS = {"top": (22, 24, 30), "bottom": (14, 15, 19), "rail": (245, 165, 36), "divider": (48, 52, 62),
                     "glow": (120, 75, 10)}
 
 
 def default_highway() -> str:
-    """Library-wide default for songs without a choice (`highway:` in configs/product.yaml)."""
+    """Library-wide default for songs without a choice: the one picked in the app's highway designer
+    ("riffchart", "cover", "none" or "design:<id>"), else `highway:` in configs/product.yaml."""
+    from .highways import library_default
+    v = library_default()
+    if v:
+        return v
     try:
         from ..paths import load_config
         m = load_config("configs/product.yaml").get("highway", "riffchart")
@@ -216,18 +221,21 @@ def default_highway() -> str:
     return m if m in ("riffchart", "cover", "none") else "riffchart"
 
 
-def make_highway(top, bottom, rail, divider, glow=None, texture=None) -> "Image.Image":
+def make_highway(top, bottom, rail, divider, glow=None, texture=None, texture_alpha=0.22, rail_w=14,
+                 lanes=True, overlay=None) -> "Image.Image":
     """A 512x1024 highway that tiles vertically: a dark surface (gradient that wraps), five lanes, coloured
-    rails with a soft inner glow, optionally a faint texture. Notes and beat lines are drawn by the game."""
+    rails with a soft inner glow, optionally a faint texture (HxWx3, mixed in at texture_alpha) and an RGBA
+    overlay (text / logo) under the lane lines. Notes and beat lines are drawn by the game."""
     from PIL import Image, ImageDraw, ImageFilter
     W, H = HW_SIZE
     t = (1 - np.cos(np.linspace(0, 2 * np.pi, H, endpoint=False))) / 2          # 0 -> 1 -> 0: seamless
     a, b = np.array(top, np.float32), np.array(bottom, np.float32)
     px = np.repeat((a[None] * (1 - t[:, None]) + b[None] * t[:, None])[:, None, :], W, axis=1)
-    if texture is not None:
-        px = px * 0.78 + np.asarray(texture, np.float32) * 0.22
+    if texture is not None and texture_alpha > 0:
+        px = px * (1 - texture_alpha) + np.asarray(texture, np.float32) * texture_alpha
     im = Image.fromarray(px.clip(0, 255).astype(np.uint8))
-    rail_w = 14
+    if overlay is not None:
+        im = Image.alpha_composite(im.convert("RGBA"), overlay).convert("RGB")
     if glow:
         g = Image.new("RGB", (W, H), (0, 0, 0))
         gd = ImageDraw.Draw(g)
@@ -241,15 +249,17 @@ def make_highway(top, bottom, rail, divider, glow=None, texture=None) -> "Image.
         im = Image.fromarray(np.clip(np.asarray(im, np.int16) + np.asarray(g, np.int16) // 2, 0, 255).astype(np.uint8))
     d = ImageDraw.Draw(im)
     lane = (W - 2 * rail_w) / 5
-    for i in range(1, 5):
-        xx = round(rail_w + i * lane)
-        d.line((xx, 0, xx, H), fill=tuple(divider), width=2)
-    rail = tuple(rail)
-    light = tuple(min(255, c + 60) for c in rail)
-    d.rectangle((0, 0, rail_w - 1, H), fill=rail)
-    d.rectangle((W - rail_w, 0, W, H), fill=rail)
-    d.line((rail_w, 0, rail_w, H), fill=light, width=1)
-    d.line((W - rail_w - 1, 0, W - rail_w - 1, H), fill=light, width=1)
+    if lanes:
+        for i in range(1, 5):
+            xx = round(rail_w + i * lane)
+            d.line((xx, 0, xx, H), fill=tuple(divider), width=2)
+    if rail_w > 0:
+        rail = tuple(rail)
+        light = tuple(min(255, c + 60) for c in rail)
+        d.rectangle((0, 0, rail_w - 1, H), fill=rail)
+        d.rectangle((W - rail_w, 0, W, H), fill=rail)
+        d.line((rail_w, 0, rail_w, H), fill=light, width=1)
+        d.line((W - rail_w - 1, 0, W - rail_w - 1, H), fill=light, width=1)
     return im
 
 
@@ -300,12 +310,16 @@ def hw_mode(folder: Path) -> str:
     m = _state(folder).get("highway")
     if m in HW_MODES:
         return m
-    return "own" if find_first(folder, HW_FILES) else default_highway()
+    return "own" if find_first(folder, HW_FILES) else default_highway().split(":")[0]
 
 
-def set_hw_mode(folder: Path, mode: str) -> None:
+def set_hw_mode(folder: Path, mode: str, design: str | None = None) -> None:
+    """design: the preset id to copy into the song (mode "design")."""
     if mode not in HW_MODES:
         raise ValueError(f"highway must be one of {', '.join(HW_MODES)}")
+    if mode == "design" and design:
+        from .highways import copy_to_song
+        copy_to_song(folder, design)
     _set_state(folder, "highway", mode)
 
 
@@ -317,19 +331,35 @@ def _remove_hw(folder: Path) -> None:
 def refresh_highway(folder: Path) -> None:
     """Make highway.png for the mode: the RiffChart highway, one from the cover (the RiffChart one when there's
     no cover), the user's own (left alone) or none."""
+    from . import highways
     mode = hw_mode(folder)
     if "highway" not in _state(folder):
         set_hw_mode(folder, mode)
+        dflt = default_highway()
+        if mode == "design" and dflt.startswith("design:"):
+            try:                                        # a new song gets the library's design
+                highways.copy_to_song(folder, dflt[7:])
+            except (KeyError, ValueError, OSError):
+                pass
     if mode == "own":
         return
     if mode == "none":
         _remove_hw(folder)
         return
-    art = find_art(folder) if mode == "cover" else None
-    try:
-        data = highway_from_cover(art.read_bytes()) if art else riffchart_highway()
-    except Exception:                                   # unreadable cover
-        data = riffchart_highway()
+    data = None
+    if mode == "design":
+        sd = highways.song_design(folder)
+        if sd:
+            try:
+                data = highways.render(*sd)
+            except Exception:                           # broken pattern image: the RiffChart one
+                data = None
+    if data is None:
+        art = find_art(folder) if mode == "cover" else None
+        try:
+            data = highway_from_cover(art.read_bytes()) if art else riffchart_highway()
+        except Exception:                               # unreadable cover
+            data = riffchart_highway()
     tmp = folder / "highway.png.tmp"
     tmp.write_bytes(data)
     _remove_hw(folder)

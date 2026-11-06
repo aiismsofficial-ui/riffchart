@@ -192,3 +192,55 @@ def test_search_errors_are_reported(monkeypatch):
     monkeypatch.setattr(covers, "_last_mb", 0.0)
     r = covers.search("Band", "Song")
     assert r["results"] == [] and len(r["errors"]) == 2 and "offline" in json.dumps(r)
+
+
+def test_designed_highway_renders_and_tiles():
+    from riffchart.product import highways
+    d = dict(highways.DEFAULT, rail="#00ff00", top="#202020", bottom="#202020", glow=0, rail_width=20, lanes=False,
+             text="RIFF", text_opacity=60)
+    px = np.asarray(Image.open(io.BytesIO(highways.render(d))).convert("RGB"), np.int16)
+    assert px.shape == (1024, 512, 3)
+    assert tuple(px[500, 5]) == (0, 255, 0)                              # rail colour and width
+    assert tuple(px[500, 30]) != (0, 255, 0)
+    assert px[256, 200:312].max() > 120                                  # the text, twice per tile
+    assert px[768, 200:312].max() > 120 and px[10, 200:312].max() < 60
+    pat = highways.clean_pattern(_img((255, 0, 0), (100, 300), "JPEG"))
+    for fit in ("mirror", "tile", "stretch"):
+        p = np.asarray(Image.open(io.BytesIO(highways.render(dict(d, text="", pattern_fit=fit, pattern_opacity=50),
+                                                             pat))).convert("RGB"), np.int16)
+        assert p[100, 200, 0] > p[100, 200, 2] + 80                      # pattern mixed in
+        assert np.abs(p[0] - p[-1]).max() <= 12                          # still tiles
+    with pytest.raises(ValueError):
+        highways.clean_design({"rail": "orange"})
+    with pytest.raises(ValueError):
+        highways.clean_pattern(b"not an image")
+    assert highways.clean_design({"rail_width": 999, "name": "  a   b "})["rail_width"] == 40
+
+
+def test_design_presets_songs_and_library_default(tmp_path):
+    from riffchart.product import highways
+    from riffchart.product.visuals import hw_mode, refresh_highway, set_hw_mode
+    s = highways.save_design(dict(highways.DEFAULT, name="Neon Blue", rail="#2060ff"))
+    assert s["id"] == "neon-blue" and highways.save_design({"name": "Neon Blue"})["id"] == "neon-blue-2"
+    assert [d["name"] for d in highways.list_designs()] == ["Neon Blue", "Neon Blue"]
+    song = tmp_path / "song"
+    song.mkdir()
+    set_hw_mode(song, "design", "neon-blue")
+    refresh_highway(song)
+    px = np.asarray(Image.open(song / "highway.png").convert("RGB"))[500, 3]
+    assert px[2] > 200 and px[0] < 80
+    assert highways.songs_using(tmp_path, "neon-blue") == [song]
+    highways.delete_design("neon-blue")                                  # the song keeps its copy
+    refresh_highway(song)
+    assert np.asarray(Image.open(song / "highway.png").convert("RGB"))[500, 3][2] > 200
+    # library default: a new song gets the design
+    highways.set_library_default("design:neon-blue-2")
+    new = tmp_path / "new"
+    new.mkdir()
+    assert hw_mode(new) == "design"
+    refresh_highway(new)
+    assert highways.song_design(new)[0]["id"] == "neon-blue-2" and (new / "highway.png").exists()
+    highways.delete_design("neon-blue-2")                                # default falls back
+    assert highways.library_default() is None
+    with pytest.raises(ValueError):
+        highways.set_library_default("rainbow")

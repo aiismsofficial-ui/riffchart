@@ -1,0 +1,51 @@
+/* highway designer */
+.back { color: var(--muted); text-decoration: none; margin-right: 4px; font-size: 20px; }
+.back:hover { color: var(--text); }
+.hw-default { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.hw-main { max-width: 1320px; grid-template-columns: 230px minmax(340px, 1fr) 340px; align-items: start; }
+@media (max-width: 1000px) { .hw-main { grid-template-columns: 1fr; } }
+.hw-list h2 { font-size: 14px; }
+.hw-sub { margin-top: 18px !important; }
+.hw-designs { display: grid; gap: 6px; margin-bottom: 10px; }
+.hw-item { display: flex; align-items: center; gap: 10px; background: transparent; color: var(--text); border: 1px solid transparent;
+  border-radius: 8px; padding: 4px 6px; text-align: left; font-weight: 500; }
+.hw-item:hover { background: var(--panel2); filter: none; }
+.hw-item.on { border-color: var(--accent); background: var(--panel2); }
+.hw-thumb { width: 22px; height: 44px; border-radius: 3px; flex: none; background-size: cover; background-position: center;
+  border: 1px solid var(--line); }
+.hw-iname { font-size: 13px; line-height: 1.25; }
+.hw-iname em { font-style: normal; font-size: 12px; }
+.small { font-size: 12px; }
+
+.hw-edit .cardhead h2 { flex: 1; }
+.hw-edit #name { width: 100%; font-size: 16px; font-weight: 600; background: transparent; border: 1px solid transparent; padding: 4px 6px; }
+.hw-edit #name:hover, .hw-edit #name:focus { border-color: var(--line); background: var(--panel2); }
+.hw-edit fieldset { margin-bottom: 12px; flex-direction: column; align-items: stretch; gap: 8px; }
+.hw-edit fieldset > label { display: flex; align-items: center; gap: 8px; }
+.hw-color input[type=color] { width: 36px; height: 26px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.hw-edit fieldset:first-of-type { display: grid; grid-template-columns: 1fr 1fr; }
+.hw-edit fieldset:first-of-type legend { grid-column: 1 / -1; }
+.hw-lab { width: 86px; flex: none; color: var(--text); font-size: 13px; }
+.slider output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; }
+.hw-pat { display: flex; align-items: center; gap: 10px; }
+.hw-actions { display: flex; gap: 8px; margin: 6px 0 14px; }
+.hw-actions .danger { margin-left: auto; color: var(--bad); }
+.hw-use { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.hw-use p { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; }
+
+/* 3D preview: the image on a tilted plane, scrolling toward the player, with a strike line of five frets */
+.hw-stage { position: relative; height: 380px; perspective: 520px; perspective-origin: 50% 0%; overflow: hidden;
+  border-radius: 8px; background: radial-gradient(ellipse at 50% 20%, #23262f, #08090c 70%); }
+.hw-road { position: absolute; left: 50%; bottom: -70px; width: 240px; height: 900px; margin-left: -120px;
+  transform-origin: 50% 100%; transform: rotateX(62deg); background-size: 100% auto; background-repeat: repeat-y;
+  animation: hw-scroll 2.4s linear infinite; box-shadow: 0 0 40px rgba(0,0,0,.6); }
+.hw-road.still { animation: none; }
+@keyframes hw-scroll { from { background-position: 0 0; } to { background-position: 0 480px; } }
+.hw-strike { position: absolute; left: 50%; bottom: 32px; transform: translateX(-50%); display: flex; gap: 10px; }
+.hw-strike i { width: 30px; height: 14px; border-radius: 50%; border: 3px solid; background: rgba(0,0,0,.35); display: block; }
+.hw-strike .g { border-color: var(--g); } .hw-strike .r { border-color: var(--r); } .hw-strike .y { border-color: var(--y); }
+.hw-strike .b { border-color: var(--b); } .hw-strike .o { border-color: var(--o); }
+.hw-anim { display: inline-flex; gap: 6px; align-items: center; margin: 8px 0; font-size: 13px; color: var(--muted); }
+.hw-flat { display: flex; justify-content: center; background: var(--panel2); border-radius: 8px; padding: 10px; }
+.hw-flat img { height: 300px; aspect-ratio: 1 / 2; border: 1px solid var(--line); }
+.hw-preview p { margin: 8px 0 0; }

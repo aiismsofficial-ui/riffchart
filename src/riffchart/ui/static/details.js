@@ -59,10 +59,8 @@
             <option value="auto">Made from the cover</option><option value="own">My own image…</option><option value="none">None</option>
           </select></label>
           <input type="file" data-k="bgfile" accept="image/png,image/jpeg" hidden>
-          <label title="Clone Hero shows it when its Song Highways setting is on">Highway <select data-k="hwmode">
-            <option value="riffchart">RiffChart</option><option value="cover">From the cover</option>
-            <option value="own">My own image…</option><option value="none">None (the player's own)</option>
-          </select></label>
+          <label title="Clone Hero shows it when its Song Highways setting is on">Highway <select data-k="hwmode"></select></label>
+          <a class="link dt-hwdesign" href="highways.html" target="_blank" rel="noopener">Design your own highway…</a>
           <input type="file" data-k="hwfile" accept="image/png,image/jpeg" hidden>
           <div class="dt-video muted"></div>
         </div>
@@ -170,6 +168,24 @@
     if (src) img.src = src; else img.removeAttribute("src");
   }
 
+  function curHw() {             // the song's highway as the select's value (designs: "design:<id>")
+    const h = cur.highway;
+    return h.mode === "design" ? `design:${(h.design && h.design.id) || ""}` : h.mode;
+  }
+
+  async function fillHwSelect() {
+    let list = [];
+    try { list = (await call("/api/highways")).designs; } catch { /* designs are optional */ }
+    const sel = q('[data-k="hwmode"]'), h = cur.highway, esc = (t) => String(t).replace(/[&<>"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    const mine = list.map((d) => [`design:${d.id}`, d.name]);
+    if (h.mode === "design" && !mine.some(([v]) => v === curHw()))
+      mine.unshift([curHw(), `${(h.design && h.design.name) || "Designed"} (kept in this song)`]);
+    sel.innerHTML = `<option value="riffchart">RiffChart</option><option value="cover">From the cover</option>`
+      + (mine.length ? `<optgroup label="Your designs">${mine.map(([v, n]) => `<option value="${esc(v)}">${esc(n)}</option>`).join("")}</optgroup>` : "")
+      + `<option value="own">My own image…</option><option value="none">None (the player's own)</option>`;
+    sel.value = hwMode;
+  }
+
   function showHw() {
     const box = q(".dt-hwprev"), img = box.querySelector("img"), ph = box.querySelector("span");
     const coverChanged = removeArt || pendingArt || pendingArtUrl;
@@ -178,8 +194,10 @@
       if (hwUrl) URL.revokeObjectURL(hwUrl); hwUrl = URL.createObjectURL(hwFile); src = hwUrl;
     } else if (hwMode === "none") {
       note = "player's own";
-    } else if (hwMode === cur.highway.mode && cur.highway.file && !(hwMode === "cover" && coverChanged)) {
+    } else if (hwMode === curHw() && cur.highway.file && !(hwMode === "cover" && coverChanged)) {
       src = `/api/songs/${enc(cur.id)}/file/${cur.highway.file}`;
+    } else if (hwMode.startsWith("design:")) {
+      src = `/api/highways/${enc(hwMode.slice(7))}/image`;
     } else {
       note = "made when you save";
     }
@@ -231,8 +249,7 @@
   function fill(info) {
     cur = info; pendingArt = pendingArtUrl = bgFile = null; removeArt = removeVideo = false;
     bgMode = info.background.mode;
-    hwMode = info.highway.mode; hwFile = null;
-    q('[data-k="hwmode"]').value = hwMode;
+    hwMode = curHw(); hwFile = null;
     for (const f of FIELDS) q(`[data-f="${f}"]`).value = info[f] ?? "";
     const d = q('[data-f="diff_guitar"]');
     d.value = /^[0-6]$/.test(String(info.diff_guitar ?? "")) ? String(info.diff_guitar) : "";
@@ -275,8 +292,8 @@
       if (hwFile) {
         const fd = new FormData(); fd.append("file", hwFile);
         await call(`${base}/highway/file`, { method: "POST", body: fd });
-      } else if (hwMode !== "own" && (hwMode !== cur.highway.mode || (hwMode === "cover" && (pendingArt || pendingArtUrl || removeArt)))) {
-        await call(`${base}/highway`, json({ mode: hwMode }));
+      } else if (hwMode !== "own" && (hwMode !== curHw() || (hwMode === "cover" && (pendingArt || pendingArtUrl || removeArt)))) {
+        await call(`${base}/highway`, json(hwMode.startsWith("design:") ? { mode: "design", design: hwMode.slice(7) } : { mode: hwMode }));
       }
       const info = await call(`${base}/meta`, json(body));
       dlg.close();
@@ -295,6 +312,7 @@
     onSaved = opts.onSaved || null;
     try {
       fill(await call(`/api/songs/${enc(songId)}`));
+      await fillHwSelect();
     } catch (err) { toast(err.message, true); return; }
     dlg.showModal();
     q('[data-f="title"]').focus();

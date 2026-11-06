@@ -531,3 +531,46 @@ def test_highway_endpoints(env):
     assert (env.cfg["export_dir"] / "Muse - Uprising" / "highway.png").exists()
     d = c.post(f"{base}/highway", json={"mode": "none"}).json()
     assert d["highway"]["file"] == "" and d["export_stale"]
+
+
+def test_highway_designer_endpoints(env):
+    import io
+    from PIL import Image
+    b = io.BytesIO()
+    Image.new("RGB", (64, 64), (200, 30, 30)).save(b, "PNG")
+    c, folder = env.client, _charted(env)
+    other = _charted(env, "Band - Other")
+    blank = c.get("/api/highways").json()
+    assert blank["designs"] == [] and blank["default"] == "riffchart" and blank["clone_hero"]
+    design = json.dumps(dict(blank["blank"], name="Red Room", rail="#ff2020"))
+    r = c.post("/api/highways/render", data={"design": design}, files={"pattern": ("p.png", b.getvalue())})
+    assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
+    assert c.post("/api/highways/render", data={"design": '{"rail": "red"}'}).status_code == 400
+    saved = c.post("/api/highways", data={"design": design}, files={"pattern": ("p.png", b.getvalue())}).json()
+    hid = saved["design"]["id"]
+    assert hid == "red-room" and saved["design"]["has_pattern"] and saved["updated"] == []
+    assert c.get(f"/api/highways/{hid}/image").content[:4] == b"\x89PNG"
+    # one song, then exported; a later edit of the design redraws it and updates the up-to-date export
+    d = c.post("/api/songs/Muse - Uprising/highway", json={"mode": "design", "design": hid}).json()
+    assert d["highway"]["mode"] == "design" and d["highway"]["design"]["name"] == "Red Room"
+    assert c.post("/api/songs/Muse - Uprising/highway", json={"mode": "design", "design": "nope"}).status_code == 404
+    c.post("/api/songs/Muse - Uprising/export", json={})
+    exp = env.cfg["export_dir"] / "Muse - Uprising" / "highway.png"
+    before = exp.read_bytes()
+    time.sleep(1.1)
+    upd = c.post("/api/highways", data={"design": json.dumps(dict(saved["design"], rail="#20ff20")),
+                                        "pattern_from": hid}).json()
+    assert upd["updated"] == ["Muse - Uprising"] and upd["exported"] == ["Muse - Uprising"]
+    assert upd["design"]["has_pattern"] and exp.read_bytes() != before
+    # all songs (own highways left alone) + library default
+    c.post("/api/songs/Band - Other/highway/file", files={"file": ("h.png", b.getvalue())})
+    r = c.post("/api/highways/apply", json={"highway": f"design:{hid}", "songs": "all", "default": True}).json()
+    assert r["updated"] == ["Muse - Uprising"] and r["skipped_own"] == ["Band - Other"]
+    assert r["default"] == f"design:{hid}" and c.get("/api/highways").json()["default"] == f"design:{hid}"
+    assert c.post("/api/highways/apply", json={"highway": "rainbow", "songs": "all"}).status_code == 400
+    # install in Clone Hero (Custom/Highways next to its settings.ini)
+    inst = c.post(f"/api/highways/{hid}/install").json()["installed"]
+    assert Path(inst).parent == env.tmp / "Custom" / "Highways" and Path(inst).name == "RiffChart - Red Room.png"
+    assert c.delete(f"/api/highways/{hid}").json()["default"] == "riffchart"
+    assert c.get("/api/songs/Muse - Uprising").json()["highway"]["design"]["name"] == "Red Room"
+    assert other.exists()

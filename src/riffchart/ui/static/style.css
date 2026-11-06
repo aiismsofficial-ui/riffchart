@@ -195,3 +195,7 @@ button.icon { padding: 4px 9px; }
   display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: 9px; text-align: center; line-height: 1.2; }
 .details .dt-hwprev img { width: 100%; height: 100%; object-fit: cover; }
 @media (max-width: 560px) { .details .dt-visual { grid-template-columns: 1fr; } }
+.topnav { margin-right: auto; margin-left: 18px; }
+.topnav a { color: var(--muted); text-decoration: none; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
+.topnav a:hover { color: var(--text); background: var(--panel2); }
+.details .dt-hwdesign { font-size: 12px; }

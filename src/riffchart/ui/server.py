@@ -19,7 +19,7 @@ import numpy as np
 import soundfile as sf
 import yaml
 from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from ..paths import PROJECT, project_path
@@ -32,8 +32,9 @@ from .chartjson import json_to_song, peaks, song_to_json
 from .checker import load_rules, song_issues
 from .jobs import JobQueue, Options
 from ..product import covers
-from ..product.visuals import (VIDEO_FILES, refresh_background, refresh_highway, set_bg_mode, set_hw_mode,
-                               write_own_background, write_own_highway)
+from ..product import highways
+from ..product.visuals import (VIDEO_FILES, default_highway, hw_mode, refresh_background, refresh_highway,
+                               set_bg_mode, set_hw_mode, write_own_background, write_own_highway)
 from .library import (MAX_ART_BYTES, Library, ProtectedPathError, check_writable, clean_meta, remove_art,
                       write_art, write_ini_fields)
 
@@ -76,6 +77,9 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
     rules = load_rules(cfg.get("eval_config", "configs/eval.yaml"))
     app = FastAPI(title="RiffChart", docs_url=None, redoc_url=None)
     app.state.queue, app.state.lib, app.state.cfg = queue, lib, cfg
+    # highway designs (and the library's default highway) live next to the songs unless configured
+    highways.DESIGNS_DIR = (project_path(cfg["highways"]) if cfg.get("highways")
+                            else Path(cfg["workspace"]).parent / "highways")
     if start_worker:
         queue.start()
 
@@ -443,15 +447,146 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
 
     @app.post("/api/songs/{song_id}/highway")
     def set_highway(song_id: str, body: dict = Body(...)):
-        """mode: riffchart | cover (colours and a faint copy of the cover) | none. ("own" by uploading.)"""
+        """mode: riffchart | cover (colours and a faint copy of the cover) | design (+ "design": preset id) |
+        none. ("own" by uploading.)"""
         folder = song_folder(song_id)
         check_writable(folder, lib.protected)
         mode = body.get("mode")
-        if mode not in ("riffchart", "cover", "none"):
-            raise HTTPException(400, "highway mode must be riffchart, cover or none")
-        set_hw_mode(folder, mode)
+        if mode not in ("riffchart", "cover", "design", "none"):
+            raise HTTPException(400, "highway mode must be riffchart, cover, design or none")
+        if mode == "design":
+            _design_or_404(str(body.get("design") or ""))
+        set_hw_mode(folder, mode, body.get("design") if mode == "design" else None)
         refresh_highway(folder)
         return lib.info(song_id)
+
+    # ---- highway designer
+    def _design_or_404(i: str):
+        try:
+            return highways.get_design(i)
+        except (KeyError, ValueError):
+            raise HTTPException(404, f"no highway design {i!r}")
+
+    def ch_highways_dir() -> Path | None:
+        st = cfg.get("clone_hero_settings")
+        return Path(st).parent / "Custom" / "Highways" if st and Path(st).parent.exists() else None
+
+    @app.get("/api/highways")
+    def list_highways():
+        return {"designs": highways.list_designs(), "default": default_highway(), "blank": highways.DEFAULT,
+                "clone_hero": bool(ch_highways_dir())}
+
+    async def _form_design(design: str, pattern, pattern_from: str):
+        import json as _json
+        try:
+            d = highways.clean_design(_json.loads(design))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        pat = None
+        if pattern is not None:
+            try:
+                pat = highways.clean_pattern(await pattern.read(highways.MAX_PATTERN + 1))
+            except ValueError as e:
+                raise HTTPException(400, str(e))
+        elif pattern_from:
+            pat = _design_or_404(pattern_from)[1]
+        return d, pat
+
+    @app.post("/api/highways/render")
+    async def render_highway(design: str = Form(...), pattern: UploadFile | None = File(None),
+                             pattern_from: str = Form("")):
+        """Live preview of an unsaved design (pattern: a new image, or pattern_from: a saved design's)."""
+        d, pat = await _form_design(design, pattern, pattern_from)
+        return Response(highways.render(d, pat), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/highways")
+    async def save_highway(design: str = Form(...), pattern: UploadFile | None = File(None),
+                           pattern_from: str = Form(""), remove_pattern: bool = Form(False)):
+        """Create (no id) or update a preset. Songs already using it are redrawn, and their Clone Hero copies
+        updated if those were up to date."""
+        d, pat = await _form_design(design, pattern, pattern_from)
+        if remove_pattern:
+            pat = None
+        elif pattern is None and pattern_from and pattern_from == d.get("id"):
+            pat = None                                   # unchanged: keep the saved one
+        saved = highways.save_design(d, pat, keep_pattern=not remove_pattern)
+        using = [f.name for f in highways.songs_using(lib.workspace, saved["id"])]
+        res = apply_highway(using, "design", saved["id"], export=True)
+        return {"design": saved, **res}
+
+    @app.delete("/api/highways/{design_id}")
+    def delete_highway(design_id: str):
+        _design_or_404(design_id)
+        highways.delete_design(design_id)
+        return {"ok": True, "default": default_highway()}
+
+    @app.get("/api/highways/{design_id}/image")
+    def highway_image(design_id: str):
+        _design_or_404(design_id)
+        return FileResponse(highways.preview_path(design_id), media_type="image/png",
+                            headers={"Cache-Control": "no-cache"})
+
+    def apply_highway(song_ids, mode: str, design: str | None, export: bool, skip_own: bool = False) -> dict:
+        updated, exported, skipped = [], [], []
+        for sid in song_ids:
+            try:
+                folder = lib.folder(sid)
+            except KeyError:
+                continue
+            if skip_own and hw_mode(folder) == "own":
+                skipped.append(sid)
+                continue
+            check_writable(folder, lib.protected)
+            current = (lib.export_dir / sid / "notes.chart").exists() and not lib.export_stale(sid)
+            set_hw_mode(folder, mode, design)
+            refresh_highway(folder)
+            updated.append(sid)
+            if export and current:
+                lib.export(sid, overwrite=True)
+                exported.append(sid)
+        return {"updated": updated, "exported": exported, "skipped_own": skipped}
+
+    @app.post("/api/highways/apply")
+    def apply_highways(body: dict = Body(...)):
+        """{"highway": riffchart | cover | none | design:<id>, "songs": "all" | [ids], "export": bool,
+        "default": bool}. all: every song except those with their own image; export: also update Clone Hero
+        copies that were up to date; default: new songs get it too."""
+        v = str(body.get("highway", ""))
+        mode, design = ("design", v[7:]) if v.startswith("design:") else (v, None)
+        if mode not in ("riffchart", "cover", "none", "design"):
+            raise HTTPException(400, "highway must be riffchart, cover, none or design:<id>")
+        if design is not None:
+            _design_or_404(design)
+        songs = body.get("songs") or []
+        if songs == "all":
+            ids = [p.name for p in sorted(lib.workspace.iterdir()) if p.is_dir()]
+        elif isinstance(songs, list):
+            ids = [str(x) for x in songs]
+        else:
+            raise HTTPException(400, 'songs must be "all" or a list of song ids')
+        res = apply_highway(ids, mode, design, bool(body.get("export")), skip_own=songs == "all")
+        if body.get("default"):
+            highways.set_library_default(v)
+        return dict(res, default=default_highway())
+
+    @app.post("/api/highways/default")
+    def set_default_highway(body: dict = Body(...)):
+        try:
+            highways.set_library_default(str(body.get("highway", "")))
+        except (KeyError, ValueError) as e:
+            raise HTTPException(400, str(e))
+        return {"default": default_highway()}
+
+    @app.post("/api/highways/{design_id}/install")
+    def install_highway(design_id: str):
+        """Copy the design into Clone Hero's Custom/Highways folder (players pick it in Clone Hero for every
+        song)."""
+        _design_or_404(design_id)
+        dest = ch_highways_dir()
+        if dest is None:
+            raise HTTPException(404, "Clone Hero's folder wasn't found (clone_hero_settings in configs/ui.yaml)")
+        check_writable(dest, lib.protected)
+        return {"installed": str(highways.install_in_clone_hero(design_id, dest))}
 
     @app.post("/api/songs/{song_id}/highway/file")
     async def set_highway_file(song_id: str, file: UploadFile = File(...)):

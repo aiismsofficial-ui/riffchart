@@ -7,6 +7,7 @@ from pathlib import Path
 
 from ..formats.loader import load_song
 from ..formats.song import DIFFICULTIES
+from ..product.highways import song_design
 from ..product.visuals import (ART_FILES, BG_FILES, HW_FILES, VIDEO_FILES, bg_mode, find_art, find_first, hw_mode,
                                image_ext, refresh_visuals)
 
@@ -158,6 +159,9 @@ class Library:
         d["video"] = {"file": vid.name, "mb": round(vid.stat().st_size / 2**20, 1)} if vid else None
         hw = find_first(p, HW_FILES)
         d["highway"] = {"file": f"{hw.name}?v={int(hw.stat().st_mtime)}" if hw else "", "mode": hw_mode(p)}
+        if d["highway"]["mode"] == "design":
+            sd = song_design(p)
+            d["highway"]["design"] = {"id": sd[0].get("id", ""), "name": sd[0]["name"]} if sd else None
         d["exported"] = (self.export_dir / song_id / "notes.chart").exists()
         d["export_stale"] = d["exported"] and self.export_stale(song_id)
         return d

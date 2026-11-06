@@ -29,6 +29,9 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
   online (opt-in: only the artist and title are sent).
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a
   music video file keeps the video to play behind the highway.
+- **Highways:** every song gets a RiffChart highway, one coloured from its cover, or your own. The
+  highway designer (colours, edge glow, a pattern image, your own text) shows a live 3D preview; use a
+  design on one song, all songs or new songs, or install it in Clone Hero as your everyday highway.
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,
