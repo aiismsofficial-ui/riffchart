@@ -35,6 +35,7 @@ from ..timing.pipeline import DEFAULTS as TEMPO_DEFAULTS
 from ..timing.tempo_map import beats_to_tempo_map
 from ..timing.trackers import get_tracker
 from .follow import MODES as FOLLOW_MODES, playable_part
+from .difficulty import estimate as estimate_difficulty, load_model as load_difficulty_model
 from .meta import SongMeta, cover_art, read_meta
 from .visuals import VIDEO_FILES, find_art, find_first, refresh_background, save_video
 
@@ -162,6 +163,17 @@ class RiffCharter:
         self.mel = Mel(device)
         self.tracker = get_tracker(self.cfg["beat_tracker"], device=device)
 
+    def guitar_difficulty(self, song: Song) -> int:
+        """diff_guitar 0-6: the fitted estimator (configs/difficulty.yaml) if present, else notes/s cuts."""
+        path = self.cfg.get("difficulty_model")
+        if path and project_path(path).exists():
+            if not hasattr(self, "_diff_model"):
+                self._diff_model = load_difficulty_model(project_path(path))
+            return estimate_difficulty(song, self._diff_model)
+        ex = song.tracks.get("expert")
+        on = song.tempo.tick_to_sec(ex.tick) if ex is not None and len(ex) else np.zeros(2)
+        return estimate_diff(len(on), float(on.min()), float(on.max()), self.cfg["diff_guitar_nps_cuts"])
+
     @staticmethod
     def cfg_device(config) -> str | None:
         """`device:` in the product config (auto | cuda | cpu); auto / missing = pick automatically."""
@@ -216,9 +228,7 @@ class RiffCharter:
         else:
             write_ogg(folder / "song.ogg", mix.astype(np.float32), OUT_SR, q)
             (folder / "guitar.ogg").unlink(missing_ok=True)
-        ex = song.tracks.get("expert")
-        on = song.tempo.tick_to_sec(ex.tick) if ex is not None and len(ex) else np.zeros(2)
-        diff = estimate_diff(len(on), float(on.min()), float(on.max()), self.cfg["diff_guitar_nps_cuts"])
+        diff = self.guitar_difficulty(song)
         prev = preview_start(mono, OUT_SR, downs, audio_s)
         ini = song_ini(meta, audio_s, prev, diff)
         old_ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}

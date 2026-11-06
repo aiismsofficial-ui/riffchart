@@ -1,0 +1,62 @@
+# diff_guitar estimator (product/difficulty.py), fitted by scripts/fit_difficulty.py on
+# 1496 human-rated charts. Linear score on standardised Expert-chart features, cut into 0-6.
+features:
+- nps
+- peak_nps
+- p90_nps
+- fast_frac
+- very_fast_frac
+- chord_frac
+- chord3_frac
+- move_ps
+- hopo_frac
+- tap_frac
+- sustain_frac
+- open_frac
+mean:
+- 4.034389
+- 7.74238
+- 6.617473
+- 0.292704
+- 0.114542
+- 0.387388
+- 0.07535
+- 2.919982
+- 0.136168
+- 0.048106
+- 0.2706
+- 0.141698
+std:
+- 1.230198
+- 2.819872
+- 2.318447
+- 0.245371
+- 0.157029
+- 0.220953
+- 0.131459
+- 1.439595
+- 0.131647
+- 0.110259
+- 0.228249
+- 0.179528
+intercept: 2.733957
+weights:
+- 0.185774
+- 0.645091
+- -0.230234
+- 0.085011
+- 0.074695
+- -0.051232
+- 0.028283
+- 0.168986
+- 0.209467
+- -0.061051
+- -0.071806
+- -0.145457
+cuts:
+- -1.054
+- 1.6038
+- 2.4946
+- 3.8499
+- 4.1082
+- 4.7212
