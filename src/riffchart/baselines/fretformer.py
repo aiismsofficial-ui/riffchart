@@ -1,6 +1,6 @@
 """Fretformer 2 (Autochart) baseline, re-implemented locally from the published ONNX graphs.
 
-Weights: Dvaro/riffchart-models `fretformer-v2/` (CC BY-NC-SA 4.0; used here only for local,
+Weights: Dvaro/autochart-models `fretformer-v2/` (CC BY-NC-SA 4.0; used here only for local,
 non-commercial benchmarking, never redistributed). Every stage follows `manifest.json`:
   stems   htdemucs_6s, piano folded into other; channels full, drums, bass, vocals, guitar, other
   beats   fine-tuned Beat This (ONNX mel + core, 1500-frame chunks, border 6, keep_first, minimal
