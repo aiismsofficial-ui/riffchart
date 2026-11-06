@@ -95,10 +95,50 @@ def _channel_part(p: str, artist_f: str) -> bool:
     return " " not in p.strip() and p.strip().endswith("VEVO")
 
 
-def clean(meta: SongMeta) -> SongMeta:
+# a title that starts with the artist: "SOiL Halo", "Muse: Uprising", "Muse | Uprising" -> the song. After
+# only a space, a joining word means the artist's name is part of the title ("Queen of the Night").
+_JOINERS = {"of", "the", "and", "in", "on", "is", "a", "an", "to", "for", "from", "with", "at", "by", "or", "&",
+            "n", "vs", "x", "feat", "ft", "featuring", "s", "song", "theme", "blues", "rag", "boogie", "pt", "part"}
+_SEP = re.compile(r"\s*(?:[:|~–—-]|//)\s*")
+
+
+def strip_artist(title: str, artist: str, space_ok: bool = True) -> str:
+    """The title without a leading copy of the artist's name (accents, case and punctuation ignored).
+    space_ok=False: only after a separator ("Muse: Uprising"), not "SOiL Halo" (real titles do that: 4 of
+    2355 human-named charts, e.g. "Ted Nugent Guitar Battle")."""
+    a = _fold(artist)
+    if not a or artist.casefold() == "unknown artist" or _fold(title) == a:
+        return title
+    acc, end = "", 0
+    for m in re.finditer(r"[^\s:|~–—]+", title):               # shortest run of words that folds to the artist
+        acc += _fold(m.group())
+        end = m.end()
+        if acc == a:
+            break
+        if not a.startswith(acc):
+            return title
+    else:
+        return title
+    rest = title[end:]
+    sep = _SEP.match(rest)
+    if sep and sep.end() > 0 and not rest[:1].isalnum():
+        out = rest[sep.end():].strip()
+    elif rest[:1] == " " and space_ok:
+        out = rest.strip()
+        first = re.sub(r"[^\w&]", "", out.split(" ", 1)[0]).casefold() if out else ""
+        if not out or first in _JOINERS or out[:1] in "'’(":
+            return title
+    else:                                                       # "Kissin' Time" by Kiss: no word break
+        return title
+    return out if len(_fold(out)) >= 2 else title
+
+
+def clean(meta: SongMeta, loose: bool = False) -> SongMeta:
     """Tidy names from downloads: "(Official Visualizer)"-style suffixes, converter-site names and bitrates,
     file-name slugs, "ArtistVEVO" / channel parts, a title that repeats the artist ("Artist - Title - Artist",
-    "Title - Artist") and a trailing part already named in the title ("Song (Cover by X) - X")."""
+    "Title - Artist"), a title starting with the artist ("Muse: Uprising"; "SOiL Halo" only from a file-name slug,
+    or with loose=True, for the Tidy names suggestions the user reviews) and a trailing part already named in
+    the title ("Song (Cover by X) - X")."""
     artist = _tidy_text(meta.artist, slug=False) or meta.artist
     artist = re.sub(r"\s+-\s+Topic$", "", artist).strip() or artist
     title = _tidy_text(meta.title) or meta.title
@@ -120,6 +160,9 @@ def clean(meta: SongMeta) -> SongMeta:
         return SongMeta(title, artist, "", meta.genre, meta.year)
     if (unknown or _LABEL.search(artist)) and len(parts) == 2:
         artist, title = parts
+    if not unknown:
+        slug = " " not in meta.title.strip() and bool(re.search(r"[-_]", meta.title))
+        title = strip_artist(title, artist, space_ok=loose or slug)
     album = _tidy_text(meta.album) if meta.album else ""
     if album and _fold(album) in (_fold(meta.title), _fold(title), _fold(f"{artist} - {title}")):
         album = ""                                          # downloaders often copy the video title here

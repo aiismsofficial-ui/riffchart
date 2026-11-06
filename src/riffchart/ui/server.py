@@ -687,7 +687,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             if s.get("error"):
                 continue
             old = {"title": s["title"], "artist": s["artist"], "album": s.get("album", "")}
-            m = clean(SongMeta(old["title"], old["artist"], old["album"]))
+            m = clean(SongMeta(old["title"], old["artist"], old["album"]), loose=True)
             new = {"title": m.title, "artist": m.artist, "album": m.album}
             if new != old:
                 out.append({"id": s["id"], "old": old, "new": new, "exported": s.get("exported", False)})

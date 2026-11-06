@@ -131,3 +131,37 @@ def test_tidy_download_names(artist, title, album, want):
     m = clean(SongMeta(title, artist, album))
     assert (m.artist, m.title, m.album) == want
     assert clean(m) == m                                     # tidying twice changes nothing
+
+
+@pytest.mark.parametrize("artist,title,space_ok,want", [
+    ("SOiL", "SOiL Halo", True, "Halo"),
+    ("SOiL", "SOiL Halo", False, "SOiL Halo"),                  # space only: not when unsure
+    ("Muse", "Muse: Uprising", False, "Uprising"),
+    ("Muse", "MUSE | Uprising", False, "Uprising"),
+    ("Måneskin", "Maneskin – Timezone", False, "Timezone"),
+    ("Guns N' Roses", "Guns N Roses Paradise City", True, "Paradise City"),
+    ("AC/DC", "ACDC Thunderstruck", True, "Thunderstruck"),
+    # the artist's name is part of the title: left alone
+    ("Queen", "Queen of the Night", True, "Queen of the Night"),
+    ("Kiss", "Kissin' Time", True, "Kissin' Time"),
+    ("Bad Company", "Bad Company", True, "Bad Company"),
+    ("Motörhead", "Motorhead", True, "Motorhead"),
+    ("Death", "Death by Metal", True, "Death by Metal"),
+    ("Boston", "Boston's Theme", True, "Boston's Theme"),
+    ("Queen", "Queens of the Stone Age", True, "Queens of the Stone Age"),
+    ("Iron Maiden", "Iron Maiden (Live)", True, "Iron Maiden (Live)"),
+    ("Unknown Artist", "Unknown Artist Song", True, "Unknown Artist Song"),
+    ("The Who", "Who Are You", True, "Who Are You"),
+])
+def test_strip_artist(artist, title, space_ok, want):
+    from riffchart.product.meta import strip_artist
+    assert strip_artist(title, artist, space_ok) == want
+
+
+def test_clean_strips_artist_from_titles():
+    assert clean(SongMeta("Muse: Uprising", "Muse")).title == "Uprising"
+    assert clean(SongMeta("SOiL Halo", "SOiL")).title == "SOiL Halo"            # automatic: not from a space
+    assert clean(SongMeta("SOiL Halo", "SOiL"), loose=True).title == "Halo"     # Tidy names suggestion
+    assert clean(SongMeta("soil-halo", "SOiL")).title == "Halo"                 # file-name slug
+    m = clean(SongMeta("SOiL Halo", "SOiL"), loose=True)
+    assert clean(m, loose=True) == m
