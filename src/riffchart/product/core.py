@@ -37,7 +37,7 @@ from ..timing.trackers import get_tracker
 from .follow import MODES as FOLLOW_MODES, playable_part
 from .difficulty import estimate as estimate_difficulty, load_model as load_difficulty_model
 from .meta import SongMeta, cover_art, read_meta
-from .visuals import VIDEO_FILES, find_art, find_first, refresh_visuals, save_video
+from .visuals import CH_VIDEO_OK, VIDEO_FILES, convert_video, find_art, find_first, refresh_visuals, save_video
 
 OUT_SR = 44100
 STAGES = ("load", "separate", "beats", "chart", "post", "write")
@@ -238,6 +238,11 @@ class RiffCharter:
                 video = save_video(path, folder)           # a music video becomes the background video
             except Exception:
                 video = None
+            if video and video["codec"] not in CH_VIDEO_OK and self.cfg.get("convert_video", True):
+                try:                                       # VP9 / AV1 / HEVC: Clone Hero can't play it
+                    convert_video(folder)
+                except Exception:                          # keep the copy; Song details offers it again
+                    pass
         start = video["start_ms"] if video else (
             old_ini.get("video_start_time") if find_first(folder, VIDEO_FILES) else None)
         if start not in (None, "", 0, "0"):

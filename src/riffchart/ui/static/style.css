@@ -199,3 +199,4 @@ button.icon { padding: 4px 9px; }
 .topnav a { color: var(--muted); text-decoration: none; font-weight: 600; padding: 4px 10px; border-radius: 6px; }
 .topnav a:hover { color: var(--text); background: var(--panel2); }
 .details .dt-hwdesign { font-size: 12px; }
+.details .dt-video.warn { color: var(--warn); }

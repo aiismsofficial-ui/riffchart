@@ -670,6 +670,32 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(400, str(e))
         return lib.info(song_id)
 
+    @app.post("/api/songs/{song_id}/video/convert")
+    def convert_song_video(song_id: str):
+        """Convert the song's video to VP8 webm in the background (Clone Hero can't play VP9 / AV1 / HEVC).
+        The song's info shows video.converting {progress, error} until it's done."""
+        from ..product import visuals
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        if visuals.video_info(folder) is None:
+            raise HTTPException(404, "this song has no video")
+        key = str(folder)
+        running = visuals.CONVERTING.get(key)
+        if running and running["error"] is None:
+            return lib.info(song_id)                         # already converting
+        visuals.CONVERTING[key] = {"progress": 0.0, "error": None}
+
+        def work():
+            try:
+                visuals.convert_video(folder, lambda f: visuals.CONVERTING[key].update(progress=round(f, 3)))
+                visuals.CONVERTING.pop(key, None)
+                queue.log(f"video converted to VP8 webm: {song_id[:60]}")
+            except Exception as e:
+                visuals.CONVERTING[key] = {"progress": 0.0, "error": str(e)[:300]}
+                queue.log(f"video conversion failed for {song_id[:60]}: {e}")
+        threading.Thread(target=work, daemon=True, name="convert-video").start()
+        return lib.info(song_id)
+
     @app.delete("/api/songs/{song_id}/video")
     def delete_video(song_id: str):
         folder = song_folder(song_id)

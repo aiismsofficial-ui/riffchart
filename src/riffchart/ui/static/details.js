@@ -205,13 +205,51 @@
     if (src) img.src = src; else img.removeAttribute("src");
   }
 
+  const CODEC = { h264: "H.264", vp8: "VP8", vp9: "VP9", av1: "AV1", hevc: "HEVC", mpeg4: "MPEG-4", theora: "Theora" };
+  let pollTimer = null;
   function showVideo() {
     const v = cur.video, el = q(".dt-video");
+    clearTimeout(pollTimer);
+    el.classList.remove("warn");
     if (!v) { el.innerHTML = "No music video. Drop a music video file (mp4, webm) to chart it with one."; return; }
-    el.innerHTML = removeVideo ? `Music video will be removed. <button type="button" class="linkbtn" data-k="keepvid">Keep it</button>`
-      : `Music video: ${v.file} (${v.mb} MB) plays behind the highway. <button type="button" class="linkbtn" data-k="rmvid">Remove</button>`;
-    const b = el.querySelector("button");
-    b.addEventListener("click", () => { removeVideo = !removeVideo; showVideo(); });
+    const kind = CODEC[v.codec] || v.codec || "unknown format";
+    if (v.converting && !v.converting.error) {
+      el.innerHTML = `Converting the music video for Clone Hero… ${Math.round(v.converting.progress * 100)}%`;
+      pollTimer = setTimeout(pollVideo, 1000);
+      return;
+    }
+    if (removeVideo) {
+      el.innerHTML = `Music video will be removed. <button type="button" class="linkbtn" data-k="keepvid">Keep it</button>`;
+    } else if (!v.ok) {
+      el.classList.add("warn");
+      el.innerHTML = `⚠ Music video: ${v.file} is ${kind}, which Clone Hero can't play` +
+        (v.converting ? ` (last try failed: ${v.converting.error})` : "") +
+        `. <button type="button" class="linkbtn" data-k="convvid">Convert it</button> (VP8, under a minute) · ` +
+        `<button type="button" class="linkbtn" data-k="rmvid">Remove</button>`;
+    } else {
+      el.innerHTML = `Music video: ${v.file} (${kind}, ${v.height ? v.height + "p, " : ""}${v.mb} MB) plays behind the highway. ` +
+        `<button type="button" class="linkbtn" data-k="rmvid">Remove</button>`;
+    }
+    for (const b of el.querySelectorAll("[data-k=rmvid], [data-k=keepvid]"))
+      b.addEventListener("click", () => { removeVideo = !removeVideo; showVideo(); });
+    const conv = el.querySelector("[data-k=convvid]");
+    if (conv) conv.addEventListener("click", async () => {
+      try {
+        const info = await call(`/api/songs/${enc(cur.id)}/video/convert`, { method: "POST" });
+        cur.video = info.video; showVideo();
+      } catch (err) { toast(err.message, true); }
+    });
+  }
+  async function pollVideo() {
+    if (!dlg.open || !cur) return;
+    try {
+      const info = await call(`/api/songs/${enc(cur.id)}`);
+      const was = cur.video && cur.video.converting;
+      cur.video = info.video; cur.export_stale = info.export_stale;
+      showVideo();
+      if (was && !(info.video && info.video.converting))
+        toast(info.exported ? "Music video converted. Save & update in Clone Hero to copy it there." : "Music video converted.");
+    } catch { pollTimer = setTimeout(pollVideo, 2000); }
   }
 
   async function findOnline() {

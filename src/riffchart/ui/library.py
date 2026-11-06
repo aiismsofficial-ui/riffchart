@@ -8,7 +8,7 @@ from pathlib import Path
 from ..formats.loader import load_song
 from ..formats.song import DIFFICULTIES
 from ..product.highways import song_design
-from ..product.visuals import (ART_FILES, BG_FILES, HW_FILES, VIDEO_FILES, bg_mode, find_art, find_first, hw_mode,
+from ..product.visuals import (video_info, ART_FILES, BG_FILES, HW_FILES, VIDEO_FILES, bg_mode, find_art, find_first, hw_mode,
                                image_ext, refresh_visuals)
 
 AUDIO_FILES = {".ogg", ".opus", ".mp3", ".wav"}
@@ -155,8 +155,7 @@ class Library:
         d["art"] = f"{art.name}?v={int(art.stat().st_mtime)}" if art else ""
         bg = find_first(p, BG_FILES)
         d["background"] = {"file": f"{bg.name}?v={int(bg.stat().st_mtime)}" if bg else "", "mode": bg_mode(p)}
-        vid = find_first(p, VIDEO_FILES)
-        d["video"] = {"file": vid.name, "mb": round(vid.stat().st_size / 2**20, 1)} if vid else None
+        d["video"] = video_info(p)                    # + codec and whether Clone Hero plays it
         hw = find_first(p, HW_FILES)
         d["highway"] = {"file": f"{hw.name}?v={int(hw.stat().st_mtime)}" if hw else "", "mode": hw_mode(p)}
         if d["highway"]["mode"] == "design":

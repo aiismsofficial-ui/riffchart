@@ -244,3 +244,23 @@ def test_design_presets_songs_and_library_default(tmp_path):
     assert highways.library_default() is None
     with pytest.raises(ValueError):
         highways.set_library_default("rainbow")
+
+
+def test_convert_video_to_vp8(tmp_path):
+    import av
+    from riffchart.product.visuals import convert_video, video_info
+    src = tmp_path / "clip.mp4"
+    _encode(src, secs=1.2)
+    out = tmp_path / "song"
+    out.mkdir()
+    save_video(src, out)
+    before = video_info(out)
+    assert before["codec"] == "mpeg4" and not before["ok"] and before["width"] == 64
+    seen = []
+    after = convert_video(out, seen.append, max_height=48)
+    assert after["file"] == "video.webm" and after["codec"] == "vp8" and after["ok"]
+    assert (after["width"], after["height"]) == (48, 48) and seen[-1] == 1.0
+    assert not (out / "video.mp4").exists() and not list(out.glob("*.tmp"))
+    with av.open(str(out / "video.webm")) as c:
+        frames = list(c.decode(video=0))
+    assert len(frames) == 12 and frames[0].time < 0.01 and abs(frames[-1].time - 1.1) < 0.05

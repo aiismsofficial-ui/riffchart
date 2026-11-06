@@ -388,6 +388,96 @@ def refresh_visuals(folder: Path) -> None:
 
 
 # ---------------------------------------------------------------- background video
+# what Clone Hero plays (its docs: mp4 H.264, webm VP8, ogv Theora, mpeg; only VP8 webm on every platform).
+# VP9 / AV1 (most YouTube downloads) and HEVC are converted to VP8 webm.
+CH_VIDEO_OK = {"h264", "vp8", "theora", "mpeg1video", "mpeg2video"}
+_vinfo_cache: dict[tuple, dict] = {}
+_DECODERS = {"libdav1d": "av1", "libaom-av1": "av1", "libvpx": "vp8", "libvpx-vp9": "vp9"}   # decoder -> format
+CONVERTING: dict[str, dict] = {}          # song folder -> {progress, error} while / after converting
+
+
+def video_info(folder: Path) -> dict | None:
+    """{file, mb, codec, width, height, ok} of the song's video (ok: Clone Hero plays it), or None."""
+    vid = find_first(folder, VIDEO_FILES)
+    if vid is None:
+        return None
+    st = vid.stat()
+    key = (str(vid), st.st_size, int(st.st_mtime))
+    if key not in _vinfo_cache:
+        info = {"codec": "", "width": 0, "height": 0}
+        try:
+            import av
+            with av.open(str(vid)) as c:
+                v = c.streams.video[0]
+                name = v.codec_context.name
+                info = {"codec": _DECODERS.get(name, name), "width": v.width, "height": v.height}
+        except Exception:
+            pass
+        _vinfo_cache[key] = info
+    d = dict(_vinfo_cache[key], file=vid.name, mb=round(st.st_size / 2**20, 1))
+    d["ok"] = d["codec"] in CH_VIDEO_OK
+    conv = CONVERTING.get(str(folder))
+    if conv:
+        d["converting"] = dict(conv)
+    return d
+
+
+def convert_video(folder: Path, progress=None, max_height: int = 720) -> dict:
+    """Re-encode the song's video as VP8 webm (plays in Clone Hero on every platform and in YARG), at most
+    max_height lines, same frame rate (max 60), starting at 0 (video_start_time still applies). About 10-40x
+    real time on a desktop CPU. progress(fraction) is called now and then. Returns video_info."""
+    import av
+    src = find_first(folder, VIDEO_FILES)
+    if src is None:
+        raise FileNotFoundError("this song has no video")
+    tmp = folder / "video.webm.tmp"
+    with av.open(str(src)) as c:
+        v = c.streams.video[0]
+        v.thread_type = "AUTO"
+        rate = v.average_rate or v.guessed_rate or 30
+        if rate > 60:
+            rate = 60
+        dur = float(c.duration / 1e6) if c.duration else float(v.duration * v.time_base) if v.duration else 0.0
+        w, h = v.width, v.height
+        if h > max_height:
+            w, h = round(w * max_height / h / 2) * 2, max_height
+        w, h = w - w % 2, h - h % 2
+        with av.open(str(tmp), "w", format="webm") as o:
+            s = o.add_stream("libvpx", rate=rate)
+            s.width, s.height, s.pix_fmt = w, h, "yuv420p"
+            s.options = {"deadline": "good", "cpu-used": "5", "crf": "20", "b": "2M" if h > 480 else "1200k",
+                         "auto-alt-ref": "0"}
+            s.thread_count = 0
+            t0, last, n = None, -1.0, 0
+            for fr in c.decode(v):
+                if fr.time is None:
+                    continue
+                t0 = fr.time if t0 is None else t0
+                t = fr.time - t0
+                if t < last + 0.5 / float(rate):              # frame rate capped: drop the extra frames
+                    continue
+                last = t
+                out = fr.reformat(width=w, height=h, format="yuv420p")
+                out.pts = round(t * float(rate))
+                out.time_base = s.codec_context.time_base
+                for p in s.encode(out):
+                    o.mux(p)
+                n += 1
+                if progress and dur and n % 60 == 0:
+                    progress(min(0.99, t / dur))
+            for p in s.encode():
+                o.mux(p)
+    if n == 0:
+        tmp.unlink(missing_ok=True)
+        raise ValueError("no picture could be read from the video")
+    for f in VIDEO_FILES:
+        (folder / f).unlink(missing_ok=True)
+    tmp.replace(folder / "video.webm")
+    if progress:
+        progress(1.0)
+    return video_info(folder)
+
+
 def save_video(src: str | Path, folder: Path) -> dict | None:
     """Copy the music video's picture (no sound, no re-encoding) from a video file into the song folder as
     video.mp4 (H.264 / HEVC / ...) or video.webm (VP8 / VP9 / AV1). Returns {file, codec, start_ms} or None
@@ -404,7 +494,7 @@ def save_video(src: str | Path, folder: Path) -> dict | None:
         if not vids:
             return None
         v = vids[0]
-        codec = v.codec_context.name
+        codec = _DECODERS.get(v.codec_context.name, v.codec_context.name)
         ext = "webm" if codec in ("vp8", "vp9", "av1") else "mp4"
         a = c.streams.audio[0] if c.streams.audio else None
         a0 = float(a.start_time * a.time_base) if a is not None and a.start_time is not None else 0.0

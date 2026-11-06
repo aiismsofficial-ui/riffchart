@@ -619,3 +619,20 @@ def test_history_list_and_open(env):
     (folder / ".riffchart" / "history" / "20200101-000000-rechart-notes.chart").write_text("junk", encoding="utf-8")
     h = c.get(f"{base}/history").json()
     assert h[-1]["reason"] == "rechart"
+
+
+def test_convert_video_endpoint(env):
+    from test_visuals import _encode
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    assert c.post(f"{base}/video/convert").status_code == 404                # no video yet
+    _encode(folder / "video.mp4", audio=False, secs=1.0)
+    v = c.get(base).json()["video"]
+    assert v["codec"] == "mpeg4" and not v["ok"]
+    c.post(f"{base}/video/convert")
+    for _ in range(100):
+        v = c.get(base).json()["video"]
+        if not v.get("converting"):
+            break
+        time.sleep(0.05)
+    assert v["file"] == "video.webm" and v["codec"] == "vp8" and v["ok"] and "converting" not in v
