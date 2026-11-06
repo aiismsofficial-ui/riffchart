@@ -205,7 +205,18 @@ function drawWave(L, now, t0, t1) {
     }
   }
   ctx.globalAlpha = 1;
+  const pv = S.chart.preview_s;
+  if (pv != null) {                                        // song-list preview: a teal bracket on the left edge
+    const ya = yOf(pv, now, L), yb = yOf(pv + PREVIEW_LEN, now, L);
+    if (ya >= 0 && yb <= H) {
+      ctx.fillStyle = PREVIEW_COLOR; ctx.globalAlpha = 0.9;
+      ctx.fillRect(x, Math.max(0, yb), 3, Math.min(H, ya) - Math.max(0, yb));
+      if (ya <= H) { ctx.fillRect(x, ya - 1, w, 2); ctx.font = "600 10px system-ui"; ctx.textAlign = "left"; ctx.fillText("PREVIEW", x + 6, ya - 5); }
+      ctx.globalAlpha = 1;
+    }
+  }
 }
+const PREVIEW_LEN = 30, PREVIEW_COLOR = "#2dd4bf";
 
 function drawHighway(h, L, now, t0, t1, lines) {
   const tr = S.tracks[h.diff], off = S.chart.offset_s;
@@ -331,6 +342,10 @@ function drawOverview() {
   for (const [tick, name] of S.chart.sections) {
     const y = OH - ((S.tempo.tickToSec(tick) + S.chart.offset_s) / dur) * OH;
     octx.globalAlpha = 0.8; octx.fillRect(0, y, OW, 1); octx.globalAlpha = 1;
+  }
+  if (S.chart.preview_s != null) {
+    const pa = OH - (S.chart.preview_s / dur) * OH, pb = OH - ((S.chart.preview_s + PREVIEW_LEN) / dur) * OH;
+    octx.fillStyle = PREVIEW_COLOR; octx.globalAlpha = 0.9; octx.fillRect(0, pb, 3, pa - pb); octx.globalAlpha = 1;
   }
   if (typeof drawOverviewIssues === "function") drawOverviewIssues(octx, OW, OH, dur);
   if (typeof drawOverviewRechart === "function") drawOverviewRechart(octx, OW, OH, dur);
@@ -542,6 +557,7 @@ async function load() {
     applyVolumes();
     document.title = `${chart.title} · RiffChart editor`;
     $("#title").textContent = chart.title; $("#artist").textContent = chart.artist;
+    showPreview();
     if (!S.tracks[S.diff].notes.length) S.diff = DIFFS.find((d) => S.tracks[d].notes.length) || "expert";
     updateInfo();
     if (!chart.stems.length) toast("This song has no audio files; playback is silent.", true);
@@ -558,6 +574,37 @@ async function load() {
 resize();
 requestAnimationFrame(draw);
 load();
+
+// song-list preview start (song.ini preview_start_time): set at the playhead, snapped to the nearest bar line
+function showPreview() { $("#pvval").textContent = S.chart.preview_s == null ? "auto" : fmtTime(S.chart.preview_s).replace(/\.\d+$/, ""); }
+async function setPreview() {
+  if (!S.chart) return;
+  const now = S.player.time(), tick = S.tempo.secToTick(now - S.chart.offset_s);
+  const bars = S.tempo.lines(tick - S.chart.resolution * 16, tick + S.chart.resolution * 16, 4).filter((l) => l.kind === 2);
+  let t = now;
+  if (bars.length) {
+    const near = bars.reduce((a, b) => (Math.abs(b.tick - tick) < Math.abs(a.tick - tick) ? b : a));
+    const ts = S.tempo.tickToSec(near.tick) + S.chart.offset_s;
+    if (Math.abs(ts - now) < 1.5) t = ts;
+  }
+  t = Math.max(0, Math.min(t, S.chart.audio_s - 1));
+  try {
+    const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/preview`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ start_s: t }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    const was = S.chart.preview_s;
+    S.chart.preview_s = j.preview_s; showPreview(); drawOverview();
+    toast(`Song-list preview now starts at ${fmtTime(j.preview_s).replace(/\.\d+$/, "")}` +
+      (was != null ? ` (was ${fmtTime(was).replace(/\.\d+$/, "")})` : "") + (j.export_stale ? ". Export again to update Clone Hero." : "."));
+  } catch (e) { toast("Could not set the preview: " + e.message, true); }
+}
+$("#pvset").addEventListener("click", setPreview);
+$("#pvhear").addEventListener("click", () => {
+  if (!S.chart || S.chart.preview_s == null) return;
+  S.player.seek(S.chart.preview_s);
+  if (!S.player.playing) togglePlay();
+});
 
 // song details (details.js): title / artist / album / cover, saved to song.ini
 function showDetails() {

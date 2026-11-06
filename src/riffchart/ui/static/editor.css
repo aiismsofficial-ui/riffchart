@@ -111,3 +111,5 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .rcstyle[open] { display: flex; flex-direction: column; gap: 10px; }
 .sync { display: inline-flex; align-items: center; gap: 4px; }
 .sync b { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pvw { display: inline-flex; align-items: center; gap: 4px; }
+.pvw b { color: #2dd4bf; min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }

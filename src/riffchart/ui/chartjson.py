@@ -37,10 +37,15 @@ def song_to_json(song: Song, ini: dict[str, str] | None = None, audio_s: float |
             "solos": [[int(a), int(b)] for a, b in tr.solos],
         }
     end = audio_s or float(tm.tick_to_sec(song.last_tick())) + 4.0
+    try:
+        preview = float(ini.get("preview_start_time", "")) / 1000.0
+    except ValueError:
+        preview = None
     return {
         "resolution": int(song.resolution),
         "offset_s": float(song.chart_offset_s) + delay,     # audio time = chart time + offset_s
         "audio_s": float(end),
+        "preview_s": preview,                               # song-list preview start (audio time), or None
         "hopo_threshold": int(chart_hopo_threshold(song.resolution, ini)),
         "tempo": [[int(t), float(b)] for t, b in zip(tm.ticks, tm.bpm)],
         "ts": [[int(t), int(n), int(d)] for t, n, d in zip(tm.ts_ticks, tm.ts_num, tm.ts_den)],

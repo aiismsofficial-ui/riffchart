@@ -586,3 +586,14 @@ def test_save_keeps_chart_offset_and_shifted_tempo(env):
     assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
     text = (folder / "notes.chart").read_text(encoding="utf-8")
     assert "Offset = 0.25" in text and "0 = B 100000" in text and "192 = B 120000" in text
+
+
+def test_preview_start(env):
+    c, folder = env.client, _charted(env)
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["preview_s"] is None
+    r = c.post("/api/songs/Muse - Uprising/preview", json={"start_s": 12.3456})
+    assert r.status_code == 200 and r.json()["preview_s"] == 12.346
+    assert "preview_start_time = 12346" in (folder / "song.ini").read_text(encoding="utf-8")
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["preview_s"] == 12.346
+    for bad in ({"start_s": -1}, {"start_s": 999}, {"start_s": "soon"}, {}):
+        assert c.post("/api/songs/Muse - Uprising/preview", json=bad).status_code == 400

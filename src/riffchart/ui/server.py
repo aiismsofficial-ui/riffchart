@@ -228,6 +228,22 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             (folder / "notes.mid").replace(folder / "notes.mid.bak")
         return {"saved": stamp, "notes": {d: len(t) for d, t in song.tracks.items()}, "history": str(hist)}
 
+    @app.post("/api/songs/{song_id}/preview")
+    def set_preview(song_id: str, body: dict = Body(...)):
+        """Where the song-list preview starts (song.ini preview_start_time, ms). Clone Hero and YARG play
+        about 30 s from there."""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        try:
+            start = float(body["start_s"])
+        except (KeyError, TypeError, ValueError):
+            raise HTTPException(400, "start_s must be a number of seconds")
+        length = float(_ini(folder).get("song_length", 0) or 0) / 1000.0
+        if not (0 <= start and (length <= 0 or start < length)):
+            raise HTTPException(400, "the preview must start inside the song")
+        write_ini_fields(folder / "song.ini", {"preview_start_time": str(int(round(start * 1000)))})
+        return {"preview_s": round(start, 3), "export_stale": lib.export_stale(song_id)}
+
     @app.post("/api/check")
     def check_chart(body: dict = Body(...)):
         """Playability issues for an unsaved chart from the editor (same rules as the evaluation)."""
