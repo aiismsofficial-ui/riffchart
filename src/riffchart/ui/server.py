@@ -110,7 +110,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         for f in files:
             fname = _safe_filename(f.filename or "audio")
             if Path(fname).suffix.lower() not in AUDIO_EXT:
-                skipped.append(f"{fname}: unsupported format (use mp3, ogg, opus, flac or wav)")
+                skipped.append(f"{fname}: unsupported format (use mp3, m4a, ogg, opus, webm, flac or wav)")
                 continue
             # folder drops send "Album/Artist - Song/song.ogg": keep the parent folder name for naming
             parent = _safe_filename(Path((f.filename or "").replace("\\", "/")).parent.name) if "/" in (

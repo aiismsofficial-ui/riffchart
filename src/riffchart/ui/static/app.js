@@ -1,6 +1,6 @@
 "use strict";
 const $ = (s) => document.querySelector(s);
-const AUDIO = [".mp3", ".ogg", ".opus", ".flac", ".wav"];
+const AUDIO = [".mp3", ".m4a", ".aac", ".ogg", ".opus", ".webm", ".flac", ".wav", ".mp4", ".mkv", ".mka", ".wma"];
 const DIFFS = ["expert", "hard", "medium", "easy"];
 let songs = [], jobs = [], status = null, lastSongsKey = "";
 
@@ -63,9 +63,11 @@ function checkOptions() {
 
 // ---------- adding songs
 async function uploadFiles(list) {
-  const files = list.filter((f) => AUDIO.some((e) => f.file.name.toLowerCase().endsWith(e)));
+  // skip a Clone Hero folder's background video (video.mp4 / video.webm); a single dropped file always counts
+  const isBgVideo = (n) => list.length > 1 && /^(video|background|bg)\.[^.]+$/i.test(n);
+  const files = list.filter((f) => AUDIO.some((e) => f.file.name.toLowerCase().endsWith(e)) && !isBgVideo(f.file.name));
   const ignored = list.length - files.length;
-  if (!files.length) { toast(ignored ? "No supported audio files there (mp3, ogg, opus, flac, wav)" : "Nothing to add", true); return; }
+  if (!files.length) { toast(ignored ? "No supported audio files there (mp3, m4a, ogg, opus, webm, flac, wav, mp4)" : "Nothing to add", true); return; }
   if (!checkOptions()) return;
   let added = 0;
   toast(`Uploading ${files.length} file${files.length > 1 ? "s" : ""}…`);

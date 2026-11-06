@@ -67,7 +67,7 @@ Once models are available (see below):
 .venv/Scripts/riffchart "D:/music/some album" --out <folder> --style density=-0.3,chords=low
 ```
 
-The command line takes mp3, ogg, opus, flac or wav files, or folders of them, and skips songs that are
+The command line takes mp3, m4a, ogg, opus, webm, flac, wav or mp4 files (and a few more), or folders of them, and skips songs that are
 already charted (`--overwrite` to redo). Run `riffchart --help` for all options.
 
 ## Models

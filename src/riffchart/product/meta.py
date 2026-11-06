@@ -42,12 +42,16 @@ def from_filename(path: Path) -> SongMeta:
 _JUNK = re.compile(r"\s*[\(\[](?:[^\)\]]*\b(?:official|lyrics?|visuali[sz]er|audio|video|hd|hq|4k|remaster(?:ed)?"
                    r"(?: \d{4})?|explicit|clean|music video|mv)\b[^\)\]]*)[\)\]]", re.I)
 
+# downloaders append the video id: "Song [dQw4w9WgXcQ]"
+_YTID = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
+
 
 def clean(meta: SongMeta) -> SongMeta:
     """Tidy names from downloads: drop "(Official Visualizer)"-style suffixes and a title that repeats
     the artist ("Artist - Title - Artist", "Title - Artist")."""
-    artist = _JUNK.sub("", meta.artist).strip() or meta.artist
-    title = _JUNK.sub("", meta.title).strip() or meta.title
+    artist = _YTID.sub("", _JUNK.sub("", meta.artist)).strip() or meta.artist
+    title = _YTID.sub("", _JUNK.sub("", meta.title)).strip() or meta.title
+    artist = re.sub(r"\s+-\s+Topic$", "", artist).strip() or artist
     a = artist.casefold()
     parts = [p.strip() for p in title.split(" - ")]
     if len(parts) > 1:

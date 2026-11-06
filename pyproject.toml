@@ -32,6 +32,7 @@ dependencies = [
     "uvicorn==0.54.0",
     "python-multipart==0.0.33",
     "torchcrepe==0.0.24",
+    "av==19.0.2",
 ]
 
 [project.optional-dependencies]

@@ -19,11 +19,14 @@ from tqdm import tqdm
 
 from ..formats.song import DIFFICULTIES
 from ..paths import PROJECT
+from ..audio.io import AUDIO_EXT
 from .meta import GENERIC
 
-AUDIO_EXT = {".mp3", ".ogg", ".opus", ".flac", ".wav"}       # what libsndfile decodes
 STAGE_LABEL = {"load": "loading", "separate": "separating guitar", "beats": "tracking beats",
                "chart": "charting", "post": "polishing", "write": "writing"}
+
+
+BACKGROUND_VIDEO = {"video", "background", "bg"}
 
 
 def find_audio(inputs: list[str]) -> tuple[list[Path], list[Path]]:
@@ -34,9 +37,11 @@ def find_audio(inputs: list[str]) -> tuple[list[Path], list[Path]]:
         for f in cands:
             if not f.is_file():
                 continue
+            if p.is_dir() and f.stem.lower() in BACKGROUND_VIDEO:
+                continue                                    # a Clone Hero folder's background video
             if f.suffix.lower() in AUDIO_EXT:
                 files.append(f)
-            elif p.is_file() or f.suffix.lower() in {".m4a", ".aac", ".wma", ".mp4"}:
+            elif p.is_file() or f.suffix.lower() in {".alac", ".aiff", ".aif", ".ape", ".wv", ".mid"}:
                 unsupported.append(f)
     return files, unsupported
 
