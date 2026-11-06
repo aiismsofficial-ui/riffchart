@@ -35,7 +35,8 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,
-  star power, solos, sections, undo and redo.
+  star power, solos, sections, undo and redo. A sync nudge moves the whole chart earlier or later
+  against the audio in 5 ms steps.
 - **Live playability check:** problems such as impossible chords, notes too fast for the difficulty or
   sustains running into the next note are marked on the highway as you edit.
 - **Re-chart a section:** select a few bars (a solo, a riff), and let the AI chart just that part again.

@@ -109,3 +109,5 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .rcstyle summary { cursor: pointer; font-size: 13px; }
 .rcstyle summary .muted { font-size: 12px; margin-left: 4px; }
 .rcstyle[open] { display: flex; flex-direction: column; gap: 10px; }
+.sync { display: inline-flex; align-items: center; gap: 4px; }
+.sync b { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }

@@ -206,6 +206,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         if not any(len(t) for t in song.tracks.values()):
             raise HTTPException(400, "refusing to save a chart with no notes in any difficulty")
         ini = _ini(folder)
+        try:                                       # keep the chart's own [Song] Offset: the page sends ticks
+            song.chart_offset_s = load_song(folder)[0].chart_offset_s      # relative to it
+        except Exception:
+            pass
         text = write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
                                 charter=ini.get("charter", "RiffChart"), ini=ini)
         hist = folder / ".riffchart" / "history"

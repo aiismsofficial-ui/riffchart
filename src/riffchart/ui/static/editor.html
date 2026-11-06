@@ -46,6 +46,8 @@
     <input id="delay" type="number" min="0" max="1000" step="10" value="0" class="num"> ms</label>
   <label title="Click on every note (C)"><input id="clap" type="checkbox"> Note clap</label>
   <label title="Click on every beat (M)"><input id="metro" type="checkbox"> Metronome</label>
+  <span class="sync" title="Move the whole chart against the audio, for every player (saved in the chart). Notes early: move later. Shift+click = 20 ms. Keys: Shift+[ and Shift+]">Sync
+    <button id="syncearly" class="ghost small icon" aria-label="Move the chart 5 ms earlier">&minus;</button><b id="syncval">0 ms</b><button id="synclate" class="ghost small icon" aria-label="Move the chart 5 ms later">+</button></span>
   <span class="sep"></span>
   <button id="rcbtn" class="ghost small" title="Let the AI chart a section again: try takes and keep the best (R)">&#10022; Re-chart section</button>
   <button id="issuesbtn" class="ghost small issuesbtn" title="Playability problems in this difficulty (. and , jump to the next / previous)">Checking…</button>
@@ -108,7 +110,8 @@
         <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> zoom · <kbd>+</kbd><kbd>-</kbd> zoom</p>
         <p><kbd>&uarr;</kbd><kbd>&darr;</kbd> grid step · <kbd>PgUp</kbd><kbd>PgDn</kbd> bar · <kbd>Home</kbd><kbd>End</kbd></p>
         <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty · <kbd>I</kbd> song details</p>
-        <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p></div>
+        <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p>
+        <p><kbd>Shift</kbd>+<kbd>[</kbd><kbd>]</kbd> sync: whole chart 5 ms earlier / later</p></div>
       <div><h4>Notes</h4>
         <p><b>Click</b> empty lane: add (snaps to the grid) · <b>right-click</b> a gem: delete it</p>
         <p><kbd>1</kbd>–<kbd>5</kbd> toggle G R Y B O on the selection, or add at the playhead · <kbd>0</kbd> open</p>

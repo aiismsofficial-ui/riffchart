@@ -574,3 +574,15 @@ def test_highway_designer_endpoints(env):
     assert c.delete(f"/api/highways/{hid}").json()["default"] == "riffchart"
     assert c.get("/api/songs/Muse - Uprising").json()["highway"]["design"]["name"] == "Red Room"
     assert other.exists()
+
+
+def test_save_keeps_chart_offset_and_shifted_tempo(env):
+    """A chart's own [Song] Offset survives an editor save, and a sync nudge (new lead-in tempo) is written."""
+    c, folder = env.client, _charted(env)
+    (folder / "notes.chart").write_text(CHART.replace("Offset = 0", "Offset = 0.25"), encoding="utf-8")
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    assert abs(d["offset_s"] - 0.25) < 1e-9
+    d["tempo"] = [[0, 100.0], [192, 120.0]]                       # what the editor sends after a nudge
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    assert "Offset = 0.25" in text and "0 = B 100000" in text and "192 = B 120000" in text

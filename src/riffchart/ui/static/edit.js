@@ -36,6 +36,7 @@ function initEdit(chart) {
     rebuild(d);
   }
   E.clean = contentSnap();
+  initSync();
   updateButtons();
   if (typeof scheduleCheck === "function") scheduleCheck(0);
 }
@@ -64,10 +65,12 @@ function rebuildAll() {
 }
 
 // ---------------------------------------------------------------- undo / redo / dirty
-const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, sel: [E.sel.diff, [...E.sel.ticks]] });
+const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, tempo: S.chart.tempo, sel: [E.sel.diff, [...E.sel.ticks]] });
+function setTempo(tempo) { S.chart.tempo = tempo; S.tempo = new Tempo(S.chart.resolution, tempo, S.chart.ts); }
 function restore(snap) {
   const o = JSON.parse(snap);
   S.edit = o.edit; S.chart.sections = o.sections;
+  if (JSON.stringify(o.tempo) !== JSON.stringify(S.chart.tempo)) setTempo(o.tempo);
   E.sel = { diff: o.sel[0], ticks: new Set(o.sel[1]) };
   rebuildAll();
 }
@@ -82,13 +85,13 @@ function edit(label, fn) {
 }
 function undo() {
   const u = E.undo.pop(); if (!u) return toast("Nothing to undo");
-  E.redo.push({ snap: snapshot(), label: u.label }); restore(u.snap); markDirty(); toast("Undo: " + u.label);
+  E.redo.push({ snap: snapshot(), label: u.label }); restore(u.snap); markDirty(); showSync(); toast("Undo: " + u.label);
 }
 function redo() {
   const r = E.redo.pop(); if (!r) return toast("Nothing to redo");
-  E.undo.push({ snap: snapshot(), label: r.label }); restore(r.snap); markDirty(); toast("Redo: " + r.label);
+  E.undo.push({ snap: snapshot(), label: r.label }); restore(r.snap); markDirty(); showSync(); toast("Redo: " + r.label);
 }
-const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections });
+const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, tempo: S.chart.tempo });
 function markDirty() { E.dirty = contentSnap() !== E.clean; updateButtons(); }   // undo back to saved = clean
 function updateButtons() {
   $("#save").disabled = !E.dirty || E.saving; $("#undo").disabled = !E.undo.length; $("#redo").disabled = !E.redo.length;
@@ -126,6 +129,68 @@ async function save() {
     toast("Saved notes.chart (the previous version is kept in the song's .riffchart/history folder)");
   } catch (e) { toast("Save failed: " + e.message, true); }
   E.saving = false; updateButtons();
+}
+
+// ---------------------------------------------------------------- sync nudge
+// Move the whole chart against the audio by stretching (or squeezing) the lead-in before the first note:
+// the tempo markers before an anchor tick are scaled, one is added at the anchor if needed, and everything
+// from the anchor on keeps its tempo, so every note, section and beat line moves by exactly `ms`.
+// RiffChart charts start with a one-beat lead-in tempo marker made for this; other charts get one at the
+// last beat before their first event. Works in Clone Hero, YARG and Moonscraper (no Offset / delay tricks).
+const MAX_BPM = 2000, MIN_LEADIN = 0.05;
+function firstEventTick() {
+  let f = Infinity;
+  for (const d of DIFFS) {
+    const t = S.edit[d];
+    if (t.notes.length) f = Math.min(f, t.notes[0][0]);
+    for (const [a] of t.star_power.concat(t.solos)) f = Math.min(f, a);
+  }
+  for (const [t] of S.chart.sections) f = Math.min(f, t);
+  return f;
+}
+function shiftedTempo(ms) {          // -> new tempo list, or an error message
+  const res = S.chart.resolution, tm = S.tempo;
+  let tempo = S.chart.tempo.map((x) => x.slice());
+  if (!tempo.length || tempo[0][0] !== 0) tempo.unshift([0, tm.bpmAt(0)]);
+  const first = firstEventTick();
+  const later = tempo.find(([t]) => t > 0);
+  const anchor = later && later[0] <= first ? later[0] : Number.isFinite(first) ? Math.floor(first / res) * res : res * 4;
+  if (anchor <= 0) return "The chart starts right at its first beat, so there's no lead-in to stretch.";
+  const dur = tm.tickToSec(anchor), want = dur + ms / 1000;
+  const top = Math.max(...tempo.filter(([t]) => t < anchor).map(([, b]) => b));
+  const shortest = Math.max(MIN_LEADIN, dur * top / MAX_BPM);     // shortest lead-in we allow
+  if (want < shortest) {
+    const most = Math.max(0, Math.floor((dur - shortest) * 1000));
+    return most ? `The first note is too close to the start: the chart can move at most ${most} ms more earlier.`
+      : "The first note is too close to the start to move the chart any earlier.";
+  }
+  const atAnchor = tm.bpmAt(anchor), k = dur / want;
+  tempo = tempo.map(([t, b]) => [t, t < anchor ? Math.round(b * k * 1000) / 1000 : b]);
+  if (!tempo.some(([t]) => t === anchor)) tempo.push([anchor, atAnchor]);
+  return tempo.sort((a, b) => a[0] - b[0]);
+}
+function nudgeSync(ms) {
+  if (!S.edit) return;
+  const r = shiftedTempo(ms);
+  if (typeof r === "string") { toast(r, true); return; }
+  edit(ms > 0 ? `chart ${ms} ms later` : `chart ${-ms} ms earlier`, () => { setTempo(r); });
+  showSync();
+}
+function showSync() {
+  const el = $("#syncval");
+  if (!el || !E.sync0) return;
+  const d = Math.round((S.tempo.tickToSec(E.sync0[0]) - E.sync0[1]) * 1000);
+  el.textContent = `${d > 0 ? "+" : ""}${d} ms`;
+  el.title = d ? `The chart is ${Math.abs(d)} ms ${d > 0 ? "later" : "earlier"} than when you opened it` : "Unchanged since you opened the song";
+}
+function initSync() {
+  const f = firstEventTick(), t = Number.isFinite(f) ? f : S.chart.resolution * 4;
+  E.sync0 = [t, S.tempo.tickToSec(t)];
+  showSync();
+}
+for (const [id, ms] of [["#syncearly", -5], ["#synclate", 5]]) {
+  const b = $(id);
+  if (b) b.addEventListener("click", (e) => nudgeSync(e.shiftKey ? ms * 4 : ms));
 }
 
 // ---------------------------------------------------------------- geometry helpers
@@ -414,6 +479,7 @@ window.addEventListener("keydown", (e) => {
   else if (k === "p" || k === "P") toggleRange("sp");
   else if (k === "l" || k === "L") toggleRange("solo");
   else if (k === "n" || k === "N") { e.preventDefault(); sectionAtPlayhead(); }
+  else if (k === "{" || k === "}") { e.preventDefault(); nudgeSync(k === "}" ? 5 : -5); }
   else if (e.altKey && (k === "ArrowUp" || k === "ArrowDown")) {
     e.preventDefault(); if (!needSel()) return;
     edit("move", () => moveSelection(k === "ArrowUp" ? step : -step, 0));
