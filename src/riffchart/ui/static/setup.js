@@ -27,9 +27,11 @@ function render() {
   $("#back").hidden = first;
   $("#save").textContent = first ? "Save and start" : "Save";
   $("#chstate").innerHTML = ch.found
-    ? `✓ Found. ${ch.exe ? "Clone Hero itself is installed too, so songs can open straight in it." : "(Clone Hero.exe wasn't found, so “open in Clone Hero” won't work; everything else does.)"}`
-      + (ch.running ? ` <b class="warnc">Clone Hero is running: close it before saving to change its settings.</b>` : "")
+    ? "✓ Found." + (ch.running ? ` <b class="warnc">Clone Hero is running: close it before saving to change its settings.</b>` : "")
     : "✗ Not found here. Install and start Clone Hero once, or paste where its settings.ini is. Without it RiffChart still charts and exports.";
+  $("#exestate").textContent = ch.exe
+    ? "✓ Found, so songs can open straight in Clone Hero."
+    : "Not found: paste the folder Clone Hero is in (where Clone Hero.exe is) to open songs straight in it. Everything else works without it.";
   showReg();
   // protected folders: what's protected now, plus Clone Hero's other song folders (ticked on first run)
   if (!prot.length) {
@@ -75,6 +77,7 @@ $("#save").addEventListener("click", async () => {
   document.querySelectorAll("[data-opt]").forEach((el) => { options[el.dataset.opt] = el.checked; });
   const body = { export_dir: $("#export").value.trim().replace(/^"|"$/g, ""),
     clone_hero_settings: $("#settings").value.trim().replace(/^"|"$/g, "") || null,
+    clone_hero_exe: $("#exe").value.trim().replace(/^"|"$/g, "") || null,
     protected: prot.filter((p) => p.on).map((p) => p.path),
     register: !$("#regrow").hidden && $("#register").checked, options };
   if (!body.export_dir) { toast("Choose a folder for your finished songs", true); $("#export").focus(); return; }
@@ -89,7 +92,7 @@ $("#save").addEventListener("click", async () => {
     if (r.registered) bits.push("the songs folder is now in Clone Hero");
     if (r.options_changed) bits.push("Clone Hero's song options are set");
     toast(bits.join(", ") + ".");
-    S = r; prot = []; render();
+    S = r; prot = []; render(); $("#exe").value = S.clone_hero.exe || "";
     if (first) setTimeout(() => { location.href = "./"; }, 900);
   } catch (e) {
     toast(e.status === 409 ? "Close Clone Hero first, then Save again (it overwrites its settings when it exits)." : e.message, true);
@@ -100,6 +103,7 @@ $("#save").addEventListener("click", async () => {
   try {
     S = await api("/api/setup");
     $("#settings").value = S.clone_hero.settings;
+    $("#exe").value = S.clone_hero.exe || "";
     $("#export").value = S.done ? S.export_dir : S.default_export;
     render();
   } catch (e) { toast(e.message, true); }

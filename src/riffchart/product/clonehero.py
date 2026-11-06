@@ -15,16 +15,58 @@ from pathlib import Path
 from ..paths import load_config, project_path
 
 
-def find_exe(cli: str | None = None) -> Path | None:
-    cands = [cli, os.environ.get("CLONE_HERO_EXE")]
+EXE = "Clone Hero.exe"
+
+
+def exe_path(p: str | Path | None) -> Path | None:
+    """A path the user gave: the exe itself, or the folder it's in."""
+    if not p or not str(p).strip():
+        return None
+    p = Path(str(p).strip().strip('"')).expanduser()
+    if p.is_dir():
+        p = p / EXE
+    return p if p.is_file() and p.suffix.lower() == ".exe" else None
+
+
+def from_player_log() -> Path | None:
+    """Clone Hero is a portable zip people unpack anywhere, but its Unity log names the folder it ran from
+    ("... at path D:/Games/Clone Hero/Clone Hero_Data/UnitySubsystems")."""
+    logs = Path.home() / "AppData" / "LocalLow" / "srylain Inc_" / "Clone Hero"
+    for name in ("Player.log", "Player-prev.log"):
+        try:
+            text = (logs / name).read_text(encoding="utf-8", errors="replace")[:200_000]
+        except OSError:
+            continue
+        for m in re.finditer(r"([A-Za-z]:[\\/][^\r\n'\"]*?)[\\/]Clone Hero_Data", text):
+            exe = exe_path(m.group(1))
+            if exe:
+                return exe
+    return None
+
+
+def find_exe(cli: str | None = None, configured: str | None = None) -> Path | None:
+    """Clone Hero.exe: given on the command line, CLONE_HERO_EXE, the app's setup (configured), configs/
+    preview.yaml, the folder Clone Hero last ran from (its log), then the usual places."""
+    cands = [cli, os.environ.get("CLONE_HERO_EXE"), configured]
     if project_path("configs/preview.yaml").exists():
         cands.append(load_config("configs/preview.yaml").get("clone_hero_exe"))
-    cands += [r"C:\Program Files\Clone Hero\Clone Hero.exe", r"C:\Program Files (x86)\Clone Hero\Clone Hero.exe",
-              str(Path.home() / "AppData/Local/Programs/Clone Hero/Clone Hero.exe"),
-              str(Path.home() / "Desktop/Clone Hero/Clone Hero.exe")]
     for c in cands:
-        if c and Path(c).is_file():
-            return Path(c)
+        exe = exe_path(c)
+        if exe:
+            return exe
+    exe = from_player_log()
+    if exe:
+        return exe
+    home = Path.home()
+    places = [Path(os.environ.get("ProgramFiles", r"C:\Program Files")), Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
+              home / "AppData/Local/Programs", home / "Desktop", home / "Downloads", home / "Documents", home / "Games"]
+    for drive in "CDEFG":
+        places += [Path(f"{drive}:/"), Path(f"{drive}:/Games")]
+    for base in places:
+        for name in ("Clone Hero", "CloneHero"):
+            exe = exe_path(base / name)
+            if exe:
+                return exe
     return None
 
 
@@ -36,7 +78,7 @@ def launch_preview(folder: Path, difficulty: str = "expert", exe: Path | None = 
     """Start Clone Hero on one song folder (it must contain the audio). Returns the command line."""
     exe = exe or find_exe()
     if exe is None:
-        raise FileNotFoundError("Clone Hero.exe not found: set clone_hero_exe in configs/preview.yaml")
+        raise FileNotFoundError("Clone Hero.exe wasn't found: choose it under Settings in the library")
     cmd = preview_command(exe, folder, difficulty)
     subprocess.Popen(cmd, cwd=str(exe.parent))
     return cmd

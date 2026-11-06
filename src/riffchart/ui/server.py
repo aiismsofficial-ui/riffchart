@@ -96,7 +96,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
     def status():
         settings = cfg["clone_hero_settings"]
         folders = clonehero.song_folders(settings) if settings else []
-        exe = clonehero.find_exe()
+        exe = clonehero.find_exe(configured=cfg.get("clone_hero_exe"))
         return {"model": queue.model_state, "workspace": str(lib.workspace), "export_dir": str(lib.export_dir),
                 "clone_hero": {"exe": str(exe) if exe else None,
                                "export_registered": any(Path(p).resolve() == lib.export_dir.resolve()
@@ -114,7 +114,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         st = cfg.get("clone_hero_settings") or setup.default_settings()
         st = Path(st)
         folders = [p for p in clonehero.song_folders(st) if p.strip()] if st.exists() else []
-        exe = clonehero.find_exe()
+        exe = clonehero.find_exe(configured=cfg.get("clone_hero_exe"))
         return {"done": setup_done(), "export_dir": str(lib.export_dir),
                 "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
@@ -149,6 +149,11 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             check_writable(lib.workspace, prot)
         except ProtectedPathError:
             raise HTTPException(400, "the songs folder can't be inside a folder you protect from changes")
+        exe = None
+        if str(body.get("clone_hero_exe") or "").strip():
+            exe = clonehero.exe_path(body["clone_hero_exe"])
+            if exe is None:
+                raise HTTPException(400, "Clone Hero.exe isn't there: choose the folder Clone Hero is in, or the exe itself")
         opts = {k: bool(v) for k, v in (body.get("options") or {}).items() if k in setup.CH_OPTIONS}
         cur = setup.read_options(st) if st and st.exists() else {}
         opts_change = {k: v for k, v in opts.items() if (cur.get(k) if cur.get(k) is not None else 1) != int(v)}
@@ -158,8 +163,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(409, "close Clone Hero first: it overwrites its settings when it exits")
         export.mkdir(parents=True, exist_ok=True)
         setup.write_local(cfg["_config"], {"export_dir": str(export), "clone_hero_settings": str(st) if st else None,
+                                           "clone_hero_exe": str(exe) if exe else None,
                                            "protected": [str(p) for p in prot], "setup_done": True})
-        cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True)
+        cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True,
+                   clone_hero_exe=str(exe) if exe else None)
         lib.export_dir, lib.protected = export, prot
         done = {"registered": False, "options_changed": False}
         if touches_ch:
@@ -841,7 +848,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         if diff not in ("expert", "hard", "medium", "easy"):
             raise HTTPException(400, "difficulty must be expert, hard, medium or easy")
         try:
-            cmd = clonehero.launch_preview(folder, diff)
+            cmd = clonehero.launch_preview(folder, diff, clonehero.find_exe(configured=cfg.get("clone_hero_exe")))
         except FileNotFoundError as e:
             raise HTTPException(404, str(e))
         return {"command": cmd}

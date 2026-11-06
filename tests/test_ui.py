@@ -679,3 +679,28 @@ def test_set_ch_options_only_touches_custom(tmp_path):
     t = st.read_text(encoding="utf-8")
     assert "[game]\nsong_videos = 7" in t and t.rstrip().endswith("[custom]\nsong_videos = 1") and "nonsense" not in t
     assert read_options(st)["song_videos"] == 1
+
+
+def test_find_clone_hero_exe(tmp_path, monkeypatch, env):
+    ch = tmp_path / "Somewhere" / "Clone Hero"
+    (ch / "Clone Hero_Data").mkdir(parents=True)
+    (ch / "Clone Hero.exe").write_bytes(b"MZ")
+    assert clonehero.exe_path(ch) == ch / "Clone Hero.exe"                 # the folder is enough
+    assert clonehero.exe_path(ch / "Clone Hero.exe") == ch / "Clone Hero.exe"
+    assert clonehero.exe_path(tmp_path) is None and clonehero.exe_path("") is None
+    # Clone Hero's own log says where it ran from
+    logs = tmp_path / "home" / "AppData" / "LocalLow" / "srylain Inc_" / "Clone Hero"
+    logs.mkdir(parents=True)
+    (logs / "Player.log").write_text(f"[Subsystems] Discovering subsystems at path {ch.as_posix()}/Clone Hero_Data/UnitySubsystems\n",
+                                     encoding="utf-8")
+    monkeypatch.setattr(clonehero.Path, "home", classmethod(lambda cls: tmp_path / "home"))
+    monkeypatch.delenv("CLONE_HERO_EXE", raising=False)
+    assert clonehero.from_player_log() == ch / "Clone Hero.exe"
+    # chosen in Setup: saved and used
+    monkeypatch.setattr(clonehero, "is_running", lambda: False)
+    env.cfg["_config"] = env.tmp / "ui.yaml"
+    body = {"export_dir": str(env.tmp / "songs"), "clone_hero_settings": str(env.cfg["clone_hero_settings"]),
+            "clone_hero_exe": str(ch), "protected": []}
+    r = env.client.post("/api/setup", json=body)
+    assert r.status_code == 200 and r.json()["clone_hero"]["exe"] == str(ch / "Clone Hero.exe")
+    assert env.client.post("/api/setup", json=dict(body, clone_hero_exe=str(tmp_path / "nope"))).status_code == 400

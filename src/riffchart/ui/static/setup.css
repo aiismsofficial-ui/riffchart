@@ -16,3 +16,5 @@
 .su-add input { flex: 1; }
 .su-actions { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
 .warnc { color: var(--warn); }
+.su-gap { margin-top: 14px; }
+.su-opt { font-weight: 400; }
