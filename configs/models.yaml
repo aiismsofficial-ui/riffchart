@@ -1,26 +1,29 @@
 # Model files the app needs, checked (and downloaded where a url is set) by scripts/get_models.py, which the
 # installer runs. The Demucs separation model is public and is fetched by Demucs itself on first use (the
 # script fetches it up front so the first song doesn't wait).
-# url: empty until the models are published (see NOTES "C3"); copy the files to `path` by hand until then.
+# huggingface: the model repo ("<account>/<repo>"); each file downloads from
+#   https://huggingface.co/<repo>/resolve/main/<file>. Empty until the models are public: copy the files to
+#   `path` by hand until then. A file's own `url:` overrides this.
+huggingface: ""
 files:
   - name: RiffChart chart model (v2)
     path: data/checkpoints/chart/full_v2/step60000.pt
-    url: ""
+    file: riffchart-chart-v2.pt
     sha256: 6fc2537e3860355f30a0725519ef6a93a9113503870a466a9830aadffbac17e9
     bytes: 214775243
   - name: Beat tracker (Beat This, fine-tuned)
     path: data/checkpoints/beat_finetune/best.ckpt
-    url: ""
+    file: beat-tracker-finetuned.ckpt
     sha256: 6daf3b5c08d4164712b10f3d514b668d6647ea76413db7e5fa462c8c6a472358
     bytes: 81056614
   - name: Chart model input statistics (per-band mean and spread of the training audio)
     path: data/features/model/mel_stats.npz
-    url: ""
+    file: chart-input-stats.npz
     sha256: 960b86851f2924234641d4e8878510bd382b1231dd024ae191b1a453c45258f3
     bytes: 2548
   - name: Difficulty reducer (keeps easier difficulties below harder ones; density control)
     path: data/checkpoints/reduce/reduce.pkl
-    url: ""
+    file: difficulty-reducer.pkl
     sha256: a7bbd3ff5f78b3870dab104c53ebb248253bc66ff8e8c36111801c62844e4b29
     bytes: 3123426
 demucs: htdemucs_6s

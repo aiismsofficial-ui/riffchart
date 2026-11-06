@@ -59,8 +59,11 @@ def main(argv=None) -> int:
             pass
     cfg = load_config("configs/models.yaml")
     missing = []
+    repo = (cfg.get("huggingface") or "").strip().strip("/")
     for f in cfg.get("files") or []:
         dest = project_path(f["path"])
+        if not f.get("url") and repo and f.get("file"):
+            f["url"] = f"https://huggingface.co/{repo}/resolve/main/{f['file']}"
         if dest.exists():
             if dest.stat().st_size == f.get("bytes", dest.stat().st_size) and sha256(dest) == f["sha256"]:
                 print(f"✓ {f['name']}")
