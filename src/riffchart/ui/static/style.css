@@ -203,3 +203,4 @@ button.icon { padding: 4px 9px; }
 .tiplink { color: var(--accent); text-decoration: none; font-weight: 600; font-size: 13px; padding: 4px 10px;
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; white-space: nowrap; }
 .tiplink:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.topright { display: flex; align-items: center; gap: 14px; }

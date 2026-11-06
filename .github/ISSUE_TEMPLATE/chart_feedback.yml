@@ -1,0 +1,23 @@
+name: A chart came out wrong
+description: The notes don't match the song somewhere
+labels: [chart quality]
+body:
+  - type: input
+    id: song
+    attributes:
+      label: Song
+      description: Artist - Title
+    validations:
+      required: true
+  - type: input
+    id: diff
+    attributes:
+      label: Difficulty
+      description: Expert, Hard, Medium or Easy
+  - type: textarea
+    id: where
+    attributes:
+      label: Where and what
+      description: Timestamps help most, for example "1:42 the riff should be on yellow-blue" or "the solo at 2:30 is too sparse"
+    validations:
+      required: true

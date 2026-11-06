@@ -60,8 +60,10 @@ much faster). It's about twice as fast on an NVIDIA GTX 16 / RTX 20-series card 
 AMD Radeon RX 9000 / 7900 cards may work with AMD's ROCm build of PyTorch for Windows (untested).
 `device: auto | cuda | cpu` in `configs/product.yaml` picks where it runs (auto: the GPU if there is one).
 
-**Install:** download this repository (Code > Download ZIP), unzip it somewhere like `C:\RiffChart`, and
-double-click **install.bat**. It needs no admin rights and installs nothing system-wide. Everything goes in that
+**Install:** download the latest release's ZIP (Releases, on the right of the GitHub page, or Code > Download
+ZIP), unzip it somewhere like `C:\RiffChart`, and double-click **install.bat**. If Windows says "Windows
+protected your PC", click **More info**, then **Run anyway**. It shows that for any script downloaded from
+the internet. It needs no admin rights and installs nothing system-wide. Everything goes in that
 folder:
 - **uv:** the tool that installs Python and the app's packages.
 - **Python 3.12.**
@@ -72,6 +74,13 @@ folder:
 Expect about 3 GB with an NVIDIA card, or 1.5 GB for the CPU version. Run install.bat again at any time to repair
 or update; finished steps are skipped. To uninstall, run **uninstall.bat**. It removes the app and its
 models but keeps your charted songs unless you choose otherwise; then delete the folder.
+
+**Update to a new version:** download the new ZIP, unzip it over your RiffChart folder (replace the files),
+and run **install.bat** again. Your songs, highway designs and settings are kept, because they aren't in the ZIP.
+Settings shows which version you have.
+
+**Problems?** [Report them on GitHub](https://github.com/aiismsofficial-ui/riffchart/issues/new/choose) with your version number (Settings),
+Windows version, CPU or graphics card, and the last lines in the RiffChart window.
 
 **Start:** the RiffChart shortcut, or `RiffChart.bat`. It opens the app in your browser; close the RiffChart
 window to stop it.

@@ -712,3 +712,12 @@ def test_tip_link_only_when_https(env):
     assert env.client.get("/api/status").json()["tip_url"] == "https://ko-fi.com/someone"
     env.cfg["tip_url"] = "javascript:alert(1)"
     assert env.client.get("/api/status").json()["tip_url"] == ""
+
+
+def test_version_and_report_link(env):
+    from riffchart import __version__
+    assert __version__.count(".") == 2
+    s = env.client.get("/api/status").json()
+    assert s["version"] == __version__ and s["issues_url"] == ""
+    env.cfg["issues_url"] = "https://github.com/x/y/issues/new/choose"
+    assert env.client.get("/api/setup").json()["issues_url"].endswith("/issues/new/choose")

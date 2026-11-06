@@ -359,6 +359,8 @@ $("#tidy-go").addEventListener("click", async () => {
 // ---------- status + export folder
 function renderStatus() {
   if (!status) return;
+  const brand = document.querySelector(".top .brand");
+  if (brand && status.version) brand.title = `RiffChart ${status.version}`;
   const tip = $("#tiplink");
   if (tip) { tip.hidden = !status.tip_url; if (status.tip_url) tip.href = status.tip_url; }
   const m = status.model, ch = status.clone_hero;

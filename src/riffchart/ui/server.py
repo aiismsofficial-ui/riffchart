@@ -22,6 +22,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from .. import __version__
 from ..paths import PROJECT, project_path
 from ..product import clonehero
 from ..product.cli import AUDIO_EXT, display_name, find_audio
@@ -102,7 +103,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                                "export_registered": any(Path(p).resolve() == lib.export_dir.resolve()
                                                         for p in folders if p),
                                "running": clonehero.is_running()},
-                "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done(), "tip_url": tip_url()}
+                "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done(), "tip_url": tip_url(),
+                "version": __version__, "issues_url": str(cfg.get("issues_url") or "")}
 
     def tip_url() -> str:
         u = str(cfg.get("tip_url") or "").strip()
@@ -119,7 +121,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         st = Path(st)
         folders = [p for p in clonehero.song_folders(st) if p.strip()] if st.exists() else []
         exe = clonehero.find_exe(configured=cfg.get("clone_hero_exe"))
-        return {"done": setup_done(), "export_dir": str(lib.export_dir),
+        return {"done": setup_done(), "version": __version__, "issues_url": str(cfg.get("issues_url") or ""),
+                "export_dir": str(lib.export_dir),
                 "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
                 "clone_hero": {"settings": str(st), "found": st.exists(), "exe": str(exe) if exe else None,
@@ -918,7 +921,7 @@ def main(argv=None) -> None:
         return
     import uvicorn
     app = create_app(cfg)
-    print(f"RiffChart is running at {url}  (Ctrl+C to stop)", flush=True)
+    print(f"RiffChart {__version__} is running at {url}  (Ctrl+C to stop)", flush=True)
     if cfg.get("open_browser", True) and not args.no_browser:
         threading.Timer(1.0, webbrowser.open, (url,)).start()
     os.chdir(PROJECT)

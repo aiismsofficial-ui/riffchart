@@ -22,6 +22,8 @@ async function api(path, opts = {}) {
 
 function render() {
   const ch = S.clone_hero, first = !S.done;
+  $("#about").innerHTML = `RiffChart ${esc(S.version || "")}` + (S.issues_url
+    ? ` · <a href="${esc(S.issues_url)}" target="_blank" rel="noopener">Report a problem</a> (include this version number)` : "");
   $("#intro").hidden = !first;
   $("#heading").textContent = first ? "Set up RiffChart" : "Settings";
   $("#back").hidden = first;

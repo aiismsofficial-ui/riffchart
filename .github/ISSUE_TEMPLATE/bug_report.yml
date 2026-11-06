@@ -1,0 +1,35 @@
+name: Something went wrong
+description: RiffChart crashed, a song failed, or the install didn't work
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: RiffChart version
+      description: Shown at the bottom of Settings (for example 1.0.0)
+    validations:
+      required: true
+  - type: input
+    id: pc
+    attributes:
+      label: Windows version and hardware
+      description: For example "Windows 11, Intel i7 laptop, no graphics card" or "Windows 10, RTX 3060"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: The last lines in the RiffChart window (or the installer's window)
+      render: text
+  - type: input
+    id: song
+    attributes:
+      label: Song (if it's about one song)
+      description: Artist - Title, and where in the song (for example "1:42, the riff should be on yellow-blue")

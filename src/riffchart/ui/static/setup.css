@@ -18,3 +18,5 @@
 .warnc { color: var(--warn); }
 .su-gap { margin-top: 14px; }
 .su-opt { font-weight: 400; }
+.su-about { text-align: right; font-size: 12px; margin: 4px 0 0; }
+.su-about a { color: var(--accent); }
