@@ -32,7 +32,7 @@ def test_download_from_huggingface(tmp_path, monkeypatch):
     def fake_open(req, timeout=0):
         seen.append(req.full_url)
         return FakeResp(served[0])
-    monkeypatch.setattr(gm.urllib.request, "urlopen", fake_open)
+    monkeypatch.setattr(gm, "_open", lambda req, timeout=60: fake_open(gm._authorize(req), timeout))
     served = [b"tampered"]
     assert gm.main(["--no-demucs"]) == 2                                  # wrong checksum: refused
     assert not (tmp_path / "a" / "model.pt").exists() and not list((tmp_path / "a").glob("*.part"))
@@ -66,7 +66,7 @@ def test_private_repo_needs_token(tmp_path, monkeypatch):
         if "Authorization" not in req.unredirected_hdrs:
             raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
         return FakeResp(good)
-    monkeypatch.setattr(gm.urllib.request, "urlopen", fake_open)
+    monkeypatch.setattr(gm, "_open", lambda req, timeout=60: fake_open(gm._authorize(req), timeout))
     monkeypatch.delenv("HF_TOKEN", raising=False)
     assert gm.main(["--no-demucs"]) == 3                                  # private: ask for a token
     monkeypatch.setenv("HF_TOKEN", "hf_test")
@@ -79,3 +79,18 @@ def test_private_repo_needs_token(tmp_path, monkeypatch):
     reqs.clear()
     gm.main(["--no-demucs"])
     assert "Authorization" not in reqs[-1].unredirected_hdrs
+
+
+def test_token_follows_huggingface_redirects_only(monkeypatch):
+    import urllib.request
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+    h = gm._HFRedirect()
+    req = gm._authorize(urllib.request.Request("https://huggingface.co/riffchart/riffchart-models/resolve/main/a.npz"))
+    same = h.redirect_request(req, None, 307, "", {}, "https://huggingface.co/api/resolve-cache/models/x/a.npz")
+    cdn = h.redirect_request(req, None, 302, "", {}, "https://us.aws.cdn.hf.co/xet-bridge-us/abc?Signature=x")
+    evil = h.redirect_request(req, None, 302, "", {}, "https://huggingface.co.evil.io/a")
+    assert same.unredirected_hdrs.get("Authorization") == "Bearer hf_test"
+    assert "Authorization" not in cdn.unredirected_hdrs and "Authorization" not in cdn.headers
+    assert "Authorization" not in evil.unredirected_hdrs
+    plain = gm._authorize(urllib.request.Request("http://huggingface.co/x"))          # not https: no token
+    assert "Authorization" not in plain.unredirected_hdrs
