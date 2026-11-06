@@ -4,10 +4,10 @@ AI autocharter for **Clone Hero** and **YARG**: give it a song, get a playable 5
 all four difficulties (Expert, Hard, Medium, Easy), with star power, HOPOs, taps and sustains. It comes
 with a local web app to manage your songs and a chart editor to review and fix the result.
 
-Everything runs on your own PC. Nothing is uploaded anywhere.
+Everything runs on your own PC. Your songs and charts are never uploaded anywhere.
 
-> **Status: in development.** The code is here; the trained models are **not published yet**, so the
-> app cannot chart songs out of the box. See [Models](#models).
+**Version 1.0** for Windows 10 / 11. Download, double-click `install.bat`, and chart your first song a few
+minutes later. A graphics card is optional.
 
 ## What it does
 
@@ -20,9 +20,15 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
   other instruments where the guitar is quiet, or the whole song's melody, for songs with little guitar).
 - **Clone Hero-ready output:** `notes.chart`, `song.ini` (with an estimated difficulty and preview
   start), `song.ogg` and a separate `guitar.ogg`, so the guitar mutes when you miss.
+- **Difficulty rating:** each song's guitar difficulty (0-6) is estimated from its Expert chart the way
+  human charters rate songs.
+- **Takes what you have:** mp3, m4a, ogg, opus, flac, wav, webm and music videos (mp4, mkv). Names left by
+  downloads and converter sites ("(Official Video)", "y2mate.com - ...", "Artist - Topic") are tidied.
 
 ### The app
 
+- **First run:** a short setup finds Clone Hero, picks the folder finished songs go to, protects your own
+  chart folders from any changes, and switches on Clone Hero's song videos, backgrounds and highways.
 - **Library:** drop in audio files or folders; songs chart in the background with a progress bar.
   Fix a song's details (title, artist, album, genre, year, difficulty, cover) and update the copy in
   Clone Hero in one click; covers embedded in your audio files are picked up automatically, or find one
@@ -46,9 +52,11 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
 
 ## Setup (Windows)
 
-Requirements: Windows 10/11, Python 3.12, [uv](https://docs.astral.sh/uv/), 16 GB RAM recommended, ~6 GB disk.
-A graphics card is optional: RiffChart runs on the CPU (a 4-minute song took ~90 s on an Intel i7-14700KF)
-and is about twice as fast on an NVIDIA GTX 16 / RTX 20-series card or newer with 6 GB+ (~40 s on an RTX 5090).
+Requirements: Windows 10/11, 16 GB RAM recommended, about 3 GB of disk space, and an internet connection
+for the install. A graphics card is optional: RiffChart runs on the CPU (a 3-minute song took about 60 s on
+a desktop Intel i7-14700KF, and a few minutes on a laptop without a graphics card; plug the laptop in, it's
+much faster). It's about twice as fast on an NVIDIA GTX 16 / RTX 20-series card or newer with 6 GB+
+(~40 s on an RTX 5090).
 AMD Radeon RX 9000 / 7900 cards may work with AMD's ROCm build of PyTorch for Windows (untested).
 `device: auto | cuda | cpu` in `configs/product.yaml` picks where it runs (auto: the GPU if there is one).
 
@@ -92,7 +100,7 @@ protected:                      # your own chart folders: the app never writes i
 
 ## Usage
 
-Once models are available (see below):
+From the shortcut, or from the command line:
 
 ```bash
 .venv/Scripts/riffchart-ui                                   # the app, opens http://127.0.0.1:8765/
@@ -105,10 +113,16 @@ already charted (`--overwrite` to redo). Run `riffchart --help` for all options.
 
 ## Models
 
-RiffChart needs two trained models: the chart model (`configs/product.yaml: chart_ckpt`) and a
-fine-tuned beat tracker. They are not in this repository and have not been released yet. Stem
-separation uses [Demucs](https://github.com/facebookresearch/demucs) (`htdemucs_6s`), which downloads
-its own weights on first use.
+The installer downloads RiffChart's models from Hugging Face,
+[riffchart/riffchart-models](https://huggingface.co/riffchart/riffchart-models), and checks each file's
+checksum. There are four files, about 300 MB together:
+- the chart model;
+- a beat tracker, fine-tuned from [Beat This](https://github.com/CPJKU/beat_this);
+- the chart model's input statistics;
+- the difficulty reducer.
+
+The list is in `configs/models.yaml`, and `scripts/get_models.py` fetches or checks them. Stem separation uses
+[Demucs](https://github.com/facebookresearch/demucs) (`htdemucs_6s`), which is downloaded from Meta.
 
 You can train your own from a library of charts with matching audio. The pipeline (data audit,
 artist-disjoint splits, stem separation, features, training, evaluation) is in `src/riffchart/` and
@@ -118,6 +132,14 @@ the chart library is only ever read.
 ## How it works
 
 See [DESIGN.md](DESIGN.md) for the pipeline, the model and the post-processing.
+
+## Licence
+
+The code is GPL-3.0 (see `LICENSE`). The model files are CC BY-NC 4.0: free to use and share with credit,
+not for commercial use. The beat tracker builds on Beat This (MIT).
+
+The charts you make are for your own play. The songs themselves are copyrighted, so think twice before
+sharing song folders that contain the audio.
 
 ## Licence
 

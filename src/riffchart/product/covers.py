@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 
 # MusicBrainz asks every client to identify itself (https://musicbrainz.org/doc/MusicBrainz_API/Rate_Limiting)
-USER_AGENT = "RiffChart/0.1 (open-source Clone Hero / YARG autocharter)"
+USER_AGENT = "RiffChart/1.0 (open-source Clone Hero / YARG autocharter; +https://huggingface.co/riffchart)"
 COVER_HOSTS = ("mzstatic.com", "coverartarchive.org", "archive.org")
 TIMEOUT = 10
 _last_mb = 0.0
