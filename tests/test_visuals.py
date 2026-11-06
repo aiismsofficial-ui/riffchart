@@ -264,3 +264,11 @@ def test_convert_video_to_vp8(tmp_path):
     with av.open(str(out / "video.webm")) as c:
         frames = list(c.decode(video=0))
     assert len(frames) == 12 and frames[0].time < 0.01 and abs(frames[-1].time - 1.1) < 0.05
+
+
+def test_cover_results_ranked_by_artist_and_title():
+    r = [{"label": "When Woken: Lullaby covers of Band songs · Sleepy Tribute"}, {"label": "Live EP · Band"},
+         {"label": "Song Name (feat. X) · Band"}, {"label": "Karaoke Hits · Band"}]
+    assert [x["label"] for x in covers.rank(r, "Band", "Song Name")] == [
+        "Song Name (feat. X) · Band", "Live EP · Band", "Karaoke Hits · Band",
+        "When Woken: Lullaby covers of Band songs · Sleepy Tribute"]

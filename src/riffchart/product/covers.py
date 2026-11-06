@@ -4,6 +4,7 @@ cover hosts these services use, over https, with a size cap."""
 from __future__ import annotations
 
 import json
+import re
 import time
 import urllib.error
 import urllib.parse
@@ -121,4 +122,23 @@ def search(artist: str, title: str, album: str = "") -> dict:
             results += fn()
         except (OSError, ValueError) as e:
             errors.append(f"{name}: {e}")
-    return {"results": results, "errors": errors}
+    return {"results": rank(results, artist, title, album), "errors": errors}
+
+
+_TRIBUTE = re.compile(r"\b(?:lullaby|lullabies|tribute|karaoke|rendition|8-bit|piano version|music box|"
+                      r"string quartet|made famous|in the style of)\b", re.I)
+
+
+def rank(results: list[dict], artist: str, title: str, album: str = "") -> list[dict]:
+    """Best match first: by the song's own artist, then a release named after the album or the song (the
+    single), and tribute / lullaby / karaoke albums last. Otherwise the services' own order."""
+    from .meta import _fold
+    a, t, al = _fold(artist), _fold(title), _fold(album)
+
+    def key(ir):
+        i, r = ir
+        rel, _, who = r.get("label", "").rpartition(" · ")
+        f_rel, f_who = _fold(rel), _fold(who)
+        named = bool((al and al in f_rel) or (t and t in f_rel))
+        return (bool(a) and f_who != a, not named, bool(_TRIBUTE.search(rel)), i)
+    return [r for _, r in sorted(enumerate(results), key=key)]
