@@ -113,3 +113,9 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .sync b { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
 .pvw { display: inline-flex; align-items: center; gap: 4px; }
 .pvw b { color: #2dd4bf; min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+.histpanel .hnote { margin: 0; padding: 8px 12px 4px; font-size: 12px; }
+.histpanel li { grid-template-columns: 1fr auto; }
+.histpanel li.cur { outline: 1px solid var(--accent); }
+.histpanel .hcount { grid-column: 1 / span 2; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.histpanel .hcount b { color: var(--text); font-weight: 600; }
+.histpanel .up { color: var(--ok); } .histpanel .down { color: var(--bad); }

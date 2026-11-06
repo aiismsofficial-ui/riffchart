@@ -164,6 +164,7 @@ function openRechart() {
   R.bars = rcBars();
   if (R.bars.length < 2) return toast("This chart has no bars to re-chart", true);
   $("#issues").hidden = true;
+  if ($("#history")) $("#history").hidden = true;
   R.open = true; R.a = R.b = -1; R.takes = []; R.cur = 0; R.undoPushed = false;
   $("#rechart").hidden = false;
   if (!(E.sel.ticks.size && rangeFromSelection())) rangeAtPlayhead();

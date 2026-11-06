@@ -597,3 +597,25 @@ def test_preview_start(env):
     assert c.get("/api/songs/Muse - Uprising/chart").json()["preview_s"] == 12.346
     for bad in ({"start_s": -1}, {"start_s": 999}, {"start_s": "soon"}, {}):
         assert c.post("/api/songs/Muse - Uprising/preview", json=bad).status_code == 400
+
+
+def test_history_list_and_open(env):
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    assert c.get(f"{base}/history").json() == []
+    d = c.get(f"{base}/chart").json()
+    d["tracks"]["expert"]["notes"] = d["tracks"]["expert"]["notes"][:1]
+    assert c.post(f"{base}/chart", json=d).status_code == 200            # keeps the 3-note version
+    d["tracks"]["expert"]["notes"] = []
+    d["tracks"]["hard"]["notes"] = [[0, 2, 0, 0], [192, 4, 0, 0]]
+    assert c.post(f"{base}/chart", json=d).status_code == 200            # same second: still two versions
+    h = c.get(f"{base}/history").json()
+    assert [v["notes"]["expert"] for v in h] == [1, 3] and all(v["reason"] == "save" for v in h)
+    assert h[0]["replaced"] >= h[1]["replaced"] and h[1]["made"] > 0
+    old = c.get(f"{base}/history/{h[1]['name']}").json()
+    assert len(old["tracks"]["expert"]["notes"]) == 3 and old["resolution"] == 192 and old["tempo"]
+    for bad in ("nope-notes.chart", "..%2Fsong.ini", "../../song.ini"):
+        assert c.get(f"{base}/history/{bad}").status_code == 404
+    (folder / ".riffchart" / "history" / "20200101-000000-rechart-notes.chart").write_text("junk", encoding="utf-8")
+    h = c.get(f"{base}/history").json()
+    assert h[-1]["reason"] == "rechart"

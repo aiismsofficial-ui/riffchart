@@ -52,6 +52,7 @@
     <b id="pvval">–</b><button id="pvset" class="ghost small" title="Start the song-list preview at the playhead (on the bar line nearest to it)">Set here</button><button id="pvhear" class="ghost small icon" title="Play from the preview start" aria-label="Play the preview">&#9654;</button></span>
   <span class="sep"></span>
   <button id="rcbtn" class="ghost small" title="Let the AI chart a section again: try takes and keep the best (R)">&#10022; Re-chart section</button>
+  <button id="histbtn" class="ghost small" title="Earlier versions of this chart: look at one, then Save to restore it">History</button>
   <button id="issuesbtn" class="ghost small issuesbtn" title="Playability problems in this difficulty (. and , jump to the next / previous)">Checking…</button>
   <span class="muted" id="info"></span>
 </div>
@@ -101,6 +102,13 @@
       </details>
     </div>
   </aside>
+  <aside id="history" class="issues histpanel" hidden aria-label="Earlier versions">
+    <div class="ihead"><b>Earlier versions</b>
+      <button class="ghost small" id="hclose" aria-label="Close">✕</button></div>
+    <p class="muted hnote">Each save and re-chart keeps the version it replaced. Open one to look at it here;
+      Save makes it the chart again (what you have now is kept too), Undo goes back.</p>
+    <ol id="hlist"></ol>
+  </aside>
   <div id="loading" class="loading">Loading chart and audio…</div>
 </div>
 
@@ -139,5 +147,6 @@
 <script src="edit.js"></script>
 <script src="check.js"></script>
 <script src="rechart.js"></script>
+<script src="history.js"></script>
 </body>
 </html>

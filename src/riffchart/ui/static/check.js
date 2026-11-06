@@ -87,6 +87,7 @@ function stepIssue(dir) {   // next / previous relative to the playhead
 function toggleIssues() {
   $("#issues").hidden = !$("#issues").hidden;
   if (!$("#issues").hidden && typeof closeRechart === "function") closeRechart();   // same spot on screen
+  if (!$("#issues").hidden && $("#history")) $("#history").hidden = true;
   renderIssues();
 }
 $("#issuesbtn").addEventListener("click", toggleIssues);

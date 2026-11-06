@@ -215,6 +215,9 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         hist = folder / ".riffchart" / "history"
         hist.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%d-%H%M%S")
+        if list(hist.glob(f"{stamp}-*notes.*")):          # two saves in one second: keep both
+            time.sleep(1.0)
+            stamp = time.strftime("%Y%m%d-%H%M%S")
         for name in ("notes.chart", "notes.mid"):
             old = folder / name
             if old.exists():
@@ -243,6 +246,55 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(400, "the preview must start inside the song")
         write_ini_fields(folder / "song.ini", {"preview_start_time": str(int(round(start * 1000)))})
         return {"preview_s": round(start, 3), "export_stale": lib.export_stale(song_id)}
+
+    # ---- chart history: the version each save / re-chart replaced, in .riffchart/history
+    hist_counts: dict[tuple, dict] = {}
+
+    def history_files(folder: Path) -> list[Path]:
+        h = folder / ".riffchart" / "history"
+        return sorted(h.glob("*-notes.*"), reverse=True) if h.is_dir() else []
+
+    def history_song(folder: Path, f: Path):
+        from ..formats.chart_parser import parse_chart
+        from ..formats.midi_parser import parse_midi
+        ini = _ini(folder)
+        return (parse_midi(f, ini) if f.suffix.lower() in (".mid", ".midi") else parse_chart(f, ini)), ini
+
+    @app.get("/api/songs/{song_id}/history")
+    def history(song_id: str):
+        """Newest first: name, made (when that version was written), replaced (when a save or re-chart
+        replaced it), reason (save / rechart), notes per difficulty."""
+        folder = song_folder(song_id)
+        out = []
+        for f in history_files(folder):
+            m = re.match(r"(\d{8}-\d{6})-(?:(rechart)-)?notes\.", f.name)
+            if not m:
+                continue
+            st = f.stat()
+            key = (str(f), st.st_size, int(st.st_mtime))
+            if key not in hist_counts:
+                try:
+                    song, _ = history_song(folder, f)
+                    hist_counts[key] = {d: len(t) for d, t in song.tracks.items()}
+                except Exception as e:                       # unreadable: still listed
+                    hist_counts[key] = {"error": str(e)[:200]}
+            replaced = time.mktime(time.strptime(m.group(1), "%Y%m%d-%H%M%S"))
+            out.append({"name": f.name, "made": st.st_mtime, "replaced": replaced,
+                        "reason": m.group(2) or "save", "notes": hist_counts[key]})
+        return out
+
+    @app.get("/api/songs/{song_id}/history/{name}")
+    def history_version(song_id: str, name: str):
+        """One old version as editor JSON (to look at it and, by saving, restore it)."""
+        folder = song_folder(song_id)
+        f = next((x for x in history_files(folder) if x.name == name), None)
+        if f is None:
+            raise HTTPException(404, f"no history version {name!r}")
+        try:
+            song, ini = history_song(folder, f)
+        except Exception as e:
+            raise HTTPException(422, f"that version can't be read: {e}")
+        return song_to_json(song, ini)
 
     @app.post("/api/check")
     def check_chart(body: dict = Body(...)):

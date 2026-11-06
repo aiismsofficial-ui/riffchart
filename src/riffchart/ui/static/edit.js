@@ -26,15 +26,19 @@ function finalTypes(notes) {
   const nat = naturalHopo(notes, S.chart.hopo_threshold);
   return notes.map((n, i) => (n[3] === 2 ? 2 : (nat[i] ^ (n[3] === 1)) ? 1 : 0));
 }
-function initEdit(chart) {
-  S.edit = {};
+function editTracks(chart) {      // server tracks (final note types) -> editable tracks (forced flags)
+  const out = {};
   for (const d of DIFFS) {
     const t = chart.tracks[d] || { notes: [], star_power: [], solos: [] };
     const nat = naturalHopo(t.notes, chart.hopo_threshold);
-    S.edit[d] = { notes: t.notes.map(([tick, m, sus, nt], i) => [tick, m, sus, nt === 2 ? 2 : (nt === 1) !== !!nat[i] ? 1 : 0]),
+    out[d] = { notes: t.notes.map(([tick, m, sus, nt], i) => [tick, m, sus, nt === 2 ? 2 : (nt === 1) !== !!nat[i] ? 1 : 0]),
       star_power: t.star_power.map((x) => x.slice()), solos: t.solos.map((x) => x.slice()) };
-    rebuild(d);
   }
+  return out;
+}
+function initEdit(chart) {
+  S.edit = editTracks(chart);
+  for (const d of DIFFS) rebuild(d);
   E.clean = contentSnap();
   initSync();
   updateButtons();
@@ -65,12 +69,17 @@ function rebuildAll() {
 }
 
 // ---------------------------------------------------------------- undo / redo / dirty
-const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, tempo: S.chart.tempo, sel: [E.sel.diff, [...E.sel.ticks]] });
+// timing = tempo map, time signatures, resolution and HOPO threshold (a sync nudge or a restored version)
+const timing = () => ({ tempo: S.chart.tempo, ts: S.chart.ts, res: S.chart.resolution, thr: S.chart.hopo_threshold });
+const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, timing: timing(), sel: [E.sel.diff, [...E.sel.ticks]] });
 function setTempo(tempo) { S.chart.tempo = tempo; S.tempo = new Tempo(S.chart.resolution, tempo, S.chart.ts); }
+function setTiming(t) {
+  S.chart.ts = t.ts; S.chart.resolution = t.res; S.chart.hopo_threshold = t.thr; setTempo(t.tempo);
+}
 function restore(snap) {
   const o = JSON.parse(snap);
   S.edit = o.edit; S.chart.sections = o.sections;
-  if (JSON.stringify(o.tempo) !== JSON.stringify(S.chart.tempo)) setTempo(o.tempo);
+  if (JSON.stringify(o.timing) !== JSON.stringify(timing())) setTiming(o.timing);
   E.sel = { diff: o.sel[0], ticks: new Set(o.sel[1]) };
   rebuildAll();
 }
@@ -86,12 +95,14 @@ function edit(label, fn) {
 function undo() {
   const u = E.undo.pop(); if (!u) return toast("Nothing to undo");
   E.redo.push({ snap: snapshot(), label: u.label }); restore(u.snap); markDirty(); showSync(); toast("Undo: " + u.label);
+  if (typeof historyChanged === "function") historyChanged(false);
 }
 function redo() {
   const r = E.redo.pop(); if (!r) return toast("Nothing to redo");
   E.undo.push({ snap: snapshot(), label: r.label }); restore(r.snap); markDirty(); showSync(); toast("Redo: " + r.label);
+  if (typeof historyChanged === "function") historyChanged(false);
 }
-const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, tempo: S.chart.tempo });
+const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, timing: timing() });
 function markDirty() { E.dirty = contentSnap() !== E.clean; updateButtons(); }   // undo back to saved = clean
 function updateButtons() {
   $("#save").disabled = !E.dirty || E.saving; $("#undo").disabled = !E.undo.length; $("#redo").disabled = !E.redo.length;
@@ -126,7 +137,8 @@ async function save() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     E.clean = sent; E.dirty = contentSnap() !== sent; E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    toast("Saved notes.chart (the previous version is kept in the song's .riffchart/history folder)");
+    toast("Saved notes.chart (the previous version is kept: History lists it)");
+    if (typeof historyChanged === "function") historyChanged(true);
   } catch (e) { toast("Save failed: " + e.message, true); }
   E.saving = false; updateButtons();
 }

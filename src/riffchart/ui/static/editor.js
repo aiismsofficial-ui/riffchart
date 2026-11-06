@@ -120,7 +120,7 @@ function layout() {
   const gutter = 64, wave = Math.min(140, Math.max(60, W * 0.12));
   const diffs = S.view === "all" ? DIFFS.filter((d) => S.tracks[d]) : [S.diff];
   // 150: labels on the right; a floating panel (problems, re-chart) takes more room when open
-  const panel = [$("#issues"), $("#rechart")].some((el) => el && !el.hidden) ? Math.min(360, W * 0.3) : 0;
+  const panel = [$("#issues"), $("#rechart"), $("#history")].some((el) => el && !el.hidden) ? Math.min(360, W * 0.3) : 0;
   const avail = W - gutter - wave - 24 - 150 - panel;
   const per = S.view === "all" ? Math.min(300, (avail - (diffs.length - 1) * 16) / diffs.length) : Math.min(420, avail);
   const hwW = Math.max(150, per);

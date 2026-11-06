@@ -194,7 +194,7 @@ class RiffCharter:
         if (folder / "notes.chart").exists():          # keep the chart being replaced (edits included)
             hist = folder / ".riffchart" / "history"
             hist.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(folder / "notes.chart", hist / time.strftime("%Y%m%d-%H%M%S-notes.chart"))
+            shutil.copy2(folder / "notes.chart", hist / time.strftime("%Y%m%d-%H%M%S-rechart-notes.chart"))
         sec: dict[str, float] = {}
         t = time.perf_counter()
 
