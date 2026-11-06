@@ -4,7 +4,7 @@
 # huggingface: the model repo ("<account>/<repo>"); each file downloads from
 #   https://huggingface.co/<repo>/resolve/main/<file>. Empty until the models are public: copy the files to
 #   `path` by hand until then. A file's own `url:` overrides this.
-huggingface: ""
+huggingface: riffchart/riffchart-models
 files:
   - name: RiffChart chart model (v2)
     path: data/checkpoints/chart/full_v2/step60000.pt
