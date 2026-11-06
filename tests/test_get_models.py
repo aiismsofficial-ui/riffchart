@@ -50,3 +50,32 @@ def test_models_yaml_lists_every_file():
     assert paths == {"data/checkpoints/chart/full_v2/step60000.pt", "data/checkpoints/beat_finetune/best.ckpt",
                      "data/features/model/mel_stats.npz", "data/checkpoints/reduce/reduce.pkl"}
     assert all(len(f["sha256"]) == 64 and f["file"] for f in cfg["files"])
+
+
+def test_private_repo_needs_token(tmp_path, monkeypatch):
+    import urllib.error
+    good = b"weights" * 100
+    cfg = {"huggingface": "riffchart/riffchart-models", "files": [
+        {"name": "A", "path": str(tmp_path / "m.pt"), "file": "m.pt", "sha256": hashlib.sha256(good).hexdigest(),
+         "bytes": len(good)}]}
+    monkeypatch.setattr(gm, "load_config", lambda p: cfg)
+    reqs = []
+
+    def fake_open(req, timeout=0):
+        reqs.append(req)
+        if "Authorization" not in req.unredirected_hdrs:
+            raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized", {}, None)
+        return FakeResp(good)
+    monkeypatch.setattr(gm.urllib.request, "urlopen", fake_open)
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    assert gm.main(["--no-demucs"]) == 3                                  # private: ask for a token
+    monkeypatch.setenv("HF_TOKEN", "hf_test")
+    assert gm.main(["--no-demucs"]) == 0
+    r = reqs[-1]
+    assert r.unredirected_hdrs["Authorization"] == "Bearer hf_test"
+    assert "Authorization" not in r.headers                              # so redirects never carry it
+    cfg["files"][0]["url"] = "https://example.com/m.pt"                  # another host never gets the token
+    (tmp_path / "m.pt").unlink()
+    reqs.clear()
+    gm.main(["--no-demucs"])
+    assert "Authorization" not in reqs[-1].unredirected_hdrs

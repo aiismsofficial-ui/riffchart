@@ -107,7 +107,23 @@ Set-Content -Path (Join-Path $Root "tools\flavour.txt") -Value $flavour -Encodin
 # ---------------------------------------------------------------- 4. models
 Step 4 "Models"
 & $Py (Join-Path $Root "scripts\get_models.py")
-$modelsOk = ($LASTEXITCODE -eq 0)
+$code = $LASTEXITCODE
+while ($code -eq 3 -and -not $Yes) {
+    # the model repo is private (testing before release): a Hugging Face read token lets this PC download it.
+    # It's used for this download only and is not saved anywhere.
+    Say ""
+    Say "  The models are private for now. Paste a Hugging Face read token (huggingface.co > Settings >" "Yellow"
+    Say "  Access Tokens > Create new token > Read), or press Enter to skip." "Yellow"
+    $sec = Read-Host "  Token" -AsSecureString
+    $plain = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+    if ([string]::IsNullOrWhiteSpace($plain)) { break }
+    $env:HF_TOKEN = $plain.Trim()
+    & $Py (Join-Path $Root "scripts\get_models.py") --no-demucs
+    $code = $LASTEXITCODE
+    Remove-Item Env:HF_TOKEN -ErrorAction SilentlyContinue
+    $plain = $null
+}
+$modelsOk = ($code -eq 0)
 
 # ---------------------------------------------------------------- 5. shortcuts
 Step 5 "Shortcuts"

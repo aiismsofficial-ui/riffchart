@@ -3,13 +3,18 @@
     python scripts/get_models.py [--check] [--no-demucs]
 
 Exit code 0: everything is in place. 2: something is missing (the message says what and where it goes).
+3: the model repo is private and needs a Hugging Face read token: set HF_TOKEN (the installer asks for one).
+The token is only sent to huggingface.co itself, never to the download server it redirects to.
 Downloads go to <path>.part first and are checked against their SHA-256 before they replace anything.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -33,6 +38,9 @@ def download(url: str, dest: Path, size: int) -> Path:
     part = dest.with_name(dest.name + ".part")
     dest.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(url, headers={"User-Agent": "RiffChart installer"})
+    token = os.environ.get("HF_TOKEN", "").strip()
+    if token and urllib.parse.urlsplit(url).hostname == "huggingface.co":
+        req.add_unredirected_header("Authorization", f"Bearer {token}")     # not passed on to redirects
     with urllib.request.urlopen(req, timeout=60) as r, open(part, "wb") as out:
         total = int(r.headers.get("Content-Length") or size or 0)
         done, last = 0, -1
@@ -58,7 +66,7 @@ def main(argv=None) -> int:
         except (AttributeError, ValueError):
             pass
     cfg = load_config("configs/models.yaml")
-    missing = []
+    missing, need_token = [], False
     repo = (cfg.get("huggingface") or "").strip().strip("/")
     for f in cfg.get("files") or []:
         dest = project_path(f["path"])
@@ -86,6 +94,15 @@ def main(argv=None) -> int:
                 raise ValueError("the download doesn't match its checksum")
             part.replace(dest)
             print(f"✓ {f['name']}")
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403, 404) and "huggingface.co" in f["url"]:
+                need_token = True
+                why = ("the token was refused" if os.environ.get("HF_TOKEN") else
+                       "the model repo is private, so a Hugging Face read token is needed")
+                print(f"✗ {f['name']}: {why}")
+            else:
+                print(f"✗ {f['name']}: download failed (HTTP {e.code}). Run the installer again, or put the file at {dest}")
+            missing.append(f)
         except Exception as e:
             print(f"✗ {f['name']}: download failed ({e}). Run the installer again, or put the file at {dest}")
             missing.append(f)
@@ -99,7 +116,7 @@ def main(argv=None) -> int:
             print(f"! separation model not fetched now ({e}); it downloads with the first song instead")
     if missing:
         print("\nThe app needs the files marked ✗ before it can chart songs. Everything else works already.")
-        return 2
+        return 3 if need_token else 2
     print("\nAll models are in place.")
     return 0
 
