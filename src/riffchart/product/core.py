@@ -22,9 +22,10 @@ import soxr
 import torch
 import yaml
 
-from ..audio.io import load_audio
+from ..audio.io import FFMPEG_EXT, load_audio
 from ..formats.chart_writer import write_chart_text
 from ..formats.song import DIFFICULTIES, Song
+from ..formats.textio import parse_ini
 from ..model.data_prep import SR as MEL_SR, Mel
 from ..model.generate import Charter, events_to_song
 from ..model.tokenizer import CHORD_EDGES, V
@@ -35,6 +36,7 @@ from ..timing.tempo_map import beats_to_tempo_map
 from ..timing.trackers import get_tracker
 from .follow import MODES as FOLLOW_MODES, playable_part
 from .meta import SongMeta, cover_art, read_meta
+from .visuals import VIDEO_FILES, find_art, find_first, refresh_background, save_video
 
 OUT_SR = 44100
 STAGES = ("load", "separate", "beats", "chart", "post", "write")
@@ -218,11 +220,27 @@ class RiffCharter:
         on = song.tempo.tick_to_sec(ex.tick) if ex is not None and len(ex) else np.zeros(2)
         diff = estimate_diff(len(on), float(on.min()), float(on.max()), self.cfg["diff_guitar_nps_cuts"])
         prev = preview_start(mono, OUT_SR, downs, audio_s)
-        (folder / "song.ini").write_text(song_ini(meta, audio_s, prev, diff), encoding="utf-8")
-        if not any((folder / n).exists() for n in ("album.png", "album.jpg")):
+        ini = song_ini(meta, audio_s, prev, diff)
+        old_ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
+        video = None
+        if self.cfg.get("keep_video", True) and Path(path).suffix.lower() in FFMPEG_EXT:
+            try:
+                video = save_video(path, folder)           # a music video becomes the background video
+            except Exception:
+                video = None
+        start = video["start_ms"] if video else (
+            old_ini.get("video_start_time") if find_first(folder, VIDEO_FILES) else None)
+        if start not in (None, "", 0, "0"):
+            ini += f"video_start_time = {start}\n"
+        (folder / "song.ini").write_text(ini, encoding="utf-8")
+        if not find_art(folder):
             art = cover_art(path)                          # the cover from the file's tags, if it has one
             if art:
                 (folder / ("album.png" if art[:4] == b"\x89PNG" else "album.jpg")).write_bytes(art)
+        try:
+            refresh_background(folder)                     # background from the cover (unless the user chose)
+        except Exception:
+            pass
         (folder / "notes.chart").write_text(
             write_chart_text(song, name=meta.title, artist=meta.artist, charter="RiffChart"), encoding="utf-8")
         done("write")

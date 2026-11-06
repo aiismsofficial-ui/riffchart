@@ -33,6 +33,7 @@ dependencies = [
     "python-multipart==0.0.33",
     "torchcrepe==0.0.24",
     "av==19.0.2",
+    "pillow==13.0.0",
 ]
 
 [project.optional-dependencies]

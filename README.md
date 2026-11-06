@@ -25,7 +25,10 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
 
 - **Library:** drop in audio files or folders; songs chart in the background with a progress bar.
   Fix a song's details (title, artist, album, genre, year, difficulty, cover) and update the copy in
-  Clone Hero in one click; covers embedded in your audio files are picked up automatically.
+  Clone Hero in one click; covers embedded in your audio files are picked up automatically, or find one
+  online (opt-in: only the artist and title are sent).
+- **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a
+  music video file keeps the video to play behind the highway.
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,

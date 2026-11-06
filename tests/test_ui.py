@@ -463,3 +463,49 @@ def test_tidy_names_preview_and_apply(env):
     assert "name = Uprising\n" in (env.cfg["export_dir"] / "Muse - Uprising" / "song.ini").read_text(encoding="utf-8")
     assert c.get("/api/tidy").json() == []
     assert c.post("/api/tidy", json={"ids": ["nope"]}).json()["renamed"] == []
+
+
+def test_background_video_and_online_cover_endpoints(env, monkeypatch):
+    import io
+    from PIL import Image
+    from riffchart.product import covers
+
+    def img(color, fmt="PNG"):
+        b = io.BytesIO()
+        Image.new("RGB", (200, 200), color).save(b, fmt)
+        return b.getvalue()
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    d = c.post(f"{base}/art", files={"file": ("c.png", img((200, 30, 30)))}).json()
+    assert d["background"]["mode"] == "auto" and d["background"]["file"].startswith("background.jpg")
+    assert c.get(f"{base}/file/background.jpg").status_code == 200
+    d = c.post(f"{base}/background", json={"mode": "none"}).json()
+    assert d["background"] == {"file": "", "mode": "none"} and not (folder / "background.jpg").exists()
+    assert c.post(f"{base}/background", json={"mode": "own"}).status_code == 400
+    d = c.post(f"{base}/background/file", files={"file": ("bg.jpg", img((1, 1, 1), "JPEG"))}).json()
+    assert d["background"]["mode"] == "own" and (folder / "background.jpg").exists()
+    d = c.post(f"{base}/background", json={"mode": "auto"}).json()
+    assert d["background"]["mode"] == "auto"
+    # video: listed, removed with its start time
+    (folder / "video.mp4").write_bytes(b"0" * 2048)
+    ini = folder / "song.ini"
+    ini.write_text(ini.read_text(encoding="utf-8") + "video_start_time = 120\n", encoding="utf-8")
+    assert c.get(base).json()["video"]["file"] == "video.mp4"
+    d = c.delete(f"{base}/video").json()
+    assert d["video"] is None and "video_start_time" not in ini.read_text(encoding="utf-8")
+    # online covers: search goes through covers.search; picked covers only from cover hosts
+    monkeypatch.setattr(covers, "search", lambda a, t, al: {"results": [{"q": [a, t, al]}], "errors": []})
+    assert c.get("/api/covers/search", params={"artist": "Muse", "title": "Uprising"}).json()["results"] == [
+        {"q": ["Muse", "Uprising", ""]}]
+    assert c.get("/api/covers/search").status_code == 400
+    assert c.post(f"{base}/art/url", json={"url": "https://example.com/a.jpg"}).status_code == 400
+    monkeypatch.setattr(covers, "fetch", lambda url, n: img((0, 0, 250), "JPEG"))
+    d = c.post(f"{base}/art/url", json={"url": "https://is1-ssl.mzstatic.com/a/1200x1200bb.jpg"}).json()
+    assert d["art"].startswith("album.jpg") and d["background"]["file"].startswith("background.jpg")
+    # export carries the visuals, and a changed background marks the export stale
+    c.post(f"{base}/export", json={})
+    dest = env.cfg["export_dir"] / "Muse - Uprising"
+    assert (dest / "album.jpg").exists() and (dest / "background.jpg").exists()
+    assert not (dest / ".riffchart").exists()
+    c.post(f"{base}/background", json={"mode": "none"})
+    assert c.get(base).json()["export_stale"]

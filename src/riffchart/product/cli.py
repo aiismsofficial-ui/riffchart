@@ -76,6 +76,9 @@ def main(argv=None) -> int:
         style = Style.parse(args.style)
     except ValueError as e:
         ap.error(str(e))
+    for s in args.inputs:
+        if not Path(s).exists():
+            print(f"not found: {s}", file=sys.stderr)
     files, unsupported = find_audio(args.inputs)
     for f in unsupported:
         print(f"skipping {f.name}: unsupported format (convert to mp3/ogg/flac/wav)", file=sys.stderr)

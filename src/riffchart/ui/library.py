@@ -7,27 +7,20 @@ from pathlib import Path
 
 from ..formats.loader import load_song
 from ..formats.song import DIFFICULTIES
+from ..product.visuals import (ART_FILES, BG_FILES, VIDEO_FILES, bg_mode, find_art, find_first, image_ext,
+                               refresh_background)
 
 AUDIO_FILES = {".ogg", ".opus", ".mp3", ".wav"}
-ART_FILES = ("album.png", "album.jpg")            # what Clone Hero and YARG show as the cover
 # song.ini keys the details panel edits, in file order: (key, field name in the API)
 META_KEYS = (("name", "title"), ("artist", "artist"), ("album", "album"), ("genre", "genre"), ("year", "year"),
              ("diff_guitar", "diff_guitar"))
 MAX_ART_BYTES = 10 << 20
 
 
-def art_ext(data: bytes) -> str | None:
-    """'png' / 'jpg' from the file's first bytes, else None."""
-    if data.startswith(b"\x89PNG\r\n\x1a\n"):
-        return "png"
-    if data.startswith(b"\xff\xd8\xff"):
-        return "jpg"
-    return None
-
-
 def write_art(folder: Path, data: bytes) -> str:
-    """Save a cover as album.png / album.jpg (by content), removing the other one."""
-    ext = art_ext(data)
+    """Save a cover as album.png / album.jpg (by content), removing the other one. A background that follows
+    the cover is made again."""
+    ext = image_ext(data)
     if ext is None:
         raise ValueError("the cover must be a PNG or JPEG image")
     if len(data) > MAX_ART_BYTES:
@@ -39,11 +32,14 @@ def write_art(folder: Path, data: bytes) -> str:
     for other in ART_FILES:
         if other != name:
             (folder / other).unlink(missing_ok=True)
+    refresh_background(folder)
     return name
 
 
-def find_art(folder: Path) -> Path | None:
-    return next((folder / n for n in ART_FILES if (folder / n).is_file()), None)
+def remove_art(folder: Path) -> None:
+    for n in ART_FILES:
+        (folder / n).unlink(missing_ok=True)
+    refresh_background(folder)
 
 
 def _one_line(v) -> str:
@@ -90,6 +86,8 @@ def write_ini_fields(path: Path, fields: dict[str, str]) -> None:
             at += 1
         elif key in seen:
             at = next((i + 1 for i, x in enumerate(out) if x.split("=", 1)[0].strip().lower() == key), at)
+    known = {k for k, _ in META_KEYS}
+    out += [f"{k} = {v}" for k, v in fields.items() if v and k not in seen and k not in known]
     tmp = path.with_suffix(".ini.tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
     tmp.replace(path)
@@ -154,15 +152,19 @@ class Library:
         d["stems"] = sorted(f.name for f in p.iterdir() if f.suffix.lower() in AUDIO_FILES)
         art = find_art(p)
         d["art"] = f"{art.name}?v={int(art.stat().st_mtime)}" if art else ""
+        bg = find_first(p, BG_FILES)
+        d["background"] = {"file": f"{bg.name}?v={int(bg.stat().st_mtime)}" if bg else "", "mode": bg_mode(p)}
+        vid = find_first(p, VIDEO_FILES)
+        d["video"] = {"file": vid.name, "mb": round(vid.stat().st_size / 2**20, 1)} if vid else None
         d["exported"] = (self.export_dir / song_id / "notes.chart").exists()
         d["export_stale"] = d["exported"] and self.export_stale(song_id)
         return d
 
     def export_stale(self, song_id: str) -> bool:
-        """True if the chart, song.ini or cover changed since the copy in the export folder was made
-        (export keeps file times, so a newer file here means an edit)."""
+        """True if the chart, song.ini, cover, background or video changed since the copy in the export folder
+        was made (export keeps file times, so a newer file here means an edit)."""
         src, dest = self.workspace / song_id, self.export_dir / song_id
-        for name in ("notes.chart", "notes.mid", "song.ini") + ART_FILES:
+        for name in ("notes.chart", "notes.mid", "song.ini") + ART_FILES + BG_FILES + VIDEO_FILES:
             a, b = src / name, dest / name
             if a.exists() != b.exists():
                 return True

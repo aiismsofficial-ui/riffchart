@@ -171,3 +171,22 @@ button.icon { padding: 4px 9px; }
 .tidylist .new { color: var(--text); font-weight: 600; }
 .tidylist .new .art { color: var(--muted); font-weight: 400; }
 .tidyexp { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+.details { width: min(720px, calc(100vw - 32px)); }
+.details .dt-find { margin-top: 8px; width: 100%; }
+.details .dt-online { margin-top: 14px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.details .dt-onhead { display: flex; gap: 8px; align-items: baseline; font-size: 13px; margin-bottom: 8px; }
+.details .dt-onhead .linkbtn { margin-left: auto; }
+.details .dt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; max-height: 230px; overflow: auto; }
+.details .dt-cand { position: relative; padding: 0; border: 2px solid transparent; border-radius: 6px; background: var(--panel2); aspect-ratio: 1; overflow: hidden; cursor: pointer; }
+.details .dt-cand img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.details .dt-cand span { position: absolute; right: 3px; bottom: 3px; font-size: 10px; background: rgba(0,0,0,.65); color: #fff; padding: 1px 4px; border-radius: 3px; }
+.details .dt-cand.on, .details .dt-cand:hover { border-color: var(--accent); }
+.details .dt-visual { display: grid; grid-template-columns: 168px 1fr; gap: 18px; margin-top: 14px; align-items: start; }
+.details .dt-bgprev { width: 168px; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2);
+  display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: 11px; text-align: center; }
+.details .dt-bgprev img { width: 100%; height: 100%; object-fit: cover; }
+.details .dt-bgprev.blur img { filter: blur(6px) brightness(.5) saturate(1.15); transform: scale(1.1); }
+.details .dt-bgopts { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.details .dt-bgopts label { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.details .dt-video { font-size: 12px; }
+@media (max-width: 560px) { .details .dt-visual { grid-template-columns: 1fr; } }

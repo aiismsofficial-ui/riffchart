@@ -31,7 +31,9 @@ from ..formats.chart_writer import write_chart_text
 from .chartjson import json_to_song, peaks, song_to_json
 from .checker import load_rules, song_issues
 from .jobs import JobQueue, Options
-from .library import (ART_FILES, MAX_ART_BYTES, Library, ProtectedPathError, check_writable, clean_meta,
+from ..product import covers
+from ..product.visuals import VIDEO_FILES, refresh_background, set_bg_mode, write_own_background
+from .library import (MAX_ART_BYTES, Library, ProtectedPathError, check_writable, clean_meta, remove_art,
                       write_art, write_ini_fields)
 
 STATIC = Path(__file__).parent / "static"
@@ -386,11 +388,63 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         return lib.info(song_id)
 
     @app.delete("/api/songs/{song_id}/art")
-    def remove_art(song_id: str):
+    def delete_art(song_id: str):
         folder = song_folder(song_id)
         check_writable(folder, lib.protected)
-        for n in ART_FILES:
+        remove_art(folder)
+        return lib.info(song_id)
+
+    @app.post("/api/songs/{song_id}/art/url")
+    def set_art_from_url(song_id: str, body: dict = Body(...)):
+        """A cover the user picked from the online search. Only cover hosts are fetched."""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        try:
+            data = covers.fetch(str(body.get("url", "")), MAX_ART_BYTES)
+            write_art(folder, data)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        except OSError as e:
+            raise HTTPException(502, f"couldn't download that cover: {e}")
+        return lib.info(song_id)
+
+    @app.get("/api/covers/search")
+    def cover_search(artist: str = "", title: str = "", album: str = ""):
+        """Cover candidates from the iTunes Search API and MusicBrainz / Cover Art Archive. Only the artist,
+        title and album are sent, and only when the user asks (the details panel's Find online)."""
+        if not (artist.strip() or title.strip()):
+            raise HTTPException(400, "need an artist or a title to search for")
+        return covers.search(artist.strip(), title.strip(), album.strip())
+
+    @app.post("/api/songs/{song_id}/background")
+    def set_background(song_id: str, body: dict = Body(...)):
+        """mode: auto (made from the cover) | none. ("own" is set by uploading an image.)"""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        mode = body.get("mode")
+        if mode not in ("auto", "none"):
+            raise HTTPException(400, "background mode must be auto or none")
+        set_bg_mode(folder, mode)
+        refresh_background(folder)
+        return lib.info(song_id)
+
+    @app.post("/api/songs/{song_id}/background/file")
+    async def set_background_file(song_id: str, file: UploadFile = File(...)):
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        try:
+            write_own_background(folder, await file.read((20 << 20) + 1))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return lib.info(song_id)
+
+    @app.delete("/api/songs/{song_id}/video")
+    def delete_video(song_id: str):
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        for n in VIDEO_FILES:
             (folder / n).unlink(missing_ok=True)
+        write_ini_fields(folder / "song.ini", {"video_start_time": ""})
         return lib.info(song_id)
 
     def tidy_changes() -> list[dict]:
