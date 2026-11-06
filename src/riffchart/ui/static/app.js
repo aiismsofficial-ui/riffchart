@@ -210,7 +210,7 @@ function renderSongs() {
     const state = j ? `<span class="tag running">${j.status === "running" ? `re-charting ${Math.round(j.progress * 100)}%` : "re-chart queued"}</span>` : "";
     const id = esc(s.id);
     return `<tr data-id="${id}">
-      <td><a class="songlink" href="${editorUrl(s.id)}" title="Open in the editor"><span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></a>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</td>
+      <td><a class="songlink" href="${editorUrl(s.id)}" title="Open in the editor">${s.art ? `<img class="thumb" src="/api/songs/${encodeURIComponent(s.id)}/file/${s.art}" alt="">` : `<span class="thumb none"></span>`}<span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></a>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</td>
       <td class="num">${notes}</td><td class="num">${fmtLen(s.length_s)}</td><td class="num">${esc(s.diff_guitar ?? "")}</td>
       <td class="when">${when(s.charted)}</td>
       <td><div class="acts">
@@ -220,7 +220,7 @@ function renderSongs() {
         <div class="menu"><button class="ghost small icon" data-menu="${id}" aria-label="More actions" aria-haspopup="true">⋯</button>
           <div class="menulist" hidden>
             <button data-rechart="${id}" ${j ? "disabled" : ""}>Re-chart with other settings…</button>
-            <button data-rename="${id}">Rename…</button>
+            <button data-details="${id}">Song details &amp; cover…</button>
             ${DIFFS.slice(1).map((d) => `<button data-test="${id}" data-diff="${d}" ${chExe ? "" : "disabled"}>Test in Clone Hero on ${DLABEL[d]}</button>`).join("")}
             <button data-reveal="${id}">Open song folder</button>
             <button data-remove="${id}" class="danger" ${j ? "disabled" : ""}>Remove from library…</button>
@@ -269,12 +269,8 @@ $("#songs").addEventListener("click", async (e) => {
       await post(`/api/songs/${enc(b.dataset.reveal)}/reveal`);
     } else if (b.dataset.rechart) {
       openRechart(song(b.dataset.rechart));
-    } else if (b.dataset.rename) {
-      const s = song(b.dataset.rename);
-      const title = prompt("Song title:", s.title); if (title === null) return;
-      const artist = prompt("Artist:", s.artist); if (artist === null) return;
-      await post(`/api/songs/${enc(s.id)}/meta`, { title, artist });
-      toast("Renamed. Export again to update the copy in Clone Hero."); refreshSongs(true);
+    } else if (b.dataset.details) {
+      openDetails(b.dataset.details, { onSaved: () => refreshSongs(true) });
     } else if (b.dataset.remove) {
       const s = song(b.dataset.remove);
       if (!confirm(`Remove "${s.title}" from your library?\n\nIt is moved to data/ui/trash (not deleted). A copy you exported to Clone Hero stays there.`)) return;

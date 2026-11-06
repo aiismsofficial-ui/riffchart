@@ -81,3 +81,40 @@ def _read_meta(path: str | Path) -> SongMeta:
     year = _first(t, "date")[:4]
     return SongMeta(_first(t, "title") or meta.title, _first(t, "artist") or meta.artist, _first(t, "album"),
                     _first(t, "genre"), year if year.isdigit() else "")
+
+
+def cover_art(path: str | Path) -> bytes | None:
+    """The cover image embedded in an audio file's tags (mp3 APIC, m4a covr, flac / ogg / opus pictures),
+    PNG or JPEG only. Front cover first when the file says which is which."""
+    try:
+        import mutagen
+        f = mutagen.File(str(path))
+    except Exception:
+        return None
+    if f is None:
+        return None
+    pics: list[tuple[int, bytes]] = []                     # (picture type, data); 3 = front cover
+    try:
+        for p in getattr(f, "pictures", None) or []:       # flac
+            pics.append((p.type, p.data))
+        t = f.tags
+        if t is not None:
+            if hasattr(t, "getall"):                       # id3
+                pics += [(a.type, a.data) for a in t.getall("APIC")]
+            if "covr" in t:                                # mp4
+                pics += [(3, bytes(c)) for c in t["covr"]]
+            if "metadata_block_picture" in t:              # ogg vorbis / opus
+                import base64
+                from mutagen.flac import Picture
+                for b in t["metadata_block_picture"]:
+                    try:
+                        pic = Picture(base64.b64decode(b))
+                        pics.append((pic.type, pic.data))
+                    except Exception:
+                        pass
+    except Exception:
+        return None
+    pics = [x for x in pics if x[1][:8] == b"\x89PNG\r\n\x1a\n" or x[1][:3] == b"\xff\xd8\xff"]
+    if not pics:
+        return None
+    return sorted(pics, key=lambda x: x[0] != 3)[0][1]

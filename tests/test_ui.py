@@ -382,3 +382,68 @@ def test_rename_and_remove_song(env):
     assert c.get("/api/songs").json() == [] and not folder.exists()
     trash = list((env.cfg["workspace"].parent / "trash").iterdir())
     assert len(trash) == 1 and (trash[0] / "notes.chart").exists()                 # moved, not deleted
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + bytes(40)
+JPG = b"\xff\xd8\xff\xe0" + bytes(40)
+
+
+def test_song_details_cover_and_update_in_clone_hero(env):
+    import os
+    import time
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    r = c.post(f"{base}/meta", json={"title": "Uprising", "artist": "Muse", "album": "The Resistance",
+                                      "genre": "Rock", "year": "2009", "diff_guitar": "4"})
+    assert r.status_code == 200, r.text
+    d = r.json()
+    assert (d["album"], d["genre"], d["year"], d["diff_guitar"]) == ("The Resistance", "Rock", "2009", "4")
+    ini = (folder / "song.ini").read_text(encoding="utf-8")
+    assert "album = The Resistance" in ini and "year = 2009" in ini and ini.count("diff_guitar") == 1
+    assert ini.startswith("[song]") and "song_length = " in ini and "charter = " in ini   # other lines kept
+    # clearing a field removes the line; newlines can't sneak extra keys into song.ini
+    c.post(f"{base}/meta", json={"album": "", "genre": "Rock\ncharter = me"})
+    ini = (folder / "song.ini").read_text(encoding="utf-8")
+    assert "album" not in ini and "genre = Rock charter = me" in ini and ini.count("charter =") == 2
+    assert "\ncharter = me" not in ini
+    for bad in ({"year": "09/2009"}, {"diff_guitar": "9"}, {"title": ""}):
+        assert c.post(f"{base}/meta", json=bad).status_code == 400
+    # cover: png / jpg by content, one at a time, anything else refused
+    assert c.post(f"{base}/art", files={"file": ("x.png", b"GIF89a....")}).status_code == 400
+    r = c.post(f"{base}/art", files={"file": ("cover.jpeg", JPG)})
+    assert r.json()["art"].startswith("album.jpg") and (folder / "album.jpg").read_bytes() == JPG
+    c.post(f"{base}/art", files={"file": ("cover.png", PNG)})
+    assert (folder / "album.png").exists() and not (folder / "album.jpg").exists()
+    assert c.get(f"{base}/file/album.png").content == PNG
+    # save & update in Clone Hero: exports (first time), then edits show as stale until updated again
+    r = c.post(f"{base}/meta", json={"title": "Uprising", "export": True})
+    assert r.json()["exported"] and not r.json()["export_stale"]
+    dest = env.cfg["export_dir"] / "Muse - Uprising"
+    assert (dest / "album.png").exists() and "genre = Rock" in (dest / "song.ini").read_text(encoding="utf-8")
+    c.post(f"{base}/meta", json={"artist": "MUSE"})
+    later = time.time() + 5
+    os.utime(folder / "song.ini", (later, later))
+    assert c.get(base).json()["export_stale"]
+    assert c.get("/api/songs").json()[0]["artist"] == "MUSE"                 # list isn't stuck on a cached name
+    r = c.post(f"{base}/meta", json={"artist": "MUSE", "export": True})
+    assert not r.json()["export_stale"] and "artist = MUSE" in (dest / "song.ini").read_text(encoding="utf-8")
+    assert c.delete(f"{base}/art").json()["art"] == "" and c.get(base).json()["export_stale"]
+
+
+def test_cover_art_from_tags(tmp_path):
+    import numpy as np
+    import soundfile as sf
+    from mutagen.flac import FLAC, Picture
+    from riffchart.product.meta import cover_art
+    f = tmp_path / "a.flac"
+    sf.write(f, np.zeros(800, np.float32), 8000)
+    assert cover_art(f) is None
+    fl = FLAC(f)
+    back, front = Picture(), Picture()
+    back.type, back.mime, back.data = 4, "image/png", PNG
+    front.type, front.mime, front.data = 3, "image/jpeg", JPG
+    fl.add_picture(back)
+    fl.add_picture(front)
+    fl.save()
+    assert cover_art(f) == JPG                                                # front cover wins
+    assert cover_art(tmp_path / "missing.mp3") is None

@@ -34,7 +34,7 @@ from ..timing.pipeline import DEFAULTS as TEMPO_DEFAULTS
 from ..timing.tempo_map import beats_to_tempo_map
 from ..timing.trackers import get_tracker
 from .follow import MODES as FOLLOW_MODES, playable_part
-from .meta import SongMeta, read_meta
+from .meta import SongMeta, cover_art, read_meta
 
 OUT_SR = 44100
 STAGES = ("load", "separate", "beats", "chart", "post", "write")
@@ -219,6 +219,10 @@ class RiffCharter:
         diff = estimate_diff(len(on), float(on.min()), float(on.max()), self.cfg["diff_guitar_nps_cuts"])
         prev = preview_start(mono, OUT_SR, downs, audio_s)
         (folder / "song.ini").write_text(song_ini(meta, audio_s, prev, diff), encoding="utf-8")
+        if not any((folder / n).exists() for n in ("album.png", "album.jpg")):
+            art = cover_art(path)                          # the cover from the file's tags, if it has one
+            if art:
+                (folder / ("album.png" if art[:4] == b"\x89PNG" else "album.jpg")).write_bytes(art)
         (folder / "notes.chart").write_text(
             write_chart_text(song, name=meta.title, artist=meta.artist, charter="RiffChart"), encoding="utf-8")
         done("write")

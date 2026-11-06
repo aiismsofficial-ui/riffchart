@@ -31,7 +31,8 @@ from ..formats.chart_writer import write_chart_text
 from .chartjson import json_to_song, peaks, song_to_json
 from .checker import load_rules, song_issues
 from .jobs import JobQueue, Options
-from .library import Library, ProtectedPathError, check_writable
+from .library import (ART_FILES, MAX_ART_BYTES, Library, ProtectedPathError, check_writable, clean_meta,
+                      write_art, write_ini_fields)
 
 STATIC = Path(__file__).parent / "static"
 
@@ -348,26 +349,48 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         j = queue.add(src, meta["title"] or song_id, opts, upload=True, target=song_id, meta=meta)
         return j.to_dict()
 
+    def update_export(song_id: str) -> str | None:
+        """Copy the song to the Clone Hero folder again (or for the first time)."""
+        try:
+            return str(lib.export(song_id, overwrite=True))
+        except ProtectedPathError as e:
+            raise HTTPException(403, str(e))
+
     @app.post("/api/songs/{song_id}/meta")
     def set_meta(song_id: str, body: dict = Body(...)):
+        """Song details (title, artist, album, genre, year, guitar difficulty) into song.ini. With
+        "export": true the copy in the Clone Hero folder is updated too."""
         folder = song_folder(song_id)
         check_writable(folder, lib.protected)
-        title, artist = str(body.get("title", "")).strip(), str(body.get("artist", "")).strip()
-        if not title:
-            raise HTTPException(400, "the title can't be empty")
-        p = folder / "song.ini"
-        lines = p.read_text(encoding="utf-8", errors="replace").splitlines() if p.exists() else ["[song]"]
-        out, seen = [], set()
-        for line in lines:
-            k = line.split("=", 1)[0].strip().lower() if "=" in line else ""
-            if k in ("name", "artist"):
-                line = f"{k} = {title if k == 'name' else artist}"
-                seen.add(k)
-            out.append(line)
-        for k, v in (("name", title), ("artist", artist)):
-            if k not in seen:
-                out.insert(1, f"{k} = {v}")
-        p.write_text("\n".join(out) + "\n", encoding="utf-8")
+        try:
+            fields = clean_meta(body)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        if fields:
+            write_ini_fields(folder / "song.ini", fields)
+        out = lib.info(song_id)
+        if body.get("export"):
+            out = dict(lib.info(song_id), exported_to=update_export(song_id))
+            out.update(exported=True, export_stale=False)
+        return out
+
+    @app.post("/api/songs/{song_id}/art")
+    async def set_art(song_id: str, file: UploadFile = File(...)):
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        data = await file.read(MAX_ART_BYTES + 1)
+        try:
+            write_art(folder, data)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return lib.info(song_id)
+
+    @app.delete("/api/songs/{song_id}/art")
+    def remove_art(song_id: str):
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        for n in ART_FILES:
+            (folder / n).unlink(missing_ok=True)
         return lib.info(song_id)
 
     @app.delete("/api/songs/{song_id}")

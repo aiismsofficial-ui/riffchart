@@ -24,6 +24,8 @@ Everything runs on your own PC. Nothing is uploaded anywhere.
 ### The app
 
 - **Library:** drop in audio files or folders; songs chart in the background with a progress bar.
+  Fix a song's details (title, artist, album, genre, year, difficulty, cover) and update the copy in
+  Clone Hero in one click; covers embedded in your audio files are picked up automatically.
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,

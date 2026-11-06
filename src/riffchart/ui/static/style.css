@@ -120,7 +120,10 @@ table.songs { width: 100%; border-collapse: collapse; }
 .settings summary { cursor: pointer; color: var(--muted); font-size: 13px; padding: 4px 0; }
 .settings summary span { color: var(--text); }
 .settings[open] summary { margin-bottom: 4px; }
-.songlink { color: inherit; text-decoration: none; display: inline-flex; flex-direction: column; }
+.songlink { color: inherit; text-decoration: none; display: inline-grid; grid-template-columns: 36px auto;
+  column-gap: 10px; align-items: center; }
+.songlink .thumb { grid-row: span 2; width: 36px; height: 36px; border-radius: 4px; object-fit: cover; }
+.songlink .thumb.none { background: var(--panel2); border: 1px solid var(--line); box-sizing: border-box; }
 .songlink:hover .t { color: var(--accent); text-decoration: underline; }
 .songlink .t { font-weight: 600; } .songlink .a { color: var(--muted); font-size: 13px; }
 .songs td:first-child { min-width: 220px; }
@@ -143,3 +146,18 @@ button.icon { padding: 4px 9px; }
 .dialog p { margin: 0 0 6px; font-size: 13px; }
 .dlgbtns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .job .acts { align-items: center; }
+/* song details panel (details.js) */
+.details .dt-body { display: grid; grid-template-columns: 168px 1fr; gap: 18px; margin-top: 12px; }
+.details .dt-cover { width: 168px; height: 168px; border: 1px dashed var(--line); border-radius: 8px; background: var(--panel2);
+  display: grid; place-items: center; overflow: hidden; cursor: pointer; color: var(--muted); font-size: 13px; }
+.details .dt-cover.over, .details .dt-cover:focus-visible { border-color: var(--accent); outline: none; }
+.details .dt-cover img { width: 100%; height: 100%; object-fit: cover; }
+.details .dt-artbtns { display: flex; justify-content: space-between; margin-top: 6px; font-size: 13px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--muted); cursor: pointer; font: inherit; text-decoration: underline; }
+.linkbtn:hover { color: var(--text); }
+.details .dt-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; align-content: start; }
+.details .dt-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.details .dt-fields label.wide { grid-column: 1 / -1; }
+.details .dt-fields input, .details .dt-fields select { width: 100%; box-sizing: border-box; font-size: 14px; color: var(--text); }
+.details .dt-state { margin-top: 12px; }
+@media (max-width: 560px) { .details .dt-body { grid-template-columns: 1fr; } }

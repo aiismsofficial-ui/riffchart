@@ -462,6 +462,7 @@ window.addEventListener("keydown", (e) => {
     setSpeed(opts[j]); toast(`Speed ${Math.round(opts[j] * 100)}%`);
   }
   else if (k === "v" || k === "V") setDiff(S.view === "all" ? S.diff : "all");
+  else if ((k === "i" || k === "I") && !e.altKey && !e.shiftKey && S.chart) showDetails();
   else if ((k === "c" || k === "C") && !e.altKey) { $("#clap").checked = !$("#clap").checked; ensureAudioCtx(); savePrefs(); toast(`Note clap ${$("#clap").checked ? "on" : "off"}`); }
   else if ((k === "m" || k === "M") && !e.altKey) { $("#metro").checked = !$("#metro").checked; ensureAudioCtx(); savePrefs(); toast(`Metronome ${$("#metro").checked ? "on" : "off"}`); }
   else if (e.altKey && "1234".includes(k)) { e.preventDefault(); setDiff(DIFFS[+k - 1]); }
@@ -557,3 +558,13 @@ async function load() {
 resize();
 requestAnimationFrame(draw);
 load();
+
+// song details (details.js): title / artist / album / cover, saved to song.ini
+function showDetails() {
+  openDetails(songId, { onSaved: (info) => {
+    S.chart.title = info.title; S.chart.artist = info.artist;
+    $("#title").textContent = info.title; $("#artist").textContent = info.artist;
+    document.title = `${info.title} · RiffChart editor`;
+  } });
+}
+$("#details").addEventListener("click", showDetails);

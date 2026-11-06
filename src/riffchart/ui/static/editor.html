@@ -12,6 +12,7 @@
 <header class="top etop">
   <a class="back" href="./" title="Back to your songs">&larr; Library</a>
   <div class="songname"><div class="t" id="title">Loading…</div><div class="a" id="artist"></div></div>
+  <button id="details" class="ghost small" title="Title, artist, album, cover… (I)">Details</button>
   <nav class="tabs" id="tabs" aria-label="Difficulty">
     <button data-diff="expert">Expert</button><button data-diff="hard">Hard</button>
     <button data-diff="medium">Medium</button><button data-diff="easy">Easy</button>
@@ -106,7 +107,7 @@
       <div><h4>Navigate</h4>
         <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> zoom · <kbd>+</kbd><kbd>-</kbd> zoom</p>
         <p><kbd>&uarr;</kbd><kbd>&darr;</kbd> grid step · <kbd>PgUp</kbd><kbd>PgDn</kbd> bar · <kbd>Home</kbd><kbd>End</kbd></p>
-        <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty</p>
+        <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty · <kbd>I</kbd> song details</p>
         <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p></div>
       <div><h4>Notes</h4>
         <p><b>Click</b> empty lane: add (snaps to the grid) · <b>right-click</b> a gem: delete it</p>
@@ -127,6 +128,7 @@
   </details>
 </footer>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="details.js"></script>
 <script src="audio.js"></script>
 <script src="editor.js"></script>
 <script src="edit.js"></script>
