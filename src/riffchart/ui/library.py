@@ -7,8 +7,8 @@ from pathlib import Path
 
 from ..formats.loader import load_song
 from ..formats.song import DIFFICULTIES
-from ..product.visuals import (ART_FILES, BG_FILES, VIDEO_FILES, bg_mode, find_art, find_first, image_ext,
-                               refresh_background)
+from ..product.visuals import (ART_FILES, BG_FILES, HW_FILES, VIDEO_FILES, bg_mode, find_art, find_first, hw_mode,
+                               image_ext, refresh_visuals)
 
 AUDIO_FILES = {".ogg", ".opus", ".mp3", ".wav"}
 # song.ini keys the details panel edits, in file order: (key, field name in the API)
@@ -32,14 +32,14 @@ def write_art(folder: Path, data: bytes) -> str:
     for other in ART_FILES:
         if other != name:
             (folder / other).unlink(missing_ok=True)
-    refresh_background(folder)
+    refresh_visuals(folder)
     return name
 
 
 def remove_art(folder: Path) -> None:
     for n in ART_FILES:
         (folder / n).unlink(missing_ok=True)
-    refresh_background(folder)
+    refresh_visuals(folder)
 
 
 def _one_line(v) -> str:
@@ -156,6 +156,8 @@ class Library:
         d["background"] = {"file": f"{bg.name}?v={int(bg.stat().st_mtime)}" if bg else "", "mode": bg_mode(p)}
         vid = find_first(p, VIDEO_FILES)
         d["video"] = {"file": vid.name, "mb": round(vid.stat().st_size / 2**20, 1)} if vid else None
+        hw = find_first(p, HW_FILES)
+        d["highway"] = {"file": f"{hw.name}?v={int(hw.stat().st_mtime)}" if hw else "", "mode": hw_mode(p)}
         d["exported"] = (self.export_dir / song_id / "notes.chart").exists()
         d["export_stale"] = d["exported"] and self.export_stale(song_id)
         return d
@@ -164,7 +166,7 @@ class Library:
         """True if the chart, song.ini, cover, background or video changed since the copy in the export folder
         was made (export keeps file times, so a newer file here means an edit)."""
         src, dest = self.workspace / song_id, self.export_dir / song_id
-        for name in ("notes.chart", "notes.mid", "song.ini") + ART_FILES + BG_FILES + VIDEO_FILES:
+        for name in ("notes.chart", "notes.mid", "song.ini") + ART_FILES + BG_FILES + VIDEO_FILES + HW_FILES:
             a, b = src / name, dest / name
             if a.exists() != b.exists():
                 return True

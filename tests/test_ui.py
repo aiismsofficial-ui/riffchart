@@ -509,3 +509,25 @@ def test_background_video_and_online_cover_endpoints(env, monkeypatch):
     assert not (dest / ".riffchart").exists()
     c.post(f"{base}/background", json={"mode": "none"})
     assert c.get(base).json()["export_stale"]
+
+
+def test_highway_endpoints(env):
+    import io
+    from PIL import Image
+
+    def img(color, size=(200, 200)):
+        b = io.BytesIO()
+        Image.new("RGB", size, color).save(b, "PNG")
+        return b.getvalue()
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    assert c.get(base).json()["highway"]["mode"] == "riffchart"
+    d = c.post(f"{base}/highway", json={"mode": "cover"}).json()
+    assert d["highway"]["mode"] == "cover" and d["highway"]["file"].startswith("highway.png")
+    assert c.post(f"{base}/highway", json={"mode": "own"}).status_code == 400
+    d = c.post(f"{base}/highway/file", files={"file": ("h.png", img((9, 9, 9), (512, 1024)))}).json()
+    assert d["highway"]["mode"] == "own"
+    c.post(f"{base}/export", json={})
+    assert (env.cfg["export_dir"] / "Muse - Uprising" / "highway.png").exists()
+    d = c.post(f"{base}/highway", json={"mode": "none"}).json()
+    assert d["highway"]["file"] == "" and d["export_stale"]

@@ -1,5 +1,5 @@
 """Song visuals in the Clone Hero / YARG folder: cover (album.png / .jpg), background image (background.jpg /
-.png, shown behind the highway) and background video (video.mp4 / .webm).
+.png, shown behind the highway), background video (video.mp4 / .webm) and highway image (highway.png).
 
 The background can follow the cover ("auto": the cover blurred and darkened to 1920x1080), be the user's own
 image ("own"), or be off ("none"). The choice is kept in .riffchart/visuals.json (never exported)."""
@@ -124,28 +124,34 @@ def _state_path(folder: Path) -> Path:
     return folder / ".riffchart" / "visuals.json"
 
 
+def _state(folder: Path) -> dict:
+    try:
+        st = json.loads(_state_path(folder).read_text(encoding="utf-8"))
+        return st if isinstance(st, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def _set_state(folder: Path, key: str, value: str) -> None:
+    p = _state_path(folder)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    st = _state(folder)
+    st[key] = value
+    p.write_text(json.dumps(st), encoding="utf-8")
+
+
 def bg_mode(folder: Path) -> str:
     """auto / own / none. Without a saved choice: an existing background is the user's ("own"), else auto."""
-    try:
-        m = json.loads(_state_path(folder).read_text(encoding="utf-8")).get("background")
-        if m in MODES:
-            return m
-    except (OSError, ValueError):
-        pass
+    m = _state(folder).get("background")
+    if m in MODES:
+        return m
     return "own" if find_first(folder, BG_FILES) else "auto"
 
 
 def set_bg_mode(folder: Path, mode: str) -> None:
     if mode not in MODES:
         raise ValueError(f"background must be one of {', '.join(MODES)}")
-    p = _state_path(folder)
-    p.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        st = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        st = {}
-    st["background"] = mode
-    p.write_text(json.dumps(st), encoding="utf-8")
+    _set_state(folder, "background", mode)
 
 
 def _remove_bg(folder: Path) -> None:
@@ -156,7 +162,7 @@ def _remove_bg(folder: Path) -> None:
 def refresh_background(folder: Path) -> None:
     """Bring the background in line with the mode: auto follows the cover (none without a cover)."""
     mode = bg_mode(folder)
-    if not _state_path(folder).exists():
+    if "background" not in _state(folder):
         set_bg_mode(folder, mode)               # remember it, or the background made here would look like "own"
     if mode == "none":
         _remove_bg(folder)
@@ -190,6 +196,165 @@ def write_own_background(folder: Path, data: bytes) -> str:
     tmp.replace(folder / name)
     set_bg_mode(folder, "own")
     return name
+
+
+# ---------------------------------------------------------------- highway (Clone Hero: "Song Highways" setting)
+HW_FILES = ("highway.png", "highway.jpg")
+HW_SIZE = (512, 1024)                           # Clone Hero's recommended size; it tiles down the highway
+HW_MODES = ("riffchart", "cover", "own", "none")
+RIFFCHART_COLORS = {"top": (22, 24, 30), "bottom": (14, 15, 19), "rail": (245, 165, 36), "divider": (48, 52, 62),
+                    "glow": (120, 75, 10)}
+
+
+def default_highway() -> str:
+    """Library-wide default for songs without a choice (`highway:` in configs/product.yaml)."""
+    try:
+        from ..paths import load_config
+        m = load_config("configs/product.yaml").get("highway", "riffchart")
+    except Exception:
+        m = "riffchart"
+    return m if m in ("riffchart", "cover", "none") else "riffchart"
+
+
+def make_highway(top, bottom, rail, divider, glow=None, texture=None) -> "Image.Image":
+    """A 512x1024 highway that tiles vertically: a dark surface (gradient that wraps), five lanes, coloured
+    rails with a soft inner glow, optionally a faint texture. Notes and beat lines are drawn by the game."""
+    from PIL import Image, ImageDraw, ImageFilter
+    W, H = HW_SIZE
+    t = (1 - np.cos(np.linspace(0, 2 * np.pi, H, endpoint=False))) / 2          # 0 -> 1 -> 0: seamless
+    a, b = np.array(top, np.float32), np.array(bottom, np.float32)
+    px = np.repeat((a[None] * (1 - t[:, None]) + b[None] * t[:, None])[:, None, :], W, axis=1)
+    if texture is not None:
+        px = px * 0.78 + np.asarray(texture, np.float32) * 0.22
+    im = Image.fromarray(px.clip(0, 255).astype(np.uint8))
+    rail_w = 14
+    if glow:
+        g = Image.new("RGB", (W, H), (0, 0, 0))
+        gd = ImageDraw.Draw(g)
+        gd.rectangle((0, 0, rail_w + 18, H), fill=tuple(glow))
+        gd.rectangle((W - rail_w - 18, 0, W, H), fill=tuple(glow))
+        # blur a 3-tile strip and keep the middle, so the glow is seamless top to bottom too
+        g3 = Image.new("RGB", (W, 3 * H))
+        for k in range(3):
+            g3.paste(g, (0, k * H))
+        g = g3.filter(ImageFilter.GaussianBlur(14)).crop((0, H, W, 2 * H))
+        im = Image.fromarray(np.clip(np.asarray(im, np.int16) + np.asarray(g, np.int16) // 2, 0, 255).astype(np.uint8))
+    d = ImageDraw.Draw(im)
+    lane = (W - 2 * rail_w) / 5
+    for i in range(1, 5):
+        xx = round(rail_w + i * lane)
+        d.line((xx, 0, xx, H), fill=tuple(divider), width=2)
+    rail = tuple(rail)
+    light = tuple(min(255, c + 60) for c in rail)
+    d.rectangle((0, 0, rail_w - 1, H), fill=rail)
+    d.rectangle((W - rail_w, 0, W, H), fill=rail)
+    d.line((rail_w, 0, rail_w, H), fill=light, width=1)
+    d.line((W - rail_w - 1, 0, W - rail_w - 1, H), fill=light, width=1)
+    return im
+
+
+def riffchart_highway() -> bytes:
+    c = RIFFCHART_COLORS
+    return _png(make_highway(c["top"], c["bottom"], c["rail"], c["divider"], c["glow"]))
+
+
+def highway_from_cover(data: bytes) -> bytes:
+    """Rails in the cover's most vivid colour, a surface tinted with its main colour, and a faint mirrored copy
+    of the cover running down the highway."""
+    import colorsys
+    from PIL import Image, ImageFilter
+    cover = Image.open(io.BytesIO(data)).convert("RGB")
+    q = cover.resize((96, 96)).quantize(8, method=Image.Quantize.MEDIANCUT)
+    pal = np.array(q.getpalette()[:24], np.float32).reshape(-1, 3)
+    counts = np.bincount(np.asarray(q).ravel(), minlength=len(pal))[:len(pal)]
+    hsv = [colorsys.rgb_to_hsv(*(c / 255)) for c in pal]
+    common = [i for i in range(len(pal)) if counts[i] > 0.04 * counts.sum()] or list(range(len(pal)))
+    vivid = max(common, key=lambda i: hsv[i][1] * hsv[i][2])
+    dom = max(range(len(pal)), key=lambda i: counts[i])
+    h, s, v = hsv[vivid]
+    rail = tuple(int(c * 255) for c in colorsys.hsv_to_rgb(h, max(s, 0.55), max(v, 0.85)))
+    hd, sd, _ = hsv[dom]
+    top = tuple(int(c * 255) for c in colorsys.hsv_to_rgb(hd, min(sd, 0.5), 0.13))
+    bottom = tuple(int(c * 255) for c in colorsys.hsv_to_rgb(hd, min(sd, 0.5), 0.07))
+    W, H = HW_SIZE
+    half = cover.convert("L").resize((W, H // 2)).filter(ImageFilter.GaussianBlur(2))
+    tex = Image.new("L", (W, H))
+    tex.paste(half, (0, 0))
+    tex.paste(half.transpose(Image.FLIP_TOP_BOTTOM), (0, H // 2))             # mirrored so it tiles
+    a = np.asarray(tex, np.float32)
+    a = (a - a.min()) / (np.ptp(a) + 1e-6) * 60
+    divider = tuple(min(255, int(c * 0.35) + 30) for c in rail)
+    glow = tuple(int(c * 0.45) for c in rail)
+    return _png(make_highway(top, bottom, rail, divider, glow, np.repeat(a[..., None], 3, axis=2)))
+
+
+def _png(im) -> bytes:
+    out = io.BytesIO()
+    im.save(out, "PNG", optimize=True)
+    return out.getvalue()
+
+
+def hw_mode(folder: Path) -> str:
+    """riffchart / cover / own / none. Without a saved choice: an existing highway is the user's, else the
+    library default."""
+    m = _state(folder).get("highway")
+    if m in HW_MODES:
+        return m
+    return "own" if find_first(folder, HW_FILES) else default_highway()
+
+
+def set_hw_mode(folder: Path, mode: str) -> None:
+    if mode not in HW_MODES:
+        raise ValueError(f"highway must be one of {', '.join(HW_MODES)}")
+    _set_state(folder, "highway", mode)
+
+
+def _remove_hw(folder: Path) -> None:
+    for n in HW_FILES:
+        (folder / n).unlink(missing_ok=True)
+
+
+def refresh_highway(folder: Path) -> None:
+    """Make highway.png for the mode: the RiffChart highway, one from the cover (the RiffChart one when there's
+    no cover), the user's own (left alone) or none."""
+    mode = hw_mode(folder)
+    if "highway" not in _state(folder):
+        set_hw_mode(folder, mode)
+    if mode == "own":
+        return
+    if mode == "none":
+        _remove_hw(folder)
+        return
+    art = find_art(folder) if mode == "cover" else None
+    try:
+        data = highway_from_cover(art.read_bytes()) if art else riffchart_highway()
+    except Exception:                                   # unreadable cover
+        data = riffchart_highway()
+    tmp = folder / "highway.png.tmp"
+    tmp.write_bytes(data)
+    _remove_hw(folder)
+    tmp.replace(folder / "highway.png")
+
+
+def write_own_highway(folder: Path, data: bytes) -> str:
+    ext = image_ext(data)
+    if ext is None:
+        raise ValueError("the highway must be a PNG or JPEG image")
+    if len(data) > (10 << 20):
+        raise ValueError("the highway image is too big (10 MB max)")
+    name = f"highway.{ext}"
+    tmp = folder / f"{name}.tmp"
+    tmp.write_bytes(data)
+    _remove_hw(folder)
+    tmp.replace(folder / name)
+    set_hw_mode(folder, "own")
+    return name
+
+
+def refresh_visuals(folder: Path) -> None:
+    """Background and highway after the cover or names changed."""
+    refresh_background(folder)
+    refresh_highway(folder)
 
 
 # ---------------------------------------------------------------- background video

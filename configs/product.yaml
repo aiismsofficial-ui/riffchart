@@ -15,6 +15,7 @@ post_config: configs/post.yaml
 audio:
   write_stems: true        # guitar.ogg (separated guitar) + song.ogg (mix minus guitar): CH mutes guitar on misses
   vorbis_quality: 0.6
+highway: riffchart         # each song's highway.png (Clone Hero: Song Highways setting): riffchart | cover | none
 keep_video: true           # charting a music video (mp4 / webm / mkv) keeps its picture as video.mp4 / .webm
 # diff_guitar from Expert notes per second: cut points midway between the per-level medians of the
 # train songs' song.ini ratings (775 rated songs, Spearman 0.52 with notes/s, Phase 6 notes)

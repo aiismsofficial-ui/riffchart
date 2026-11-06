@@ -10,6 +10,7 @@
   // changes wait for Save: cover (file, url or remove), background (mode or own file), video removal
   let pendingArt = null, pendingArtUrl = null, removeArt = false, artUrl = null;
   let bgMode = "auto", bgFile = null, bgUrl = null, removeVideo = false;
+  let hwMode = "riffchart", hwFile = null, hwUrl = null;
 
   async function call(path, opts = {}) {
     const r = await fetch(path, opts);
@@ -58,8 +59,14 @@
             <option value="auto">Made from the cover</option><option value="own">My own image…</option><option value="none">None</option>
           </select></label>
           <input type="file" data-k="bgfile" accept="image/png,image/jpeg" hidden>
+          <label title="Clone Hero shows it when its Song Highways setting is on">Highway <select data-k="hwmode">
+            <option value="riffchart">RiffChart</option><option value="cover">From the cover</option>
+            <option value="own">My own image…</option><option value="none">None (the player's own)</option>
+          </select></label>
+          <input type="file" data-k="hwfile" accept="image/png,image/jpeg" hidden>
           <div class="dt-video muted"></div>
         </div>
+        <div class="dt-hwprev" title="This song's highway (it scrolls down the screen in Clone Hero)"><img alt="" hidden><span></span></div>
       </div>
       <datalist id="dt-genres">${["Rock", "Metal", "Alternative", "Punk", "Pop", "Pop Punk", "Emo", "Post-Hardcore",
         "Metalcore", "Hard Rock", "Indie", "Electronic", "Classical", "Video Game", "Country", "Blues", "Jazz", "Funk",
@@ -97,6 +104,17 @@
       if (mode.value === "own") { bgPick.click(); mode.value = bgMode; return; }   // stays until a file is picked
       bgMode = mode.value; bgFile = null; showBg();
     });
+    const hw = q('[data-k="hwmode"]'), hwPick = q('[data-k="hwfile"]');
+    hw.addEventListener("change", () => {
+      if (hw.value === "own") { hwPick.click(); hw.value = hwMode; return; }
+      hwMode = hw.value; hwFile = null; showHw();
+    });
+    hwPick.addEventListener("change", () => {
+      const f = hwPick.files[0]; hwPick.value = "";
+      if (!f) return;
+      if (!/^image\/(png|jpeg)$/.test(f.type)) { toast("The highway must be a PNG or JPEG image", true); return; }
+      hwMode = "own"; hwFile = f; hw.value = "own"; showHw();
+    });
     bgPick.addEventListener("change", () => {
       const f = bgPick.files[0]; bgPick.value = "";
       if (!f) return;
@@ -104,8 +122,8 @@
       bgMode = "own"; bgFile = f; mode.value = "own"; showBg();
     });
     dlg.addEventListener("close", () => {
-      for (const u of [artUrl, bgUrl]) if (u) URL.revokeObjectURL(u);
-      artUrl = bgUrl = null;
+      for (const u of [artUrl, bgUrl, hwUrl]) if (u) URL.revokeObjectURL(u);
+      artUrl = bgUrl = hwUrl = null;
     });
   }
 
@@ -131,6 +149,7 @@
     if (src) img.src = src; else img.removeAttribute("src");
     q('[data-k="rmart"]').hidden = !src;
     showBg();
+    if (cur) showHw();
   }
 
   function showBg() {
@@ -148,6 +167,23 @@
     box.classList.toggle("blur", !!blur);           // preview of a background that Save will make
     img.hidden = !src; ph.hidden = !!src;
     ph.textContent = bgMode === "auto" && !src ? "Add a cover to make one" : "No background";
+    if (src) img.src = src; else img.removeAttribute("src");
+  }
+
+  function showHw() {
+    const box = q(".dt-hwprev"), img = box.querySelector("img"), ph = box.querySelector("span");
+    const coverChanged = removeArt || pendingArt || pendingArtUrl;
+    let src = null, note = "";
+    if (hwMode === "own" && hwFile) {
+      if (hwUrl) URL.revokeObjectURL(hwUrl); hwUrl = URL.createObjectURL(hwFile); src = hwUrl;
+    } else if (hwMode === "none") {
+      note = "player's own";
+    } else if (hwMode === cur.highway.mode && cur.highway.file && !(hwMode === "cover" && coverChanged)) {
+      src = `/api/songs/${enc(cur.id)}/file/${cur.highway.file}`;
+    } else {
+      note = "made when you save";
+    }
+    img.hidden = !src; ph.hidden = !!src; ph.textContent = note;
     if (src) img.src = src; else img.removeAttribute("src");
   }
 
@@ -195,6 +231,8 @@
   function fill(info) {
     cur = info; pendingArt = pendingArtUrl = bgFile = null; removeArt = removeVideo = false;
     bgMode = info.background.mode;
+    hwMode = info.highway.mode; hwFile = null;
+    q('[data-k="hwmode"]').value = hwMode;
     for (const f of FIELDS) q(`[data-f="${f}"]`).value = info[f] ?? "";
     const d = q('[data-f="diff_guitar"]');
     d.value = /^[0-6]$/.test(String(info.diff_guitar ?? "")) ? String(info.diff_guitar) : "";
@@ -233,6 +271,13 @@
         await call(`${base}/art`, { method: "DELETE" });
       }
       if (removeVideo) await call(`${base}/video`, { method: "DELETE" });
+      // after the cover, so "from the cover" uses the new one
+      if (hwFile) {
+        const fd = new FormData(); fd.append("file", hwFile);
+        await call(`${base}/highway/file`, { method: "POST", body: fd });
+      } else if (hwMode !== "own" && (hwMode !== cur.highway.mode || (hwMode === "cover" && (pendingArt || pendingArtUrl || removeArt)))) {
+        await call(`${base}/highway`, json({ mode: hwMode }));
+      }
       const info = await call(`${base}/meta`, json(body));
       dlg.close();
       toast(exportToo ? "Saved and updated in Clone Hero. Rescan songs in Clone Hero to see the change."

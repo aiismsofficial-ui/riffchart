@@ -32,7 +32,8 @@ from .chartjson import json_to_song, peaks, song_to_json
 from .checker import load_rules, song_issues
 from .jobs import JobQueue, Options
 from ..product import covers
-from ..product.visuals import VIDEO_FILES, refresh_background, set_bg_mode, write_own_background
+from ..product.visuals import (VIDEO_FILES, refresh_background, refresh_highway, set_bg_mode, set_hw_mode,
+                               write_own_background, write_own_highway)
 from .library import (MAX_ART_BYTES, Library, ProtectedPathError, check_writable, clean_meta, remove_art,
                       write_art, write_ini_fields)
 
@@ -436,6 +437,28 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         check_writable(folder, lib.protected)
         try:
             write_own_background(folder, await file.read((20 << 20) + 1))
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return lib.info(song_id)
+
+    @app.post("/api/songs/{song_id}/highway")
+    def set_highway(song_id: str, body: dict = Body(...)):
+        """mode: riffchart | cover (colours and a faint copy of the cover) | none. ("own" by uploading.)"""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        mode = body.get("mode")
+        if mode not in ("riffchart", "cover", "none"):
+            raise HTTPException(400, "highway mode must be riffchart, cover or none")
+        set_hw_mode(folder, mode)
+        refresh_highway(folder)
+        return lib.info(song_id)
+
+    @app.post("/api/songs/{song_id}/highway/file")
+    async def set_highway_file(song_id: str, file: UploadFile = File(...)):
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        try:
+            write_own_highway(folder, await file.read((10 << 20) + 1))
         except ValueError as e:
             raise HTTPException(400, str(e))
         return lib.info(song_id)

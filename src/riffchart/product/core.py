@@ -37,7 +37,7 @@ from ..timing.trackers import get_tracker
 from .follow import MODES as FOLLOW_MODES, playable_part
 from .difficulty import estimate as estimate_difficulty, load_model as load_difficulty_model
 from .meta import SongMeta, cover_art, read_meta
-from .visuals import VIDEO_FILES, find_art, find_first, refresh_background, save_video
+from .visuals import VIDEO_FILES, find_art, find_first, refresh_visuals, save_video
 
 OUT_SR = 44100
 STAGES = ("load", "separate", "beats", "chart", "post", "write")
@@ -248,7 +248,7 @@ class RiffCharter:
             if art:
                 (folder / ("album.png" if art[:4] == b"\x89PNG" else "album.jpg")).write_bytes(art)
         try:
-            refresh_background(folder)                     # background from the cover (unless the user chose)
+            refresh_visuals(folder)                        # background and highway (unless the user chose)
         except Exception:
             pass
         (folder / "notes.chart").write_text(

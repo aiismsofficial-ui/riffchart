@@ -144,6 +144,47 @@ def test_cover_fetch_only_from_cover_hosts():
     assert covers._host_ok("https://coverartarchive.org/release-group/x/front-250")
 
 
+def test_highways_tile_and_follow_the_choice(tmp_path):
+    from riffchart.product.visuals import (highway_from_cover, hw_mode, refresh_highway, riffchart_highway,
+                                           set_hw_mode, write_own_highway)
+    rc = np.asarray(Image.open(io.BytesIO(riffchart_highway())).convert("RGB"), np.int16)
+    assert rc.shape == (1024, 512, 3)
+    assert np.abs(rc[0] - rc[-1]).max() <= 6                            # seamless top to bottom
+    assert tuple(rc[500, 3]) == (245, 165, 36)                           # amber rail
+    cov = np.asarray(Image.open(io.BytesIO(highway_from_cover(_img((20, 60, 230))))).convert("RGB"), np.int16)
+    assert cov[500, 3, 2] > cov[500, 3, 0]                               # rail takes the cover's blue
+    assert np.abs(cov[0] - cov[-1]).max() <= 12
+    f = tmp_path
+    assert hw_mode(f) == "riffchart"                                     # library default
+    refresh_highway(f)
+    assert (f / "highway.png").exists()
+    set_hw_mode(f, "cover")
+    refresh_highway(f)                                                   # no cover yet: the RiffChart one
+    assert np.asarray(Image.open(f / "highway.png").convert("RGB"))[500, 3].tolist() == [245, 165, 36]
+    write_art(f, _img((20, 200, 40)))                                    # a cover: the highway follows it
+    px = np.asarray(Image.open(f / "highway.png").convert("RGB"), np.int16)[500, 3]
+    assert px[1] > px[0] and px[1] > px[2]
+    write_own_highway(f, _img((5, 5, 5), (512, 1024), "JPEG"))
+    assert hw_mode(f) == "own" and (f / "highway.jpg").exists() and not (f / "highway.png").exists()
+    write_art(f, _img((200, 0, 0)))                                      # own highway untouched
+    assert (f / "highway.jpg").exists()
+    set_hw_mode(f, "none")
+    refresh_highway(f)
+    assert not list(f.glob("highway.*"))
+    with pytest.raises(ValueError):
+        set_hw_mode(f, "rainbow")
+
+
+def test_background_choice_saved_alongside_highway(tmp_path):
+    """The background mode must be remembered even when the state file already holds the highway choice."""
+    from riffchart.product.visuals import refresh_highway
+    refresh_highway(tmp_path)                                            # state file now exists (highway only)
+    write_art(tmp_path, _img((0, 0, 255)))                               # makes background.jpg (auto)
+    assert bg_mode(tmp_path) == "auto"
+    write_art(tmp_path, _img((0, 255, 0)))
+    assert np.asarray(Image.open(tmp_path / "background.jpg"))[540, 960, 1] > 30
+
+
 def test_search_errors_are_reported(monkeypatch):
     def boom(url):
         raise OSError("offline")
