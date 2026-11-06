@@ -370,6 +370,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(400, str(e))
         if fields:
             write_ini_fields(folder / "song.ini", fields)
+            if {"name", "artist"} & set(fields):
+                refresh_background(folder)             # the background shows the title and artist
         out = lib.info(song_id)
         if body.get("export"):
             out = dict(lib.info(song_id), exported_to=update_export(song_id))
@@ -477,6 +479,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 folder = song_folder(ch["id"])
                 check_writable(folder, lib.protected)
                 write_ini_fields(folder / "song.ini", clean_meta(ch["new"]))
+                refresh_background(folder)
                 done.append(ch["id"])
                 if body.get("export") and ch["exported"]:
                     lib.export(ch["id"], overwrite=True)

@@ -38,28 +38,86 @@ def find_art(folder: Path) -> Path | None:
 
 
 # ---------------------------------------------------------------- background image
-def background_from_cover(data: bytes, size: tuple[int, int] = BG_SIZE) -> bytes:
-    """A 16:9 JPEG for behind the highway: the cover filling the frame, heavily blurred, darkened, with a soft
-    vignette, so notes stay readable on any cover."""
-    from PIL import Image, ImageEnhance, ImageFilter
+def background_from_cover(data: bytes, title: str = "", artist: str = "",
+                          size: tuple[int, int] = BG_SIZE) -> bytes:
+    """A 16:9 JPEG for behind the highway. The highway covers the middle third, so: a blurred, darkened copy of
+    the cover fills the frame, the sharp cover sits on the left and the title / artist on the right."""
+    from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
     W, H = size
-    im = Image.open(io.BytesIO(data)).convert("RGB")
-    s = max(W / im.width, H / im.height)
-    im = im.resize((max(W, round(im.width * s)), max(H, round(im.height * s))), Image.LANCZOS)
+    cover = Image.open(io.BytesIO(data)).convert("RGB")
+    s = max(W / cover.width, H / cover.height)
+    im = cover.resize((max(W, round(cover.width * s)), max(H, round(cover.height * s))), Image.LANCZOS)
     left, top = (im.width - W) // 2, (im.height - H) // 2
     im = im.crop((left, top, left + W, top + H))
     # blur at 1/8 size (fast, and a much wider blur than GaussianBlur alone would manage)
-    small = im.resize((W // 8, H // 8), Image.BILINEAR).filter(ImageFilter.GaussianBlur(5))
+    small = im.resize((W // 8, H // 8), Image.BILINEAR).filter(ImageFilter.GaussianBlur(4))
     im = small.resize((W, H), Image.BICUBIC)
-    im = ImageEnhance.Color(im).enhance(1.15)
-    im = ImageEnhance.Brightness(im).enhance(0.5)
+    im = ImageEnhance.Color(im).enhance(1.2)
+    im = ImageEnhance.Brightness(im).enhance(0.42)
     y, x = np.mgrid[0:H, 0:W].astype(np.float32)
     r = np.sqrt(((x - W / 2) / (W / 2)) ** 2 + ((y - H / 2) / (H / 2)) ** 2)
     shade = np.clip(1.0 - 0.45 * np.clip(r - 0.35, 0, None) ** 1.5, 0.35, 1.0)
-    px = (np.asarray(im, np.float32) * shade[..., None]).clip(0, 255).astype(np.uint8)
+    im = Image.fromarray((np.asarray(im, np.float32) * shade[..., None]).clip(0, 255).astype(np.uint8))
+
+    # the sharp cover, left of the highway, with a soft shadow
+    side = round(H * 0.44)                                  # 475 px at 1080p
+    cx, cy = round(W * 0.15), H // 2                       # centre of the left panel
+    x0, y0 = cx - side // 2, cy - side // 2
+    sharp = cover.resize((side, side), Image.LANCZOS) if cover.width == cover.height else \
+        _square(cover).resize((side, side), Image.LANCZOS)
+    shadow = Image.new("L", (W, H), 0)
+    ImageDraw.Draw(shadow).rectangle((x0 + 10, y0 + 16, x0 + side + 10, y0 + side + 16), fill=170)
+    shadow = shadow.filter(ImageFilter.GaussianBlur(18))
+    im = Image.composite(Image.new("RGB", (W, H), (0, 0, 0)), im, shadow)
+    im.paste(sharp, (x0, y0))
+    ImageDraw.Draw(im).rectangle((x0 - 1, y0 - 1, x0 + side, y0 + side), outline=(255, 255, 255), width=1)
+
+    # title / artist, right of the highway
+    if title or artist:
+        d = ImageDraw.Draw(im)
+        tx, maxw = round(W * 0.72), round(W * 0.255)
+        tfont = ImageFont.load_default(size=round(H * 0.052))
+        afont = ImageFont.load_default(size=round(H * 0.034))
+        lines = _wrap(d, title, tfont, maxw, 3)
+        lh_t, lh_a = round(H * 0.064), round(H * 0.046)
+        total = len(lines) * lh_t + (lh_a + 14 if artist else 0)
+        ty = cy - total // 2
+        for ln in lines:
+            d.text((tx, ty), ln, font=tfont, fill=(255, 255, 255), stroke_width=1, stroke_fill=(255, 255, 255))
+            ty += lh_t
+        if artist:
+            d.text((tx, ty + 14), _wrap(d, artist, afont, maxw, 1)[0], font=afont, fill=(205, 210, 220))
     out = io.BytesIO()
-    Image.fromarray(px).save(out, "JPEG", quality=88, optimize=True)
+    im.save(out, "JPEG", quality=90, optimize=True)
     return out.getvalue()
+
+
+def _square(im):
+    s = min(im.width, im.height)
+    return im.crop(((im.width - s) // 2, (im.height - s) // 2, (im.width - s) // 2 + s, (im.height - s) // 2 + s))
+
+
+def _wrap(draw, text: str, font, maxw: int, max_lines: int) -> list[str]:
+    """Word-wrap to maxw pixels, at most max_lines (the last one ends in … if cut)."""
+    words, lines, cur = text.split(), [], ""
+    for w in words:
+        t = f"{cur} {w}".strip()
+        if draw.textlength(t, font=font) <= maxw or not cur:
+            cur = t
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    lines = lines or [""]
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        lines[-1] += "…"
+    for i, ln in enumerate(lines):                         # one long word: cut it
+        while draw.textlength(ln, font=font) > maxw and len(ln) > 2:
+            ln = ln[:-2] + "…"
+        lines[i] = ln
+    return lines
 
 
 def _state_path(folder: Path) -> Path:
@@ -107,8 +165,10 @@ def refresh_background(folder: Path) -> None:
         if art is None:
             _remove_bg(folder)
             return
+        from ..formats.textio import parse_ini
+        ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
         try:
-            data = background_from_cover(art.read_bytes())
+            data = background_from_cover(art.read_bytes(), ini.get("name", ""), ini.get("artist", ""))
         except Exception:                       # unreadable cover: leave the background as it is
             return
         tmp = folder / "background.jpg.tmp"
