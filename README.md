@@ -52,9 +52,26 @@ and is about twice as fast on an NVIDIA GTX 16 / RTX 20-series card or newer wit
 AMD Radeon RX 9000 / 7900 cards may work with AMD's ROCm build of PyTorch for Windows (untested).
 `device: auto | cuda | cpu` in `configs/product.yaml` picks where it runs (auto: the GPU if there is one).
 
+**Install:** download this repository (Code > Download ZIP), unzip it somewhere like `C:\RiffChart`, and
+double-click **install.bat**. It needs no admin rights and installs nothing system-wide. Everything goes in that
+folder:
+- **uv:** the tool that installs Python and the app's packages.
+- **Python 3.12.**
+- **PyTorch:** for an NVIDIA card if you have one with a recent driver, otherwise the CPU version. It asks.
+- **The model files.**
+- **Shortcuts:** RiffChart on the Desktop and in the Start menu.
+
+Expect about 3 GB with an NVIDIA card, or 1.5 GB for the CPU version. Run install.bat again at any time to repair
+or update; finished steps are skipped. Uninstall: delete the folder and the two shortcuts.
+
+**Start:** the RiffChart shortcut, or `RiffChart.bat`. It opens the app in your browser; close the RiffChart
+window to stop it.
+
+For development:
+
 ```bash
 python -m pip install --user uv
-uv sync --extra dev --python 3.12
+uv sync --extra dev --extra cuda --python 3.12      # or --extra cpu
 .venv/Scripts/python -m pytest -q
 ```
 

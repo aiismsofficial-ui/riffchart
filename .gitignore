@@ -33,3 +33,6 @@ configs/*.local.yaml
 
 # promo renders (contain song audio / screenshots)
 /promo/
+
+# installer: uv, Python and the chosen PyTorch flavour (install.ps1)
+/tools/

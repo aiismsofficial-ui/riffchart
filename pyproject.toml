@@ -6,8 +6,6 @@ requires-python = ">=3.12,<3.13"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dependencies = [
-    "torch==2.11.0",
-    "torchaudio==2.11.0",
     "numpy>=2.0",
     "soundfile>=0.13",
     "soxr>=0.5",
@@ -22,10 +20,7 @@ dependencies = [
     "demucs>=4.0.1",
     "tensorboard>=2.18",
     "mir-eval>=0.8.2",
-    "onnxruntime-gpu>=1.31.1",
     "beat-this==1.1.0",
-    "onnx>=1.23.2",
-    "triton-windows>=3.7,<3.8",
     "scikit-learn==1.9.1",
     "mutagen==1.47.0",
     "fastapi==0.162.0",
@@ -37,7 +32,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# PyTorch: pick one. cpu = any PC (smaller download); cuda = NVIDIA GTX 16 / RTX 20-series or newer (CUDA 13)
+cpu = ["torch==2.11.0", "torchaudio==2.11.0"]
+cuda = ["torch==2.11.0", "torchaudio==2.11.0", "triton-windows>=3.7,<3.8"]
 dev = [
+    "onnx>=1.23.2",
+    "onnxruntime-gpu>=1.31.1",
     "httpx>=0.28.1",
     "imageio-ffmpeg==0.8.1",
     "playwright==1.64.1",
@@ -51,10 +51,16 @@ riffchart-ui = "riffchart.ui.server:main"
 
 [tool.uv]
 index-strategy = "unsafe-best-match"
+conflicts = [[{ extra = "cpu" }, { extra = "cuda" }]]
 
 [tool.uv.sources]
-torch = { index = "pytorch-cu130" }
-torchaudio = { index = "pytorch-cu130" }
+torch = [{ index = "pytorch-cpu", extra = "cpu" }, { index = "pytorch-cu130", extra = "cuda" }]
+torchaudio = [{ index = "pytorch-cpu", extra = "cpu" }, { index = "pytorch-cu130", extra = "cuda" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [[tool.uv.index]]
 name = "pytorch-cu130"

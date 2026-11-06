@@ -880,6 +880,16 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
     return app
 
 
+def _already_running(url: str) -> bool:
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(url + "api/status", timeout=1.5) as r:
+            return "model" in json.loads(r.read())
+    except Exception:
+        return False
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="riffchart-ui", description="RiffChart local web app")
     ap.add_argument("--config", default="configs/ui.yaml")
@@ -889,9 +899,14 @@ def main(argv=None) -> None:
     cfg = load_config(args.config)
     port = args.port or int(cfg.get("port", 8765))
     host = cfg.get("host", "127.0.0.1")
+    url = f"http://{host}:{port}/"
+    if _already_running(url):                          # started twice (shortcut double-clicked): just show it
+        print(f"RiffChart is already running at {url}: opening it.", flush=True)
+        if not args.no_browser:
+            webbrowser.open(url)
+        return
     import uvicorn
     app = create_app(cfg)
-    url = f"http://{host}:{port}/"
     print(f"RiffChart is running at {url}  (Ctrl+C to stop)", flush=True)
     if cfg.get("open_browser", True) and not args.no_browser:
         threading.Timer(1.0, webbrowser.open, (url,)).start()
