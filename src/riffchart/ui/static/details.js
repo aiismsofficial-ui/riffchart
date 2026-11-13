@@ -63,6 +63,9 @@
           <a class="link dt-hwdesign" href="highways.html" target="_blank" rel="noopener">Design your own highway…</a>
           <input type="file" data-k="hwfile" accept="image/png,image/jpeg" hidden>
           <div class="dt-video muted"></div>
+          <div class="dt-anim muted"><label>Animated background <select data-k="anim"><option value="">None</option></select></label>
+            <span class="dt-animbtns"></span></div>
+          <div class="dt-lyrics muted"></div>
         </div>
         <div class="dt-hwprev" title="This song's highway (it scrolls down the screen in Clone Hero)"><img alt="" hidden><span></span></div>
       </div>
@@ -102,6 +105,7 @@
       if (mode.value === "own") { bgPick.click(); mode.value = bgMode; return; }   // stays until a file is picked
       bgMode = mode.value; bgFile = null; showBg();
     });
+    q('[data-k="anim"]').addEventListener("change", (e) => setAnim(e.target.value));
     const hw = q('[data-k="hwmode"]'), hwPick = q('[data-k="hwfile"]');
     hw.addEventListener("change", () => {
       if (hw.value === "own") { hwPick.click(); hw.value = hwMode; return; }
@@ -240,6 +244,99 @@
       } catch (err) { toast(err.message, true); }
     });
   }
+  function showLyrics() {
+    const L = cur.lyrics, el = q(".dt-lyrics");
+    el.innerHTML = L
+      ? `Lyrics: ${L.words} words${L.word_sync ? ", timed word by word" : ", timed by line"} (lrclib.net). ` +
+        `<button type="button" class="linkbtn" data-k="lyrfind">Look again</button> · ` +
+        `<button type="button" class="linkbtn" data-k="lyrrm">Remove</button>`
+      : `No lyrics. <button type="button" class="linkbtn" data-k="lyrfind">Find lyrics online</button>`;
+    el.querySelector("[data-k=lyrfind]").addEventListener("click", findLyrics);
+    const rm = el.querySelector("[data-k=lyrrm]");
+    if (rm) rm.addEventListener("click", async () => {
+      try {
+        await call(`/api/songs/${enc(cur.id)}/lyrics`, { method: "DELETE" });
+        cur.lyrics = null; showLyrics(); toast("Lyrics removed from the chart.");
+      } catch (err) { toast(err.message, true); }
+    });
+  }
+  async function findLyrics() {
+    const el = q(".dt-lyrics");
+    el.textContent = "Looking for lyrics and timing them to the singing…";
+    try {
+      const r = await call(`/api/songs/${enc(cur.id)}/lyrics`, { method: "POST" });
+      if (r.found) {
+        cur.lyrics = r.lyrics; showLyrics();
+        toast(`Added ${r.words} words of lyrics.` + (cur.exported ? " Save & update in Clone Hero to copy them there." : ""));
+      } else {
+        showLyrics(); toast("lrclib.net has no timed lyrics for this artist and title. Check the names and try again.", true);
+      }
+    } catch (err) { showLyrics(); toast(`Lyrics: ${err.message}`, true); }
+  }
+
+  // ---- animated background (the video behind the highway when the song has no music video)
+  let animPresets = null, animTimer = null, animUrl = null;
+  async function loadPresets() {
+    if (animPresets) return animPresets;
+    try { animPresets = (await call("/api/backgrounds")).presets; } catch { animPresets = []; }
+    return animPresets;
+  }
+  async function showAnim() {
+    const el = q(".dt-anim"), sel = el.querySelector("select"), btns = el.querySelector(".dt-animbtns");
+    const ps = await loadPresets();
+    if (sel.options.length < 2) sel.insertAdjacentHTML("beforeend", ps.map((p) => `<option value="${p.id}">${p.name}</option>`).join(""));
+    const A = cur.bg_anim || {}, hasVideo = !!cur.video;
+    sel.disabled = hasVideo || A.busy;
+    sel.value = A.preset || "";
+    clearTimeout(animTimer);
+    if (hasVideo) { btns.textContent = "Uses the music video."; return; }
+    if (A.busy) {
+      btns.textContent = "Making it (about 15 s)…";
+      animTimer = setTimeout(pollAnim, 1500); return;
+    }
+    btns.innerHTML = A.error ? `<span class="warn">Failed: ${A.error}</span>`
+      : A.preset ? `Plays behind the highway (Song Videos on). <button type="button" class="linkbtn" data-k="animprev">Preview</button>` : "";
+    const pv = btns.querySelector("[data-k=animprev]");
+    if (pv) pv.addEventListener("click", () => previewAnim(A.preset));
+  }
+  async function previewAnim(preset) {
+    const box = q(".dt-bgprev");
+    let v = box.querySelector("video");
+    if (!v) { v = document.createElement("video"); v.muted = v.loop = v.playsInline = true; box.appendChild(v); }
+    v.hidden = false; box.querySelector("img").hidden = true; box.querySelector("span").hidden = true;
+    box.classList.remove("blur");
+    try {
+      const r = await fetch("/api/backgrounds/preview", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preset, song_id: cur.id }) });
+      if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+      if (animUrl) URL.revokeObjectURL(animUrl);
+      animUrl = URL.createObjectURL(await r.blob());
+      v.src = animUrl; v.play().catch(() => {});
+    } catch (err) { v.hidden = true; showBg(); toast(`Preview failed: ${err.message}`, true); }
+  }
+  function hideAnimPreview() { const v = q(".dt-bgprev video"); if (v) { v.pause(); v.hidden = true; } }
+  async function pollAnim() {
+    if (!dlg.open || !cur) return;
+    try {
+      const info = await call(`/api/songs/${enc(cur.id)}`);
+      const was = cur.bg_anim && cur.bg_anim.busy;
+      cur.bg_anim = info.bg_anim; cur.video = info.video; cur.export_stale = info.export_stale;
+      showAnim();
+      if (was && !info.bg_anim.busy && !info.bg_anim.error)
+        toast(info.exported ? "Animated background ready. Save & update in Clone Hero to copy it there." : "Animated background ready.");
+    } catch { animTimer = setTimeout(pollAnim, 3000); }
+  }
+  async function setAnim(preset) {
+    try {
+      const info = await call(`/api/songs/${enc(cur.id)}/background/animated`, { method: "POST",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ preset }) });
+      cur.bg_anim = info.bg_anim; cur.video = info.video;
+      if (!preset) { hideAnimPreview(); showBg(); toast("Animated background removed."); }
+      else previewAnim(preset);
+      showAnim();
+    } catch (err) { toast(err.message, true); showAnim(); }
+  }
+
   async function pollVideo() {
     if (!dlg.open || !cur) return;
     try {
@@ -295,6 +392,9 @@
     q(".dt-online").hidden = true;
     showArt(info.art ? `/api/songs/${enc(info.id)}/file/${info.art}` : null);
     showVideo();
+    hideAnimPreview();
+    showAnim();
+    showLyrics();
     q('[data-k="export"]').textContent = info.exported ? "Save & update in Clone Hero" : "Save & export to Clone Hero";
     q(".dt-state").textContent = !info.exported ? "Not in your Clone Hero folder yet."
       : info.export_stale ? "● The copy in Clone Hero is older than this song: saving with “update” refreshes it."

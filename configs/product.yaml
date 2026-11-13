@@ -14,9 +14,11 @@ decoding:
 post_config: configs/post.yaml
 audio:
   write_stems: true        # guitar.ogg (separated guitar) + song.ogg (mix minus guitar): CH mutes guitar on misses
+  split_instruments: true  # also bass.ogg, drums.ogg, vocals.ogg, keys.ogg (Clone Hero / YARG stem volumes; future bass / drums charts)
   vorbis_quality: 0.6
 highway: riffchart         # each song's highway.png (Clone Hero: Song Highways setting): riffchart | cover | none
 keep_video: true           # charting a music video (mp4 / webm / mkv) keeps its picture as video.mp4 / .webm
+lyrics: online             # online = find lyrics on lrclib.net (sends artist, title, length) and time them to the singing; off = none
 convert_video: true        # ...and converts VP9 / AV1 / HEVC (most YouTube downloads) to VP8 webm, which Clone Hero plays
 # diff_guitar from Expert notes per second: cut points midway between the per-level medians of the
 # train songs' song.ini ratings (775 rated songs, Spearman 0.52 with notes/s, Phase 6 notes)

@@ -33,12 +33,22 @@ minutes later. A graphics card is optional.
   Fix a song's details (title, artist, album, genre, year, difficulty, cover) and update the copy in
   Clone Hero in one click; covers embedded in your audio files are picked up automatically, or find one
   online (opt-in: only the artist and title are sent).
+- **Lyrics:** charts get the song's lyrics, timed word by word to the singing, shown by Clone Hero and YARG
+  (looked up on lrclib.net, a free lyrics database: only the artist, title and length are sent; switch it off
+  in Settings). Songs already in your library get them from Song details.
+- **Separate audio per instrument:** guitar, bass, drums, vocals and keys each get their own track, so you
+  can turn instruments up or down in Clone Hero and YARG.
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a
   music video file keeps the video to play behind the highway (converted to a format Clone Hero plays when
-  needed).
+  needed). Songs without a music video can get an **animated background**: 11 presets (embers, bokeh,
+  aurora, starfield, stage lights, plasma, rain, thunderstorm, synthwave sunset, smoke, equalizer) drawn over
+  the song's own background, or installed in Clone Hero for every song.
 - **Highways:** every song gets a RiffChart highway, one coloured from its cover, or your own. The
-  highway designer (colours, edge glow, a pattern image, your own text) shows a live 3D preview; use a
-  design on one song, all songs or new songs, or install it in Clone Hero as your everyday highway.
+  designer has colours, edge styles (neon tube, double, chrome) and glow, lane styles and fret-coloured lanes,
+  centre glow, dark sides, a pattern image with blend modes and your own text, with a live 3D preview.
+  **Animated highways:** 11 looping effects (sparks, warp, rain, edge lightning, edge fire, synthwave grid,
+  plasma, aurora, pulse, colour cycle, sheen). Use a design on one song, all songs or new songs, or install it
+  in Clone Hero as your everyday highway (animated ones as a video highway).
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,

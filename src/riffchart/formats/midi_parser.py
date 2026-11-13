@@ -23,6 +23,8 @@ from .song import DIFFICULTIES, Song, TempoMap
 DIFF_BASE = {"easy": 60, "medium": 72, "hard": 84, "expert": 96}
 SYSEX_DIFF = {0: "easy", 1: "medium", 2: "hard", 3: "expert"}
 GUITAR_TRACK_NAMES = ("PART GUITAR", "T1 GEMS")
+INSTRUMENT_TRACKS = {"guitar": GUITAR_TRACK_NAMES, "bass": ("PART BASS",), "rhythm": ("PART RHYTHM",),
+                     "keys": ("PART KEYS",)}
 TAP_NOTE, SOLO_NOTE, SP_NOTE = 104, 103, 116
 TEXT_TYPES = {"text", "lyrics", "marker", "cue_marker", "track_name", "instrument_name"}
 
@@ -41,7 +43,7 @@ def _track_name(track: mido.MidiTrack) -> str:
     return ""
 
 
-def parse_midi(path: str | Path, ini: dict[str, str] | None = None) -> Song:
+def parse_midi(path: str | Path, ini: dict[str, str] | None = None, instrument: str = "guitar") -> Song:
     mid = mido.MidiFile(str(path), clip=True)
     if mid.type == 2:
         raise ValueError("MIDI type 2 not supported")
@@ -64,10 +66,10 @@ def parse_midi(path: str | Path, ini: dict[str, str] | None = None) -> Song:
                         sections.append((t, txt[8:].strip()))
                     elif txt.startswith("prc_"):
                         sections.append((t, txt[4:].strip()))
-        elif name in GUITAR_TRACK_NAMES and guitar is None:
+        elif name in INSTRUMENT_TRACKS[instrument] and guitar is None:
             guitar = tr
     if guitar is None:
-        raise ValueError("no PART GUITAR track")
+        raise ValueError(f"no {INSTRUMENT_TRACKS[instrument][0]} track")
 
     sp_note = SP_NOTE
     if ini and str(ini.get("multiplier_note", "")).strip() == "103":

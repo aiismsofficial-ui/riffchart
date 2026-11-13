@@ -119,6 +119,7 @@ class Song:
     chart_offset_s: float = 0.0  # [Song] Offset from .chart (seconds), 0 for .mid
     source_format: str = "chart"
     warnings: list[str] = field(default_factory=list)
+    lyrics: list[tuple[int, str]] = field(default_factory=list)   # .chart events: phrase_start / lyric x / phrase_end
 
     def times(self, track: GuitarTrack) -> tuple[np.ndarray, np.ndarray]:
         """(onset seconds, sustain seconds) in chart time (no audio offset applied)."""

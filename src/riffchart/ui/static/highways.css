@@ -33,6 +33,16 @@
 .hw-use { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .hw-use p { flex-basis: 100%; margin: 4px 0 0; font-size: 12px; }
 
+.hw-bgmain { max-width: 1320px; display: block; padding-top: 0; }
+.hw-bggrid { display: grid; grid-template-columns: minmax(200px, 300px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 800px) { .hw-bggrid { grid-template-columns: 1fr; } }
+.hw-bglist { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.hw-bglist button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px; font-weight: 500; text-align: left; }
+.hw-bglist button.on { border-color: var(--accent); }
+.hw-bgview video { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; display: block; }
+.hw-bgview .hw-use { border-top: none; padding-top: 6px; }
+
 /* 3D preview: the image on a tilted plane, scrolling toward the player, with a strike line of five frets */
 .hw-stage { position: relative; height: 380px; perspective: 520px; perspective-origin: 50% 0%; overflow: hidden;
   border-radius: 8px; background: radial-gradient(ellipse at 50% 20%, #23262f, #08090c 70%); }
@@ -49,3 +59,8 @@
 .hw-flat { display: flex; justify-content: center; background: var(--panel2); border-radius: 8px; padding: 10px; }
 .hw-flat img { height: 300px; aspect-ratio: 1 / 2; border: 1px solid var(--line); }
 .hw-preview p { margin: 8px 0 0; }
+.hw-road canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.hw-flat video { height: 300px; aspect-ratio: 1 / 2; border: 1px solid var(--line); }
+.hw-animopts { display: flex; flex-direction: column; gap: 8px; }
+.hw-animopts p { margin: 2px 0 0; }
+#animstate { margin: 6px 0 0; }

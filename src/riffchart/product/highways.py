@@ -23,7 +23,14 @@ _HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 DEFAULT = {"name": "My highway", "top": "#16181e", "bottom": "#0e0f13", "rail": "#f5a524", "divider": "#30343e",
            "glow": 50, "rail_width": 14, "lanes": True, "pattern_opacity": 25, "pattern_fit": "mirror",
-           "pattern_grey": False, "text": "", "text_color": "#ffffff", "text_opacity": 12, "text_size": 90}
+           "pattern_grey": False, "text": "", "text_color": "#ffffff", "text_opacity": 12, "text_size": 90,
+           # added 2026-11-13 (older designs read back with these, so they look the same)
+           "rail_style": "solid", "lane_style": "solid", "lane_width": 2, "fret_tint": 0, "vignette": 0,
+           "center_glow": 0, "pattern_blend": "normal",
+           "anim": "none", "anim_color": "#ffffff", "anim_strength": 60, "anim_speed": 1, "anim_seconds": 4}
+RAIL_STYLES = ("solid", "neon", "double", "chrome")
+LANE_STYLES = ("solid", "dashed", "glow")
+BLENDS = ("normal", "screen", "multiply", "overlay")
 
 
 # ---------------------------------------------------------------- validation
@@ -41,7 +48,7 @@ def clean_design(d: dict) -> dict:
     out = {}
     name = " ".join(str(d.get("name") or "").split())[:40]
     out["name"] = name or DEFAULT["name"]
-    for k in ("top", "bottom", "rail", "divider", "text_color"):
+    for k in ("top", "bottom", "rail", "divider", "text_color", "anim_color"):
         v = str(d.get(k) or DEFAULT[k])
         if not _HEX.match(v):
             raise ValueError(f"{k} must be a colour like #ff8800")
@@ -55,6 +62,15 @@ def clean_design(d: dict) -> dict:
     out["text"] = " ".join(str(d.get("text") or "").split())[:24]
     out["text_opacity"] = _int(d.get("text_opacity"), 0, 100, DEFAULT["text_opacity"])
     out["text_size"] = _int(d.get("text_size"), 20, 200, DEFAULT["text_size"])
+    from .highway_render import EFFECTS
+    for k, ok in (("rail_style", RAIL_STYLES), ("lane_style", LANE_STYLES), ("pattern_blend", BLENDS),
+                  ("anim", tuple(EFFECTS))):
+        out[k] = d.get(k) if d.get(k) in ok else DEFAULT[k]
+    out["lane_width"] = _int(d.get("lane_width"), 1, 8, DEFAULT["lane_width"])
+    for k in ("fret_tint", "vignette", "center_glow", "anim_strength"):
+        out[k] = _int(d.get(k), 0, 100, DEFAULT[k])
+    out["anim_speed"] = _int(d.get("anim_speed"), 1, 4, DEFAULT["anim_speed"])
+    out["anim_seconds"] = _int(d.get("anim_seconds"), 2, 8, DEFAULT["anim_seconds"])
     if d.get("id"):
         out["id"] = check_id(str(d["id"]))
     return out
@@ -136,17 +152,32 @@ def _text_overlay(text: str, color: str, opacity: int, size: int):
     return ov
 
 
-def render(design: dict, pattern: bytes | None = None) -> bytes:
-    """PNG bytes of a design (512x1024, tiles vertically)."""
-    from .visuals import _png, make_highway
+def _inputs(design: dict, pattern: bytes | None):
     d = clean_design(design)
-    rail = _rgb(d["rail"])
-    glow = tuple(int(c * 0.9 * d["glow"] / 100) for c in rail) if d["glow"] and d["rail_width"] else None
     tex = _texture(pattern, d["pattern_fit"], d["pattern_grey"]) if pattern else None
     ov = _text_overlay(d["text"], d["text_color"], d["text_opacity"], d["text_size"])
-    im = make_highway(_rgb(d["top"]), _rgb(d["bottom"]), rail, _rgb(d["divider"]), glow, tex,
-                      d["pattern_opacity"] / 100, d["rail_width"], d["lanes"], ov)
-    return _png(im)
+    return d, tex, ov
+
+
+def render(design: dict, pattern: bytes | None = None) -> bytes:
+    """PNG bytes of a design (512x1024, tiles vertically): the still highway, also for animated designs."""
+    from PIL import Image
+    from .highway_render import still
+    from .visuals import _png
+    return _png(Image.fromarray(still(*_inputs(design, pattern))))
+
+
+def animated(design: dict) -> bool:
+    return clean_design(design)["anim"] != "none"
+
+
+def render_video(design: dict, pattern: bytes | None = None, preview: bool = False) -> bytes:
+    """VP8 .webm of an animated design: 512x1024 at 30 fps for Clone Hero, or a quick 256x512 preview."""
+    from .highway_render import video
+    d, tex, ov = _inputs(design, pattern)
+    if preview:
+        return video(d, tex, ov, (256, 512), fps=24, crf=30, bitrate="1500k")
+    return video(d, tex, ov)
 
 
 # ---------------------------------------------------------------- presets
@@ -202,7 +233,13 @@ def save_design(design: dict, pattern: bytes | None = None, keep_pattern: bool =
     elif not keep_pattern:
         pat.unlink(missing_ok=True)
     (_dir() / f"{i}.json").write_text(json.dumps(d, indent=1), encoding="utf-8")
-    (_dir() / f"{i}.preview.png").write_bytes(render(d, pat.read_bytes() if pat.exists() else None))
+    pb = pat.read_bytes() if pat.exists() else None
+    (_dir() / f"{i}.preview.png").write_bytes(render(d, pb))
+    vid = _dir() / f"{i}.webm"
+    if d["anim"] != "none":
+        vid.write_bytes(render_video(d, pb))
+    else:
+        vid.unlink(missing_ok=True)
     out, _ = get_design(i)
     out["has_pattern"] = pat.exists()
     return out
@@ -210,7 +247,7 @@ def save_design(design: dict, pattern: bytes | None = None, keep_pattern: bool =
 
 def delete_design(i: str) -> None:
     check_id(i)
-    for suffix in (".json", ".pattern.png", ".preview.png"):
+    for suffix in (".json", ".pattern.png", ".preview.png", ".webm"):
         (_dir() / f"{i}{suffix}").unlink(missing_ok=True)
     if library_default() == f"design:{i}":
         set_library_default("riffchart")
@@ -289,12 +326,29 @@ def songs_using(workspace: Path, i: str) -> list[Path]:
     return out
 
 
+def video_path(i: str) -> Path | None:
+    """The saved preset's video (made again if missing), or None for a still design."""
+    d, pat = get_design(i)
+    if d["anim"] == "none":
+        return None
+    p = _dir() / f"{check_id(i)}.webm"
+    if not p.exists():
+        p.write_bytes(render_video(d, pat))
+    return p
+
+
 def install_in_clone_hero(i: str, highways_dir: Path) -> Path:
-    """Copy the preset's image into Clone Hero's Custom/Highways folder, where players pick it for every song."""
+    """Copy the preset into Clone Hero's Custom folder, where players pick it for every song: the image into
+    Highways, and an animated design's video into Video Highways/<name>/highway.webm (Clone Hero's layout)."""
     d, _ = get_design(i)
-    src = preview_path(i)
     name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", d["name"]).strip(" .") or i
+    vid = video_path(i)
+    if vid is not None:
+        dest = highways_dir.parent / "Video Highways" / f"RiffChart - {name}"
+        dest.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(vid, dest / "highway.webm")
+        return dest / "highway.webm"
     highways_dir.mkdir(parents=True, exist_ok=True)
     dest = highways_dir / f"RiffChart - {name}.png"
-    shutil.copyfile(src, dest)
+    shutil.copyfile(preview_path(i), dest)
     return dest

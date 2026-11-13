@@ -10,6 +10,7 @@ Stages (models load once per process, so batch mode pays the start-up cost once)
 """
 from __future__ import annotations
 
+import logging
 import re
 import shutil
 import time
@@ -34,10 +35,12 @@ from ..post.pipeline import postprocess
 from ..timing.pipeline import DEFAULTS as TEMPO_DEFAULTS
 from ..timing.tempo_map import beats_to_tempo_map
 from ..timing.trackers import get_tracker
-from .follow import MODES as FOLLOW_MODES, playable_part
+from .follow import MODES as FOLLOW_MODES, playable_part, INSTRUMENT_FILES, instrument_parts
 from .difficulty import estimate as estimate_difficulty, load_model as load_difficulty_model
 from .meta import SongMeta, cover_art, read_meta
 from .visuals import CH_VIDEO_OK, VIDEO_FILES, convert_video, find_art, find_first, refresh_visuals, save_video
+
+log = logging.getLogger(__name__)
 
 OUT_SR = 44100
 STAGES = ("load", "separate", "beats", "chart", "post", "write")
@@ -94,6 +97,7 @@ class Result:
     diff_guitar: int
     seconds: dict[str, float] = field(default_factory=dict)
     filled_s: float = 0.0            # seconds where other instruments were followed (product/follow.py)
+    lyric_words: int = 0             # words of lyrics written to the chart (product/lyrics.py)
 
 
 def safe_name(s: str) -> str:
@@ -159,6 +163,7 @@ class RiffCharter:
         # NVIDIA (CUDA) and AMD (ROCm builds of PyTorch) GPUs both show up as "cuda"; otherwise the CPU
         device = device or self.cfg_device(config) or ("cuda" if torch.cuda.is_available() else "cpu")
         self.device = device
+        self.config_path = config
         self.cfg = yaml.safe_load(open(project_path(config), encoding="utf-8"))
         self.post_cfg = yaml.safe_load(open(project_path(self.cfg["post_config"]), encoding="utf-8"))
         rules = yaml.safe_load(open(project_path(self.post_cfg.get("eval_config", "configs/eval.yaml")),
@@ -234,14 +239,25 @@ class RiffCharter:
         stage("write")
         folder.mkdir(parents=True, exist_ok=True)
         q = self.cfg["audio"]["vorbis_quality"]
+        for f in ("guitar.ogg",) + tuple(f"{n}.ogg" for n in INSTRUMENT_FILES.values()):
+            (folder / f).unlink(missing_ok=True)           # re-charting: no stems left from the last settings
         if stems:
-            g44 = play.audio if self.sep.sr == OUT_SR else soxr.resample(play.audio, self.sep.sr, OUT_SR)
-            k = min(len(mix), len(g44))
-            write_ogg(folder / "guitar.ogg", g44[:k].astype(np.float32), OUT_SR, q)
-            write_ogg(folder / "song.ogg", (mix[:k] - g44[:k]).astype(np.float32), OUT_SR, q)
+            parts = {"guitar": play.audio}
+            if self.cfg["audio"].get("split_instruments", True):
+                parts.update(instrument_parts(an["stems"], play, self.sep.sr))
+            k = len(mix)
+            rest = mix.astype(np.float32).copy()
+            for name, a in parts.items():
+                a = a if self.sep.sr == OUT_SR else soxr.resample(a, self.sep.sr, OUT_SR)
+                k = min(k, len(a))
+                parts[name] = a
+            rest = rest[:k]
+            for name, a in parts.items():                  # song.ogg = what's left: every file sums to the mix
+                rest -= a[:k]
+                write_ogg(folder / f"{name}.ogg", a[:k].astype(np.float32), OUT_SR, q)
+            write_ogg(folder / "song.ogg", rest, OUT_SR, q)
         else:
             write_ogg(folder / "song.ogg", mix.astype(np.float32), OUT_SR, q)
-            (folder / "guitar.ogg").unlink(missing_ok=True)
         diff = self.guitar_difficulty(song)
         prev = preview_start(mono, OUT_SR, downs, audio_s)
         ini = song_ini(meta, audio_s, prev, diff)
@@ -270,10 +286,28 @@ class RiffCharter:
             refresh_visuals(folder)                        # background and highway (unless the user chose)
         except Exception:
             pass
+        done("write")
+        words = self.add_lyrics(song, folder, meta, an, audio_s, stage, done)
         (folder / "notes.chart").write_text(
             write_chart_text(song, name=meta.title, artist=meta.artist, charter="RiffChart"), encoding="utf-8")
-        done("write")
-        return Result(folder, meta, audio_s, {k: len(v) for k, v in song.tracks.items()}, diff, sec, play.filled_s)
+        return Result(folder, meta, audio_s, {k: len(v) for k, v in song.tracks.items()}, diff, sec, play.filled_s,
+                      words)
+
+    def add_lyrics(self, song, folder: Path, meta, an: dict, audio_s: float, stage, done) -> int:
+        """Lyrics timed to the singing (`lyrics: online` looks them up on LRCLIB). A song re-charted in place
+        keeps the lyrics it already has. Never fails the chart: lyrics are a bonus."""
+        from . import lyrics
+        try:
+            from ..paths import load_config
+            online = load_config(self.config_path).get("lyrics", "online") == "online"   # Settings may change it
+            if lyrics.load(folder) is None and online and meta.artist and meta.title:
+                stage("lyrics")
+                lyrics.make(folder, meta.artist, meta.title, an["stems"]["vocals"], self.sep.sr, audio_s)
+                done("lyrics")
+            return lyrics.attach(song, folder, audio_s=audio_s)
+        except Exception as e:                             # offline, LRCLIB down, odd data
+            log.warning("lyrics skipped for %s: %s", folder.name, e)
+            return 0
 
     def analyse(self, mix: np.ndarray, stage=None, done=None) -> dict:
         """Audio at OUT_SR -> stems, tempo map, model inputs (everything charting needs, style-independent)."""

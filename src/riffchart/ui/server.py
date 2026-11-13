@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
 from ..paths import PROJECT, project_path
+from ..paths import load_config as _paths_load
 from ..product import clonehero
 from ..product.cli import AUDIO_EXT, display_name, find_audio
 from ..formats.loader import load_song
@@ -74,6 +75,7 @@ def _ini(folder: Path) -> dict:
 
 def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastAPI:
     lib = Library(cfg["workspace"], cfg["export_dir"], cfg["protected"])
+    product_cfg = project_path(cfg.get("product_config", "configs/product.yaml"))
     check_writable(cfg["uploads"], cfg["protected"])
     queue = JobQueue(cfg["workspace"], cfg["stage_weights"], make_charter or default_charter_factory(cfg),
                      log_file=Path(cfg["log_file"]) if cfg.get("log_file") else None)
@@ -125,6 +127,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "export_dir": str(lib.export_dir),
                 "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
+                "lyrics": str(_paths_load(product_cfg).get("lyrics", "online")),
                 "clone_hero": {"settings": str(st), "found": st.exists(), "exe": str(exe) if exe else None,
                                "running": clonehero.is_running(), "folders": folders,
                                "options": setup.read_options(st), "labels": setup.CH_OPTIONS}}
@@ -175,6 +178,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True,
                    clone_hero_exe=str(exe) if exe else None)
         lib.export_dir, lib.protected = export, prot
+        if body.get("lyrics") in ("online", "off"):
+            setup.write_local(product_cfg, {"lyrics": body["lyrics"]})
         done = {"registered": False, "options_changed": False}
         if touches_ch:
             if register:
@@ -287,10 +292,15 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         if not any(len(t) for t in song.tracks.values()):
             raise HTTPException(400, "refusing to save a chart with no notes in any difficulty")
         ini = _ini(folder)
+        old = None
         try:                                       # keep the chart's own [Song] Offset: the page sends ticks
-            song.chart_offset_s = load_song(folder)[0].chart_offset_s      # relative to it
+            old = load_song(folder)[0]                                     # relative to it
+            song.chart_offset_s = old.chart_offset_s
         except Exception:
             pass
+        from ..product import lyrics as lyr      # timed in seconds, so tempo edits never move them
+        if not lyr.attach(song, folder, ini) and old is not None:
+            song.lyrics = list(getattr(old, "lyrics", []))
         text = write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
                                 charter=ini.get("charter", "RiffChart"), ini=ini)
         hist = folder / ".riffchart" / "history"
@@ -568,6 +578,70 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(502, f"couldn't download that cover: {e}")
         return lib.info(song_id)
 
+    _sep: list = []                       # Demucs for lyrics on library songs, loaded on first use
+    _sep_lock = threading.Lock()
+
+    def _rewrite_chart(folder: Path) -> int:
+        """Write notes.chart again with the folder's current lyrics (the old chart goes to history)."""
+        from ..product import lyrics as lyr
+        song, ini, chart_path = load_song(folder)
+        if chart_path.suffix.lower() != ".chart":
+            raise HTTPException(409, "lyrics can only be added to .chart songs")
+        words = lyr.attach(song, folder, ini)
+        if not words:
+            song.lyrics = []
+        hist = folder / ".riffchart" / "history"
+        hist.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-lyrics-notes.chart"))
+        chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
+                                              charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
+        return words
+
+    @app.post("/api/songs/{song_id}/lyrics")
+    def find_lyrics(song_id: str):
+        """Look the song's lyrics up on lrclib.net (artist, title and length are sent; only when the user asks)
+        and time them to the singing in song.ogg, then write them into the chart."""
+        from ..audio.io import load_audio
+        from ..product import lyrics as lyr
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        ini = _ini(folder)
+        artist, title = ini.get("artist", "").strip(), ini.get("name", "").strip()
+        if not artist or not title:
+            raise HTTPException(400, "give the song an artist and a title first")
+        stems = audio_files(folder)
+        if not stems:
+            raise HTTPException(409, "this song has no audio")
+        if (folder / "vocals.ogg").exists():                    # the song has its own vocal track
+            vocals, sr = load_audio(folder / "vocals.ogg", 44100, mono=False)
+            audio_s = len(vocals) / sr
+        else:                                                   # separate it from song.ogg (all but the guitar)
+            mix, sr = load_audio(stems[0], 44100, mono=False)
+            audio_s = len(mix) / sr
+            with _sep_lock:
+                if not _sep:
+                    from ..audio.separate import Separator
+                    import torch
+                    _sep.append(Separator(device="cuda" if torch.cuda.is_available() else "cpu"))
+                vocals = _sep[0](mix)["vocals"]
+        try:
+            rep = lyr.make(folder, artist, title, vocals, sr, audio_s)
+        except OSError as e:
+            raise HTTPException(502, f"couldn't reach lrclib.net: {e}")
+        if not rep.get("found"):
+            return {"found": False, "lyrics": None}
+        rep["words"] = _rewrite_chart(folder)
+        return {**rep, "lyrics": lyr.summary(folder)}
+
+    @app.delete("/api/songs/{song_id}/lyrics")
+    def delete_lyrics(song_id: str):
+        from ..product import lyrics as lyr
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        lyr.remove(folder)
+        _rewrite_chart(folder)
+        return {"lyrics": None}
+
     @app.get("/api/covers/search")
     def cover_search(artist: str = "", title: str = "", album: str = ""):
         """Cover candidates from the iTunes Search API and MusicBrainz / Cover Art Archive. Only the artist,
@@ -586,6 +660,85 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(400, "background mode must be auto or none")
         set_bg_mode(folder, mode)
         refresh_background(folder)
+        return lib.info(song_id)
+
+    @app.get("/api/backgrounds")
+    def list_backgrounds():
+        from ..product.background_anim import PRESETS
+        return {"presets": [{"id": k, "name": v["name"]} for k, v in PRESETS.items()],
+                "clone_hero": bool(ch_highways_dir())}
+
+    @app.post("/api/backgrounds/preview")
+    def preview_background(body: dict = Body(...)):
+        """A small looping preview of a preset, over the song's background if a song is given."""
+        from ..product import background_anim as ba
+        from ..product.visuals import BG_FILES, find_first
+        preset = str(body.get("preset") or "")
+        if preset not in ba.PRESETS:
+            raise HTTPException(400, "unknown animated background")
+        img = None
+        if body.get("song_id"):
+            bg = find_first(song_folder(str(body["song_id"])), BG_FILES)
+            img = bg.read_bytes() if bg else None
+        return Response(ba.preview(preset, img), media_type="video/webm", headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/backgrounds/{preset}/install")
+    def install_background(preset: str):
+        """A generic version (no cover) into Clone Hero's Custom/Video Backgrounds, where it loops behind every
+        song without its own video (picked in Clone Hero's settings)."""
+        from ..product import background_anim as ba
+        if preset not in ba.PRESETS:
+            raise HTTPException(404, "unknown animated background")
+        hw = ch_highways_dir()
+        if hw is None:
+            raise HTTPException(404, "Clone Hero's folder wasn't found (Settings)")
+        dest = hw.parent / "Video Backgrounds"
+        check_writable(dest, lib.protected)
+        dest.mkdir(parents=True, exist_ok=True)
+        f = dest / f"RiffChart - {ba.PRESETS[preset]['name']}.webm"
+        f.write_bytes(ba.render(preset, None))
+        return {"installed": str(f)}
+
+    @app.post("/api/backgrounds/apply")
+    def apply_background_all(body: dict = Body(...)):
+        """Give every song without a music video this animated background (made one by one on a thread)."""
+        from ..product.visuals import VIDEO_FILES as VF, bg_anim, find_first, start_bg_anim
+        from ..product.background_anim import PRESETS
+        preset = str(body.get("preset") or "")
+        if preset not in PRESETS:
+            raise HTTPException(400, "unknown animated background")
+        started, skipped = [], []
+        for s in lib.list():
+            folder = lib.folder(s["id"])
+            try:
+                check_writable(folder, lib.protected)
+            except ProtectedPathError:
+                continue
+            if find_first(folder, VF) and not bg_anim(folder):
+                skipped.append(s["id"])
+                continue
+            start_bg_anim(folder, preset)
+            started.append(s["id"])
+        return {"started": started, "skipped_video": skipped}
+
+    @app.post("/api/songs/{song_id}/background/animated")
+    def set_background_animated(song_id: str, body: dict = Body(...)):
+        """preset: an animated background (rendered on a thread, ~15 s; Song details polls) or "" to remove it."""
+        from ..product.visuals import ANIM_BUSY, VIDEO_FILES as VF, bg_anim, find_first, remove_bg_anim, start_bg_anim
+        from ..product.background_anim import PRESETS
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        preset = str(body.get("preset") or "")
+        if not preset:
+            remove_bg_anim(folder)
+            return lib.info(song_id)
+        if preset not in PRESETS:
+            raise HTTPException(400, "unknown animated background")
+        if find_first(folder, VF) and not bg_anim(folder):
+            raise HTTPException(409, "this song has a music video: remove it first to use an animated background")
+        if ANIM_BUSY.get(str(folder), {}).get("error") == "":
+            raise HTTPException(409, "already making this song's animated background")
+        start_bg_anim(folder, preset)
         return lib.info(song_id)
 
     @app.post("/api/songs/{song_id}/background/file")
@@ -626,8 +779,9 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
 
     @app.get("/api/highways")
     def list_highways():
+        from ..product.highway_render import EFFECTS
         return {"designs": highways.list_designs(), "default": default_highway(), "blank": highways.DEFAULT,
-                "clone_hero": bool(ch_highways_dir())}
+                "clone_hero": bool(ch_highways_dir()), "effects": EFFECTS}
 
     async def _form_design(design: str, pattern, pattern_from: str):
         import json as _json
@@ -651,6 +805,24 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         """Live preview of an unsaved design (pattern: a new image, or pattern_from: a saved design's)."""
         d, pat = await _form_design(design, pattern, pattern_from)
         return Response(highways.render(d, pat), media_type="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.post("/api/highways/render_video")
+    async def render_highway_video(design: str = Form(...), pattern: UploadFile | None = File(None),
+                                   pattern_from: str = Form("")):
+        """Quick 256x512 preview video of an unsaved animated design."""
+        d, pat = await _form_design(design, pattern, pattern_from)
+        if not highways.animated(d):
+            raise HTTPException(400, "this design has no animation")
+        return Response(highways.render_video(d, pat, preview=True), media_type="video/webm",
+                        headers={"Cache-Control": "no-store"})
+
+    @app.get("/api/highways/{design_id}/video")
+    def highway_video(design_id: str):
+        _design_or_404(design_id)
+        p = highways.video_path(design_id)
+        if p is None:
+            raise HTTPException(404, "this design has no animation")
+        return FileResponse(p, media_type="video/webm", headers={"Cache-Control": "no-cache"})
 
     @app.post("/api/highways")
     async def save_highway(design: str = Form(...), pattern: UploadFile | None = File(None),

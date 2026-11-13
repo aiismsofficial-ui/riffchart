@@ -185,6 +185,9 @@ button.icon { padding: 4px 9px; }
 .details .dt-bgprev { width: 168px; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2);
   display: grid; place-items: center; overflow: hidden; color: var(--muted); font-size: 11px; text-align: center; }
 .details .dt-bgprev img { width: 100%; height: 100%; object-fit: cover; }
+.details .dt-bgprev video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.details .dt-anim { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.details .dt-anim select { max-width: 170px; }
 .details .dt-bgprev.blur img { filter: blur(6px) brightness(.5) saturate(1.15); transform: scale(1.1); }
 .details .dt-bgopts { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .details .dt-bgopts label { display: flex; align-items: center; gap: 8px; color: var(--muted); }

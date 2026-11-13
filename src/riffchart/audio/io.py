@@ -40,7 +40,11 @@ def load_audio(path: str | Path, sr: int | None = None, mono: bool = True) -> tu
     if path.suffix.lower() in FFMPEG_EXT:
         y, file_sr = _decode_ffmpeg(path)
     else:
-        y, file_sr = sf.read(str(path), dtype="float32", always_2d=True)
+        try:
+            y, file_sr = sf.read(str(path), dtype="float32", always_2d=True)
+        except sf.LibsndfileError:
+            # Converter sites often save WebM/Opus or M4A under a .mp3 name; ffmpeg reads by content.
+            y, file_sr = _decode_ffmpeg(path)
     if mono:
         y = y.mean(axis=1)
     if sr is not None and sr != file_sr:

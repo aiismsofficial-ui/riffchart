@@ -4,7 +4,7 @@ Format references: YARG.Core MoonscraperChartParser/IO/Chart/ChartReader*.cs and
 TheNathannator/GuitarGame_ChartFormats (.chart docs).
   [Song]       Resolution (default 192), Offset (seconds)
   [SyncTrack]  `t = B bpm*1000`, `t = TS num [log2(den)]`, `t = A ...` (anchor, ignored)
-  [Events]     `t = E "section name"` (also lyrics/phrases, ignored)
+  [Events]     `t = E "section name"` (lyrics and phrases kept in Song.lyrics)
   [<Diff>Single]  `t = N fret len` (0-4 frets, 5 forced, 6 tap, 7 open), `t = S 2 len` star power,
                   `t = E solo` / `t = E soloend`
 """
@@ -24,6 +24,12 @@ _LINE = re.compile(r"^\s*(\d+)\s*=\s*(\S+)\s*(.*?)\s*$")
 _KV = re.compile(r'^\s*(\w+)\s*=\s*"?(.*?)"?\s*$')
 
 TRACK_NAMES = {d: f"{d.capitalize()}Single" for d in DIFFICULTIES}
+# .chart section suffix per instrument (Clone Hero / Moonscraper names)
+INSTRUMENT_SECTIONS = {"guitar": "Single", "bass": "DoubleBass", "rhythm": "DoubleRhythm", "keys": "Keyboard"}
+
+
+def track_names(instrument: str = "guitar") -> dict[str, str]:
+    return {d: f"{d.capitalize()}{INSTRUMENT_SECTIONS[instrument]}" for d in DIFFICULTIES}
 
 
 def split_sections(text: str) -> dict[str, list[str]]:
@@ -49,12 +55,12 @@ def split_sections(text: str) -> dict[str, list[str]]:
     return sections
 
 
-def parse_chart(path: str | Path, ini: dict[str, str] | None = None) -> Song:
+def parse_chart(path: str | Path, ini: dict[str, str] | None = None, instrument: str = "guitar") -> Song:
     text = decode_text(Path(path).read_bytes())
-    return parse_chart_text(text, ini)
+    return parse_chart_text(text, ini, instrument)
 
 
-def parse_chart_text(text: str, ini: dict[str, str] | None = None) -> Song:
+def parse_chart_text(text: str, ini: dict[str, str] | None = None, instrument: str = "guitar") -> Song:
     secs = split_sections(text)
     warnings: list[str] = []
     meta: dict[str, str] = {}
@@ -76,22 +82,24 @@ def parse_chart_text(text: str, ini: dict[str, str] | None = None) -> Song:
 
     tempo = _parse_sync(secs.get("SyncTrack", []), resolution, warnings)
 
-    sections = []
+    sections, lyrics = [], []
     for line in secs.get("Events", []):
         m = _LINE.match(line)
         if m and m.group(2) == "E":
             ev = m.group(3).strip().strip('"')
             if ev.startswith("section "):
                 sections.append((int(m.group(1)), ev[8:].strip()))
+            elif ev in ("phrase_start", "phrase_end") or ev.startswith("lyric "):
+                lyrics.append((int(m.group(1)), ev))
     sections.sort()
 
     threshold = chart_hopo_threshold(resolution, ini)
     cutoff = _sustain_cutoff(ini)
     tracks = {}
-    for diff, sec_name in TRACK_NAMES.items():
+    for diff, sec_name in track_names(instrument).items():
         if sec_name in secs:
             tracks[diff] = _parse_track(diff, secs[sec_name], threshold, cutoff, warnings)
-    return Song(resolution, tempo, tracks, sections, meta, offset, "chart", warnings)
+    return Song(resolution, tempo, tracks, sections, meta, offset, "chart", warnings, lyrics)
 
 
 def _sustain_cutoff(ini: dict[str, str] | None) -> int:

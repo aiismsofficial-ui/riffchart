@@ -50,6 +50,9 @@ _YTID = re.compile(r"\s*\[[A-Za-z0-9_-]{11}\]$")
 _TLD = r"(?:me|com|net|org|cc|io|to|app|co|ch|nu|is|tv|cx|ws|fm|pro|lol|site|online|biz|info)"
 _SITE_END = re.compile(rf"[\s_-]*(?:[A-Za-z0-9]+\.)+{_TLD}$", re.I)
 _SITE_START = re.compile(rf"^(?:[A-Za-z0-9]+\.)+{_TLD}\s*[-_]\s*", re.I)
+# converter apps glue their name on the front with "_": "AudioTranscriberAI_Artist - Song", "ytmp3_Song"
+_APP_START = re.compile(r"^(?:[A-Za-z0-9]*(?i:mp3|mp4|converter|downloader|transcriber|savetube)[A-Za-z0-9]*"
+                        r"|[A-Za-z0-9]+AI)_(?=\S)")
 _BITRATE = re.compile(r"[\s_-]*[\(\[]?\b(?:64|96|128|160|192|256|320)\s*(?:k|kbps)?[\)\]]?$", re.I)
 _SLUG_JUNK = re.compile(r"(?:\s+(?:official|lyrics?|visuali[sz]er|lyric|music|video|audio|hd|4k|mv))+$", re.I)
 # an uploader that is a record label, not the artist: "Roadrunner Records" + "Devildriver - Clouds ..."
@@ -73,6 +76,7 @@ def _tidy_text(s: str, slug: bool = True) -> str:
     """Site names, bitrates and file-name slugs ("front-porch-step-drown", "Choosin_Texas_-_Ella").
     slug=False for artists: "blink-182" is a band name, not a slug."""
     s = _YTID.sub("", _JUNK.sub("", s)).strip()
+    s = _APP_START.sub("", s)
     for _ in range(2):
         s = _BITRATE.sub("", _SITE_END.sub("", _SITE_START.sub("", s))).strip()
     if not slug:

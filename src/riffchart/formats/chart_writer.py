@@ -37,8 +37,11 @@ def write_chart_text(song: Song, *, name: str = "", artist: str = "", charter: s
     for t, _, txt in sorted(sync):
         out.append(f"  {t} = {txt}")
     out += ["}", "[Events]", "{"]
-    for t, s in song.sections:
-        out.append(f'  {t} = E "section {s}"')
+    events = [(int(t), 0, f"section {s}") for t, s in song.sections]
+    order = {"phrase_start": 1, "phrase_end": 3}
+    events += [(int(t), order.get(e, 2), e) for t, e in getattr(song, "lyrics", [])]
+    for t, _, e in sorted(events, key=lambda x: (x[0], x[1])):
+        out.append(f"  {t} = E {_q(e)}")
     out.append("}")
 
     threshold = chart_hopo_threshold(res, ini)

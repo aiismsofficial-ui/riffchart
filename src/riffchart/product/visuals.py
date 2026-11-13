@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import io
 import json
+import threading
 from pathlib import Path
 
 import numpy as np
@@ -181,6 +182,8 @@ def refresh_background(folder: Path) -> None:
         tmp.write_bytes(data)
         _remove_bg(folder)
         tmp.replace(folder / "background.jpg")
+        if bg_anim(folder):                         # the animation is drawn over this picture
+            start_bg_anim(folder, bg_anim(folder))
 
 
 def write_own_background(folder: Path, data: bytes) -> str:
@@ -200,6 +203,7 @@ def write_own_background(folder: Path, data: bytes) -> str:
 
 # ---------------------------------------------------------------- highway (Clone Hero: "Song Highways" setting)
 HW_FILES = ("highway.png", "highway.jpg")
+HW_VIDEO = "highway.webm"          # an animated design's per-song video highway (VP8), beside its highway.png
 HW_SIZE = (512, 1024)                           # Clone Hero's recommended size; it tiles down the highway
 HW_MODES = ("riffchart", "cover", "design", "own", "none")
 RIFFCHART_COLORS = {"top": (22, 24, 30), "bottom": (14, 15, 19), "rail": (245, 165, 36), "divider": (48, 52, 62),
@@ -324,7 +328,7 @@ def set_hw_mode(folder: Path, mode: str, design: str | None = None) -> None:
 
 
 def _remove_hw(folder: Path) -> None:
-    for n in HW_FILES:
+    for n in HW_FILES + (HW_VIDEO,):
         (folder / n).unlink(missing_ok=True)
 
 
@@ -346,14 +350,16 @@ def refresh_highway(folder: Path) -> None:
     if mode == "none":
         _remove_hw(folder)
         return
-    data = None
+    data = vid = None
     if mode == "design":
         sd = highways.song_design(folder)
         if sd:
             try:
                 data = highways.render(*sd)
+                if highways.animated(sd[0]):
+                    vid = highways.render_video(*sd)
             except Exception:                           # broken pattern image: the RiffChart one
-                data = None
+                data = vid = None
     if data is None:
         art = find_art(folder) if mode == "cover" else None
         try:
@@ -364,6 +370,8 @@ def refresh_highway(folder: Path) -> None:
     tmp.write_bytes(data)
     _remove_hw(folder)
     tmp.replace(folder / "highway.png")
+    if vid:
+        (folder / HW_VIDEO).write_bytes(vid)
 
 
 def write_own_highway(folder: Path, data: bytes) -> str:
@@ -500,6 +508,8 @@ def save_video(src: str | Path, folder: Path) -> dict | None:
         a0 = float(a.start_time * a.time_base) if a is not None and a.start_time is not None else 0.0
         v0 = float(v.start_time * v.time_base) if v.start_time is not None else 0.0
         tmp = folder / f"video.{ext}.tmp"
+        if _state(folder).get("video"):
+            _set_state(folder, "video", "")                 # a real music video, not an animated background
         with av.open(str(tmp), "w", format="webm" if ext == "webm" else "mp4") as out:
             o = out.add_stream_from_template(v)
             for pkt in c.demux(v):
@@ -511,3 +521,75 @@ def save_video(src: str | Path, folder: Path) -> dict | None:
         (folder / n).unlink(missing_ok=True)
     tmp.replace(folder / f"video.{ext}")
     return {"file": f"video.{ext}", "codec": codec, "start_ms": int(round((a0 - v0) * 1000))}
+
+
+# ---------------------------------------------------------------- animated backgrounds (product/background_anim.py)
+ANIM_BUSY: dict[str, dict] = {}            # folder -> {"preset", "error"} while rendering (shown in Song details)
+_anim_lock = threading.Lock()
+
+
+def bg_anim(folder: Path) -> str | None:
+    """The animated background preset this song's video.webm was made from, or None (no video, or the video
+    is a real music video)."""
+    v = _state(folder).get("video", "")
+    if isinstance(v, str) and v.startswith("anim:") and (folder / "video.webm").exists():
+        return v[5:]
+    return None
+
+
+def _song_seconds(folder: Path) -> float:
+    from ..formats.textio import parse_ini
+    ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
+    try:
+        ms = float(ini.get("song_length", 0) or 0)
+    except ValueError:
+        ms = 0
+    if ms > 0:
+        return ms / 1000 + 2
+    try:
+        import soundfile as sf
+        return max(sf.info(str(f)).duration for f in folder.glob("*.ogg")) + 2
+    except Exception:
+        return 600.0
+
+
+def make_bg_anim(folder: Path, preset: str) -> None:
+    """Render the preset over the song's background and write it as video.webm, as long as the song. Refuses to
+    replace a real music video."""
+    from . import background_anim as ba
+    if preset not in ba.PRESETS:
+        raise ValueError(f"unknown animated background {preset!r}")
+    if find_first(folder, VIDEO_FILES) and bg_anim(folder) is None:
+        raise ValueError("this song has a music video: remove it first")
+    bg = find_first(folder, BG_FILES)
+    loop = ba.render(preset, bg.read_bytes() if bg else None)
+    tmp = folder / "video.webm.tmp"
+    ba.repeat_to(loop, _song_seconds(folder), tmp)
+    for n in VIDEO_FILES:
+        (folder / n).unlink(missing_ok=True)
+    tmp.replace(folder / "video.webm")
+    _set_state(folder, "video", f"anim:{preset}")
+
+
+def remove_bg_anim(folder: Path) -> None:
+    if bg_anim(folder):
+        (folder / "video.webm").unlink(missing_ok=True)
+    _set_state(folder, "video", "")
+
+
+def start_bg_anim(folder: Path, preset: str, on_done=None) -> None:
+    """make_bg_anim on a thread (about 15 s a song); ANIM_BUSY shows it in the meantime."""
+    key = str(folder)
+    ANIM_BUSY[key] = {"preset": preset, "error": ""}
+
+    def run():
+        try:
+            with _anim_lock:                                 # one at a time: they're CPU heavy
+                make_bg_anim(folder, preset)
+            ANIM_BUSY.pop(key, None)
+            if on_done:
+                on_done(folder)
+        except Exception as e:
+            ANIM_BUSY[key] = {"preset": preset, "error": str(e)}
+
+    threading.Thread(target=run, daemon=True).start()

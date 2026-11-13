@@ -20,12 +20,13 @@ def find_chart_file(folder: Path) -> Path | None:
     return None
 
 
-def load_song(folder: str | Path) -> tuple[Song, dict[str, str], Path]:
+def load_song(folder: str | Path, instrument: str = "guitar") -> tuple[Song, dict[str, str], Path]:
     folder = Path(folder)
     chart = find_chart_file(folder)
     if chart is None:
         raise FileNotFoundError(f"no notes.mid/notes.chart in {folder}")
     ini_path = next((p for p in folder.iterdir() if p.name.lower() == "song.ini"), None)
     ini = parse_ini(ini_path) if ini_path else {}
-    song = parse_midi(chart, ini) if chart.suffix.lower() in (".mid", ".midi") else parse_chart(chart, ini)
+    song = (parse_midi(chart, ini, instrument) if chart.suffix.lower() in (".mid", ".midi")
+            else parse_chart(chart, ini, instrument))
     return song, ini, chart

@@ -19,7 +19,8 @@ from ..formats.song import DIFFICULTIES
 from ..paths import PROJECT
 
 STAGE_LABEL = {"load": "loading audio", "separate": "separating guitar", "beats": "tracking beats",
-               "chart": "charting", "post": "polishing", "write": "writing files"}
+               "chart": "charting", "post": "polishing", "write": "writing files",
+               "lyrics": "finding lyrics"}
 
 
 @dataclass
@@ -273,6 +274,8 @@ class JobQueue:
             else:
                 j.status, j.song = "done", r.folder.name
                 j.message = f"{sum(r.seconds.values()):.0f} s, Expert {r.n_notes.get('expert', 0)} notes"
+                if getattr(r, "lyric_words", 0):
+                    j.message += f"; lyrics ({r.lyric_words} words)"
                 if getattr(r, "filled_s", 0) >= 5:
                     j.message += f"; followed other instruments for {r.filled_s:.0f} s where the guitar is quiet"
             self._drop_upload(j)

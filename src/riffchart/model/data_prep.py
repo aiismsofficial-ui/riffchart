@@ -49,8 +49,8 @@ class Mel(torch.nn.Module):
         return torch.log(self.m(x) + 1e-6).T.cpu().numpy()   # (T, 128)
 
 
-def song_notes(row) -> dict:
-    song, _, _ = load_song(row.path)
+def song_notes(row, instrument: str = "guitar") -> dict:
+    song, _, _ = load_song(row.path, instrument)
     off = row.delay_s + row.align_correction_ms / 1000.0
     out = {}
     for d in DIFFICULTIES:

@@ -75,3 +75,30 @@ def playable_part(stems: dict[str, np.ndarray], sr: int, mode: str = "auto", qui
     audio = (guitar + ws * melodic).astype(np.float32)
     model_in = (guitar + ws * gain * melodic).astype(np.float32)
     return Playable(audio, model_in, w, frame_s, float(filled.sum() * frame_s))
+
+
+# Demucs stem -> the file Clone Hero and YARG play it from (each mutes only when its own player misses)
+INSTRUMENT_FILES = {"bass": "bass", "drums": "drums", "vocals": "vocals", "piano": "keys"}
+
+
+def instrument_parts(stems: dict[str, np.ndarray], play: Playable, sr: int,
+                     min_level: float = 0.02) -> dict[str, np.ndarray]:
+    """bass / drums / vocals / keys tracks, as {file stem: audio}. Where the guitar track borrowed the melodic
+    parts (play.weight), that share is taken out of vocals and keys so nothing plays twice. A part much
+    quieter than the song (no piano in a metal song) is left in song.ogg instead of getting a near-silent file."""
+    n = len(play.audio)
+    hop = max(1, int(round(sr * play.frame_s)))
+    ws = np.repeat(play.weight, hop)[:n].astype(np.float32)
+    ws = np.concatenate([ws, np.full(n - len(ws), ws[-1] if len(ws) else 0.0, np.float32)])[:, None]
+    ref = float(np.sqrt(np.mean(sum(stems[k][:n] for k in stems) ** 2))) or 1e-9
+    out = {}
+    for name, file in INSTRUMENT_FILES.items():
+        if name not in stems:
+            continue
+        a = stems[name][:n].astype(np.float32)
+        if name in MELODIC:
+            a = a * (1.0 - ws[: len(a)])
+        if float(np.sqrt(np.mean(a ** 2))) < min_level * ref:
+            continue
+        out[file] = a
+    return out
