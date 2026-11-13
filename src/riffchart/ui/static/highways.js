@@ -227,7 +227,13 @@ async function refresh() {
 }
 
 // ---------- save, delete, use
-async function save(asCopy = false) {
+let saving = null;                       // one save at a time: a second click waits for the first
+function save(asCopy = false) {
+  if (saving) return saving.then(() => (asCopy ? save(true) : !dirty || save()));
+  saving = doSave(asCopy).finally(() => { saving = null; });
+  return saving;
+}
+async function doSave(asCopy = false) {
   fromForm();
   const fd = formData(!asCopy);
   if (patRemoved && !patFile) fd.append("remove_pattern", "true");
@@ -285,10 +291,10 @@ $("#install").addEventListener("click", async () => {
     const r = await post(`/api/highways/${enc(curId)}/install`);
     const parts = r.installed.split(/[\\/]/);
     const bg = r.background
-      ? ` Matching background: “${r.background.split(/[\\/]/).pop().replace(/\.webm$/i, "")}” under Video Backgrounds.` : "";
+      ? ` Matching background: “${r.background.split(/[\\/]/).pop().replace(/\.webm$/i, "")}”: Clone Hero Settings → Gameplay → Background Video.` : "";
     toast((/highway\.webm$/i.test(r.installed)
-      ? `Installed in Clone Hero's Video Highways as “${parts[parts.length - 2]}”. Pick it as your profile's highway there.`
-      : `Installed as ${parts.pop()}. In Clone Hero, pick it as your profile's highway.`) + bg);
+      ? `Installed in Clone Hero's Video Highways as “${parts[parts.length - 2]}”. In Clone Hero: on the difficulty screen press Start → Highway → that name.`
+      : `Installed as ${parts.pop()}. In Clone Hero: on the difficulty screen press Start → Highway → that name.`) + bg);
   } catch (e) { toast(e.message, true); }
   finally { $("#install").disabled = false; }
 });
@@ -367,6 +373,26 @@ $("#bginstall").addEventListener("click", async () => {
   } catch (e) { toast(e.message, true); }
   finally { $("#bginstall").disabled = false; }
 });
+
+// ---------- what Clone Hero shows on songs
+async function chState() {
+  try {
+    const r = await api("/api/clonehero/display");
+    if (!r.found) { $("#chstate").textContent = "Clone Hero's settings weren't found (see Settings)."; return; }
+    const own = r.song_highway || r.song_backgrounds;
+    $("#chstate").innerHTML = own
+      ? `Your Clone Hero now shows <b>each song's own</b> ${r.song_highway ? "highway" : ""}${r.song_highway && r.song_backgrounds ? " and " : ""}${r.song_backgrounds ? "background" : ""}` +
+        " (installed ones only show on songs without their own)."
+      : "Your Clone Hero now shows <b>your installed highway and background</b> on every song (music videos still play).";
+    $("#chinstalled").hidden = !own; $("#chsongs").hidden = own;
+  } catch (e) { $("#chstate").textContent = e.message; }
+}
+for (const [btn, mode] of [["#chinstalled", "installed"], ["#chsongs", "songs"]])
+  $(btn).addEventListener("click", async () => {
+    try { await post("/api/clonehero/display", { mode }); await chState(); toast("Done. Start Clone Hero to see it."); }
+    catch (e) { toast(e.message, true); }
+  });
+chState();
 
 (async () => {
   try {

@@ -43,6 +43,15 @@
 .hw-bgview video { width: 100%; max-width: 640px; aspect-ratio: 16 / 9; background: #000; border-radius: 8px; display: block; }
 .hw-bgview .hw-use { border-top: none; padding-top: 6px; }
 
+.hw-how { max-width: 1320px; margin: 16px auto 0; }
+.hw-how h2 { font-size: 15px; margin: 0 0 8px; }
+.hw-how h3 { font-size: 13px; margin: 0 0 4px; }
+.hw-how ul { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.45; }
+.hw-howgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 800px) { .hw-howgrid { grid-template-columns: 1fr; } }
+.hw-chstate { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--line); font-size: 13px; }
+
 /* 3D preview: the image on a tilted plane, scrolling toward the player, with a strike line of five frets */
 .hw-stage { position: relative; height: 380px; perspective: 520px; perspective-origin: 50% 0%; overflow: hidden;
   border-radius: 8px; background: radial-gradient(ellipse at 50% 20%, #23262f, #08090c 70%); }

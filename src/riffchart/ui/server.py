@@ -665,6 +665,37 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         refresh_background(folder)
         return lib.info(song_id)
 
+    def _ch_settings() -> Path | None:
+        st = cfg.get("clone_hero_settings") or setup.default_settings()
+        return Path(st) if st and Path(st).exists() else None
+
+    @app.get("/api/clonehero/display")
+    def ch_display():
+        """What Clone Hero shows on songs: each song's own highway / background, or the player's installed ones."""
+        st = _ch_settings()
+        if st is None:
+            return {"found": False}
+        o = setup.read_options(st)
+        on = lambda k: o.get(k) is None or bool(o.get(k))          # Clone Hero's default is on
+        return {"found": True, "song_highway": on("song_highway"), "song_backgrounds": on("song_backgrounds"),
+                "song_videos": on("song_videos"), "running": clonehero.is_running()}
+
+    @app.post("/api/clonehero/display")
+    def set_ch_display(body: dict = Body(...)):
+        """mode "installed": Song Highways and Use Song Backgrounds off, so the highway and background installed in
+        Clone Hero show on every song (song music videos still play). mode "songs": both on again."""
+        st = _ch_settings()
+        if st is None:
+            raise HTTPException(404, "Clone Hero's settings file wasn't found (Settings)")
+        if clonehero.is_running():
+            raise HTTPException(409, "close Clone Hero first: it overwrites its settings when it exits")
+        mode = body.get("mode")
+        if mode not in ("installed", "songs"):
+            raise HTTPException(400, "mode must be installed or songs")
+        v = 0 if mode == "installed" else 1
+        setup.set_options(st, {"song_highway": v, "song_backgrounds": v})
+        return ch_display()
+
     @app.get("/api/backgrounds")
     def list_backgrounds():
         from ..product.background_anim import PRESETS

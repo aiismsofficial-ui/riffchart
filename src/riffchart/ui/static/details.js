@@ -59,11 +59,11 @@
             <option value="auto">Made from the cover</option><option value="own">My own image…</option><option value="none">None</option>
           </select></label>
           <input type="file" data-k="bgfile" accept="image/png,image/jpeg" hidden>
-          <label title="Clone Hero shows it when its Song Highways setting is on">Highway <select data-k="hwmode"></select></label>
+          <label title="A still picture on this song (Clone Hero can't animate a song's own highway). Shown when Clone Hero's Song Highways is on, instead of your everyday highway.">Highway (still) <select data-k="hwmode"></select></label>
           <a class="link dt-hwdesign" href="highways.html" target="_blank" rel="noopener">Design your own highway…</a>
           <input type="file" data-k="hwfile" accept="image/png,image/jpeg" hidden>
           <div class="dt-video muted"></div>
-          <div class="dt-anim muted"><label>Animated background <select data-k="anim"><option value="">None</option></select></label>
+          <div class="dt-anim muted"><label title="A video as long as the song, shown when Clone Hero's Song Videos is on. It replaces your everyday background on this song.">Animated background <select data-k="anim"><option value="">None</option></select></label>
             <span class="dt-animbtns"></span></div>
           <div class="dt-lyrics muted"></div>
         </div>
