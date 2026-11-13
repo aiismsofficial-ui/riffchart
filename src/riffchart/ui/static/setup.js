@@ -34,6 +34,9 @@ function render() {
   $("#exestate").textContent = ch.exe
     ? "✓ Found, so songs can open straight in Clone Hero."
     : "Not found: paste the folder Clone Hero is in (where Clone Hero.exe is) to open songs straight in it. Everything else works without it.";
+  $("#msstate").textContent = S.moonscraper
+    ? "✓ Found: Song details can open a chart in it."
+    : "Not found (optional). Paste the folder Moonscraper Chart Editor is in to open charts in it from Song details.";
   showReg();
   // protected folders: what's protected now, plus Clone Hero's other song folders (ticked on first run)
   if (!prot.length) {
@@ -82,6 +85,7 @@ $("#save").addEventListener("click", async () => {
   const body = { export_dir: $("#export").value.trim().replace(/^"|"$/g, ""),
     clone_hero_settings: $("#settings").value.trim().replace(/^"|"$/g, "") || null,
     clone_hero_exe: $("#exe").value.trim().replace(/^"|"$/g, "") || null,
+    moonscraper_exe: $("#msexe").value.trim().replace(/^"|"$/g, "") || null,
     protected: prot.filter((p) => p.on).map((p) => p.path),
     register: !$("#regrow").hidden && $("#register").checked, options,
     lyrics: $("#lyrics").checked ? "online" : "off", background_quality: $("#bgq").value };
@@ -97,7 +101,7 @@ $("#save").addEventListener("click", async () => {
     if (r.registered) bits.push("the songs folder is now in Clone Hero");
     if (r.options_changed) bits.push("Clone Hero's song options are set");
     toast(bits.join(", ") + ".");
-    S = r; prot = []; render(); $("#exe").value = S.clone_hero.exe || "";
+    S = r; prot = []; render(); $("#exe").value = S.clone_hero.exe || ""; $("#msexe").value = S.moonscraper || "";
     if (first) setTimeout(() => { location.href = "./"; }, 900);
   } catch (e) {
     toast(e.status === 409 ? "Close Clone Hero first, then Save again (it overwrites its settings when it exits)." : e.message, true);
@@ -109,6 +113,7 @@ $("#save").addEventListener("click", async () => {
     S = await api("/api/setup");
     $("#settings").value = S.clone_hero.settings;
     $("#exe").value = S.clone_hero.exe || "";
+    $("#msexe").value = S.moonscraper || "";
     $("#export").value = S.done ? S.export_dir : S.default_export;
     render();
   } catch (e) { toast(e.message, true); }

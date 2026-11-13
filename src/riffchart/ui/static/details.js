@@ -74,6 +74,8 @@
         "Metalcore", "Hard Rock", "Indie", "Electronic", "Classical", "Video Game", "Country", "Blues", "Jazz", "Funk",
         "Hip Hop", "R&B", "Soundtrack", "Other"].map((g) => `<option value="${g}">`).join("")}</datalist>
       <p class="dt-state muted"></p>
+      <p class="dt-more muted"><button type="button" class="linkbtn" data-k="sng" title="The whole song in one file, the way Clone Hero (v1.1 and later) and YARG can read it: easy to share or copy into a songs folder. Saved changes only.">Download as .sng</button> ·
+        <button type="button" class="linkbtn" data-k="moon" title="Open this song's chart in Moonscraper Chart Editor (set where it is in Settings). Save there, then reopen the song here to see the changes.">Open in Moonscraper</button></p>
       <div class="dlgbtns"><button type="button" class="ghost" data-k="cancel">Cancel</button>
         <button type="button" class="ghost" data-k="save">Save</button>
         <button type="button" data-k="export">Save &amp; update in Clone Hero</button></div>`;
@@ -84,6 +86,13 @@
       if (e.key === "Enter" && e.target.matches("input[type=text]")) { e.preventDefault(); save(false); }
     });
     q('[data-k="cancel"]').addEventListener("click", () => dlg.close());
+    q('[data-k="sng"]').addEventListener("click", () => { location.href = `/api/songs/${enc(cur.id)}/sng`; });
+    q('[data-k="moon"]').addEventListener("click", async () => {
+      try {
+        await call(`/api/songs/${enc(cur.id)}/moonscraper`, { method: "POST" });
+        toast("Opening Moonscraper. Save there, then reopen the song here to see the changes.");
+      } catch (err) { toast(err.message.includes("Settings") ? err.message : `Moonscraper: ${err.message}`, true); }
+    });
     q('[data-k="save"]').addEventListener("click", () => save(false));
     q('[data-k="export"]').addEventListener("click", () => save(true));
     q('[data-k="rmart"]').addEventListener("click", () => { pendingArt = pendingArtUrl = null; removeArt = true; showArt(null); });

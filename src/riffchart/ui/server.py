@@ -129,9 +129,15 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
                 "lyrics": str(_paths_load(product_cfg).get("lyrics", "online")),
                 "background_quality": str(_paths_load(product_cfg).get("background_quality", "screen")),
+                "moonscraper": _moonscraper(),
                 "clone_hero": {"settings": str(st), "found": st.exists(), "exe": str(exe) if exe else None,
                                "running": clonehero.is_running(), "folders": folders,
                                "options": setup.read_options(st), "labels": setup.CH_OPTIONS}}
+
+    def _moonscraper() -> str | None:
+        from ..product.sng import find_moonscraper
+        exe = find_moonscraper(cfg.get("moonscraper_exe"))
+        return str(exe) if exe else None
 
     @app.get("/api/setup")
     def get_setup():
@@ -165,6 +171,12 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             exe = clonehero.exe_path(body["clone_hero_exe"])
             if exe is None:
                 raise HTTPException(400, "Clone Hero.exe isn't there: choose the folder Clone Hero is in, or the exe itself")
+        ms = None
+        if str(body.get("moonscraper_exe") or "").strip():
+            from ..product.sng import moonscraper_exe
+            ms = moonscraper_exe(body["moonscraper_exe"])
+            if ms is None:
+                raise HTTPException(400, "Moonscraper Chart Editor.exe isn't there: choose its folder or the exe itself")
         opts = {k: bool(v) for k, v in (body.get("options") or {}).items() if k in setup.CH_OPTIONS}
         cur = setup.read_options(st) if st and st.exists() else {}
         opts_change = {k: v for k, v in opts.items() if (cur.get(k) if cur.get(k) is not None else 1) != int(v)}
@@ -175,9 +187,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         export.mkdir(parents=True, exist_ok=True)
         setup.write_local(cfg["_config"], {"export_dir": str(export), "clone_hero_settings": str(st) if st else None,
                                            "clone_hero_exe": str(exe) if exe else None,
+                                           "moonscraper_exe": str(ms) if ms else None,
                                            "protected": [str(p) for p in prot], "setup_done": True})
         cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True,
-                   clone_hero_exe=str(exe) if exe else None)
+                   clone_hero_exe=str(exe) if exe else None, moonscraper_exe=str(ms) if ms else None)
         lib.export_dir, lib.protected = export, prot
         if body.get("lyrics") in ("online", "off"):
             setup.write_local(product_cfg, {"lyrics": body["lyrics"]})
@@ -1126,6 +1139,31 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         except FileNotFoundError as e:
             raise HTTPException(404, str(e))
         return {"command": cmd}
+
+    @app.get("/api/songs/{song_id}/sng")
+    def download_sng(song_id: str):
+        """The song as one .sng file (Clone Hero v1.1+ and YARG read these: copy it into a songs folder)."""
+        from ..product.sng import write_sng
+        folder = song_folder(song_id)
+        out = Path(cfg.get("cache", cfg["workspace"].parent / "cache")) / "sng" / f"{song_id}.sng"
+        try:
+            write_sng(folder, out, _ini(folder))
+        except ValueError as e:
+            raise HTTPException(409, str(e))
+        return FileResponse(out, filename=f"{song_id}.sng", media_type="application/octet-stream")
+
+    @app.post("/api/songs/{song_id}/moonscraper")
+    def moonscraper(song_id: str):
+        """Open the song's chart in Moonscraper Chart Editor (its edits land in this song folder)."""
+        from ..product.sng import find_moonscraper, open_in_moonscraper
+        folder = song_folder(song_id)
+        chart = folder / "notes.chart" if (folder / "notes.chart").exists() else folder / "notes.mid"
+        if not chart.exists():
+            raise HTTPException(404, "this song has no chart file")
+        try:
+            return {"command": open_in_moonscraper(chart, find_moonscraper(cfg.get("moonscraper_exe")))}
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e))
 
     @app.post("/api/songs/{song_id}/reveal")
     def reveal(song_id: str):

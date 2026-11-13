@@ -40,6 +40,8 @@ minutes later. A graphics card is optional.
   can turn instruments up or down in Clone Hero and YARG. Songs charted with an older version can be
   **brought up to date** from the library (own instrument tracks, lyrics, sharper backgrounds) without
   re-charting them.
+- **Share or hand-edit:** download any song as a single `.sng` file (Clone Hero and YARG read these), or open
+  its chart in Moonscraper Chart Editor.
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a
   music video file keeps the video to play behind the highway (converted to a format Clone Hero plays when
   needed). Songs without a music video can get an **animated background**: 11 presets (embers, bokeh,
