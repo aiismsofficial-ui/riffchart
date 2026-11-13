@@ -540,3 +540,25 @@ function drawEditOverlay(h, L, now) {
     ctx.strokeStyle = colors.accent; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y + 0.5, Math.abs(b.x1 - b.x0), Math.abs(b.y1 - b.y0));
   }
 }
+
+// ---------------------------------------------------------------- easier difficulties from Expert
+// The server reduces the current (unsaved) Expert with the same learned reducer, ladder and playability
+// fixes a fresh chart uses. Applied as one undo step; Expert is untouched.
+async function regenerateLower() {
+  const btn = $("#lowerbtn");
+  if (!S.edit || !S.edit.expert.notes.length) return toast("Expert has no notes to make the easier difficulties from", true);
+  const had = ["hard", "medium", "easy"].reduce((n, d) => n + S.edit[d].notes.length, 0);
+  if (had && !confirm("Replace Hard, Medium and Easy with versions made from the current Expert?\n\nUndo (Ctrl+Z) brings the old ones back; nothing is saved until you Save.")) return;
+  btn.disabled = true; const label = btn.innerHTML; btn.textContent = "Making…";
+  try {
+    const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/lower`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chart: chartPayload() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    const fresh = editTracks({ tracks: j.tracks, hopo_threshold: S.chart.hopo_threshold });
+    edit("easier difficulties from Expert", () => { for (const d of ["hard", "medium", "easy"]) if (j.tracks[d]) S.edit[d] = fresh[d]; });
+    toast(`Made from Expert: Hard ${j.notes.hard}, Medium ${j.notes.medium}, Easy ${j.notes.easy} notes (Ctrl+Z undoes)`);
+  } catch (e) { toast("Couldn't make the easier difficulties: " + e.message, true); }
+  btn.disabled = false; btn.innerHTML = label;
+}
+$("#lowerbtn").addEventListener("click", regenerateLower);

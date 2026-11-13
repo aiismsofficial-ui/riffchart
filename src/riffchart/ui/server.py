@@ -325,6 +325,29 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             (folder / "notes.mid").replace(folder / "notes.mid.bak")
         return {"saved": stamp, "notes": {d: len(t) for d, t in song.tracks.items()}, "history": str(hist)}
 
+    @app.post("/api/songs/{song_id}/lower")
+    def regenerate_lower(song_id: str, body: dict = Body(...)):
+        """Hard / Medium / Easy made again from body.chart's Expert (the editor's current, possibly unsaved
+        chart) with the same reducer a fresh chart uses. Nothing is written: the editor applies the result
+        as one undoable step and the user saves."""
+        from ..formats.song import Song
+        from ..post.pipeline import regenerate_lower as regen
+        song_folder(song_id)
+        try:
+            song = json_to_song(body["chart"])
+            want = [d for d in body.get("difficulties", ["hard", "medium", "easy"])]
+            audio_s = body["chart"].get("audio_s")
+        except (KeyError, TypeError, ValueError) as e:
+            raise HTTPException(400, f"bad request: {e}")
+        prod = _paths_load(project_path("configs/product.yaml"))
+        pcfg = yaml.safe_load(open(project_path(prod.get("post_config", "configs/post.yaml")), encoding="utf-8"))
+        try:
+            tracks = regen(song, pcfg, float(audio_s) if audio_s else None, want)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        out = song_to_json(Song(song.resolution, song.tempo, tracks, song.sections))["tracks"]
+        return {"tracks": out, "notes": {d: len(t) for d, t in tracks.items()}}
+
     @app.post("/api/songs/{song_id}/preview")
     def set_preview(song_id: str, body: dict = Body(...)):
         """Where the song-list preview starts (song.ini preview_start_time, ms). Clone Hero and YARG play

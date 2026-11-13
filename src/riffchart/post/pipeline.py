@@ -74,3 +74,31 @@ def postprocess(song: Song, cfg: dict, audio_s: float | None = None, mel: np.nda
                 tracks[d].star_power = copy_phrases(phrases, tracks[d])
     return Song(song.resolution, song.tempo, tracks, song.sections, song.metadata, song.chart_offset_s,
                 song.source_format, song.warnings)
+
+
+def regenerate_lower(song: Song, cfg: dict, audio_s: float | None = None,
+                     lower: list[str] | None = None) -> dict:
+    """Hard / Medium / Easy made again from the song's (edited) Expert, as a fresh chart makes them: the
+    learned reducer, the difficulty ladder and the playability fixes. Expert itself is never changed; its
+    star power phrases and solos are copied down. Returns {difficulty: GuitarTrack} for `lower`."""
+    ex = song.tracks.get("expert")
+    if ex is None or not len(ex):
+        raise ValueError("Expert has no notes to make the easier difficulties from")
+    want = [d for d in (lower or LOWER) if d in LOWER]
+    rules_file = project_path(cfg.get("eval_config", "configs/eval.yaml"))
+    rules = yaml.safe_load(open(rules_file, encoding="utf-8"))["playability"]
+    thr = cfg.get("reduce_thr", {})
+    tracks = {"expert": ex}
+    for d in LOWER:                                     # the ladder needs every level to compare
+        tracks[d] = reduce_learned(song, ex, d, _reducer(), thr.get(d, 0.5))
+    lad = cfg.get("ladder", {})
+    if lad.get("enabled"):
+        tracks = ladder(Song(song.resolution, song.tempo, tracks, song.sections), tracks, _reducer(),
+                        dict(lad.get("caps", {})), int(lad.get("window_beats", 16)))
+    out = {}
+    for d in want:
+        tr = fix_track(song, tracks[d], rules[d], audio_s=audio_s) if cfg.get("fix", True) else tracks[d]
+        tr.star_power = copy_phrases(list(ex.star_power), tr)
+        tr.solos = [tuple(s) for s in getattr(ex, "solos", [])]
+        out[d] = tr
+    return out

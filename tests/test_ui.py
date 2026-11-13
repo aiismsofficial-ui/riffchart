@@ -5,6 +5,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from riffchart.paths import PROJECT
 from fastapi.testclient import TestClient
 
 from riffchart.product import clonehero
@@ -281,6 +283,27 @@ def test_save_writes_chart_keeps_history_and_types(env):
     assert d2["tracks"]["expert"]["star_power"] == [[0, 100]] and d2["sections"] == [[0, "Intro"]]
     assert d2["tracks"]["hard"] == d["tracks"]["hard"]                                # untouched difficulty
     assert "Name = \"Uprising\"" in (folder / "notes.chart").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(not (PROJECT / "data/checkpoints/reduce/reduce.pkl").exists(), reason="no reducer model")
+def test_easier_difficulties_from_expert(env):
+    c, folder = env.client, _charted(env)
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    res = d["resolution"]
+    d["tracks"]["expert"]["notes"] = [[res * 4 + i * res // 2, 1 << (i % 5), 0, 0] for i in range(64)]
+    d["tracks"]["expert"]["star_power"] = [[res * 4, res * 4]]
+    before = (folder / "notes.chart").read_text(encoding="utf-8")
+    r = c.post("/api/songs/Muse - Uprising/lower", json={"chart": d})
+    assert r.status_code == 200, r.text
+    j = r.json()
+    assert set(j["tracks"]) == {"hard", "medium", "easy"}
+    assert 0 < j["notes"]["easy"] <= j["notes"]["medium"] <= j["notes"]["hard"] <= 64
+    ex_ticks = {n[0] for n in d["tracks"]["expert"]["notes"]}
+    assert all(n[0] in ex_ticks for n in j["tracks"]["easy"]["notes"])         # only Expert's notes kept
+    assert j["tracks"]["hard"]["star_power"]                                    # phrases copied down
+    assert (folder / "notes.chart").read_text(encoding="utf-8") == before      # nothing written
+    d["tracks"]["expert"]["notes"] = []
+    assert c.post("/api/songs/Muse - Uprising/lower", json={"chart": d}).status_code == 400
 
 
 def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):
