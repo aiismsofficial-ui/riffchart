@@ -44,6 +44,16 @@ class FakeCharter:
         (folder / "song.ogg").write_bytes(b"OggS")
         return SimpleNamespace(folder=folder, n_notes={"expert": 3, "hard": 1}, seconds={"chart": 1.0})
 
+    def update_song(self, folder, on_stage=None):
+        from riffchart.product.update import mark
+        self.calls.append(("update", Path(folder)))
+        for s in ("load", "separate", "write", "lyrics", "visuals"):
+            on_stage and on_stage(s)
+        (Path(folder) / "drums.ogg").write_bytes(b"OggS")
+        r = {"instruments": ["drums.ogg"], "lyrics": 0, "background": False, "notes": ["no lyrics found online"]}
+        mark(folder, r)
+        return r
+
 
 @pytest.fixture
 def env(tmp_path):
@@ -304,6 +314,20 @@ def test_easier_difficulties_from_expert(env):
     assert (folder / "notes.chart").read_text(encoding="utf-8") == before      # nothing written
     d["tracks"]["expert"]["notes"] = []
     assert c.post("/api/songs/Muse - Uprising/lower", json={"chart": d}).status_code == 400
+
+
+def test_bring_songs_up_to_date(env):
+    c, folder = env.client, _charted(env)
+    info = c.get("/api/songs/Muse - Uprising").json()
+    assert "instruments" in info["updates"]                       # only song.ogg: can get its own tracks
+    r = c.post("/api/library/update")
+    assert r.status_code == 200 and r.json()["queued"] == 1
+    jobs = wait_idle(c)
+    j = [x for x in jobs if x["kind"] == "update"][0]
+    assert j["status"] == "done" and "own tracks for drums" in j["message"] and "no lyrics" in j["message"]
+    assert (folder / "drums.ogg").exists()
+    assert c.get("/api/songs/Muse - Uprising").json()["updates"] == []   # marked: not offered again
+    assert c.post("/api/library/update").json()["queued"] == 0
 
 
 def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):

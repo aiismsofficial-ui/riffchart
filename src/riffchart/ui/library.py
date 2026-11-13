@@ -169,6 +169,11 @@ class Library:
         d["exported"] = (self.export_dir / song_id / "notes.chart").exists()
         from ..product import lyrics as _lyr
         d["lyrics"] = _lyr.summary(p)
+        try:
+            from ..product.update import needs
+            d["updates"] = needs(p)
+        except Exception:
+            d["updates"] = []
         d["export_stale"] = d["exported"] and self.export_stale(song_id)
         return d
 

@@ -545,6 +545,31 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         j = queue.add(src, meta["title"] or song_id, opts, upload=True, target=song_id, meta=meta)
         return j.to_dict()
 
+    @app.post("/api/songs/{song_id}/update")
+    def update_song(song_id: str):
+        """Bring the song up to date without re-charting (own instrument tracks, lyrics, sharp backgrounds):
+        a job in the queue, since splitting the instruments takes a minute or so."""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        busy = next((j for j in queue.list() if j["kind"] == "update" and j["source"] == str(folder)
+                     and j["status"] in ("queued", "running")), None)
+        if busy:
+            return busy
+        title = _ini(folder).get("name", song_id) or song_id
+        return queue.add(folder, f"Update: {title}", Options(), kind="update").to_dict()
+
+    @app.post("/api/library/update")
+    def update_library():
+        """Queue "bring up to date" for every song that has something to gain from it."""
+        queued = []
+        for s in lib.list():
+            if s.get("updates") and not s.get("error"):
+                try:
+                    queued.append(update_song(s["id"]))
+                except HTTPException:
+                    continue
+        return {"queued": len(queued)}
+
     def update_export(song_id: str) -> str | None:
         """Copy the song to the Clone Hero folder again (or for the first time)."""
         try:

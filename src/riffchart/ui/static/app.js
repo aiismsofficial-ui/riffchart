@@ -217,14 +217,19 @@ function renderSongs() {
   const q = $("#filter").value.trim().toLowerCase();
   const list = songs.filter((s) => !q || `${s.title} ${s.artist}`.toLowerCase().includes(q));
   $("#songcount").textContent = songs.length ? `${songs.length}` : "";
+  const old = songs.filter((x) => x.updates && x.updates.length).length;
+  $("#upall").hidden = !old;
+  $("#upall").textContent = `Bring ${old} song${old === 1 ? "" : "s"} up to date…`;
   $("#nosongs").hidden = songs.length > 0;
   const chExe = status && status.clone_hero && status.clone_hero.exe;
-  const busy = new Map(jobs.filter((j) => j.target && (j.status === "running" || j.status === "queued")).map((j) => [j.target, j]));
+  const busy = new Map(jobs.filter((j) => (j.target || j.kind === "update") && (j.status === "running" || j.status === "queued"))
+    .map((j) => [j.kind === "update" ? j.source.split(/[\\/]/).pop() : j.target, j]));
   $("#songs").innerHTML = list.map((s) => {
     const notes = DIFFS.map((d) => `<span title="${DLABEL[d]}">${s.notes[d] ?? "–"}</span>`).join(" / ");
     const exp = s.exported ? `<span class="badge ${s.export_stale ? "stale" : ""}" title="${s.export_stale ? "Changed since the last export: export again to update Clone Hero" : "In your Clone Hero folder"}">${s.export_stale ? "● changed since export" : "✓ in Clone Hero"}</span>` : "";
     const j = busy.get(s.id);
-    const state = j ? `<span class="tag running">${j.status === "running" ? `re-charting ${Math.round(j.progress * 100)}%` : "re-chart queued"}</span>` : "";
+    const verb = j && j.kind === "update" ? "updating" : "re-charting";
+    const state = j ? `<span class="tag running">${j.status === "running" ? `${verb} ${Math.round(j.progress * 100)}%` : j.kind === "update" ? "update queued" : "re-chart queued"}</span>` : "";
     const id = esc(s.id);
     return `<tr data-id="${id}">
       <td><a class="songlink" href="${editorUrl(s.id)}" title="Open in the editor">${s.art ? `<img class="thumb" src="/api/songs/${encodeURIComponent(s.id)}/file/${s.art}" alt="">` : `<span class="thumb none"></span>`}<span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></a>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</td>
@@ -419,3 +424,18 @@ setInterval(() => {
   if (tick % 5 === 0) refreshStatus();
   if (tick % 10 === 0) refreshSongs();
 }, 1000);
+
+// ---------- bring library songs up to date (no re-charting): own instrument tracks, lyrics, sharp backgrounds
+const UPDATE_WORDS = { instruments: "own tracks for bass, drums, vocals and keys", lyrics: "lyrics", background: "sharper backgrounds" };
+$("#upall").addEventListener("click", async () => {
+  const old = songs.filter((x) => x.updates && x.updates.length);
+  if (!old.length) { toast("Every song is up to date"); return; }
+  const what = [...new Set(old.flatMap((x) => x.updates))].map((k) => UPDATE_WORDS[k] || k).join(", ");
+  if (!confirm(`Bring ${old.length} song${old.length === 1 ? "" : "s"} up to date?\n\nAdds what's missing (${what}) without re-charting: notes and your edits stay as they are. ` +
+      `About a minute a song, in the queue. Songs already in Clone Hero show "update in Clone Hero" afterwards.`)) return;
+  try {
+    const r = await post("/api/library/update");
+    toast(`Queued ${r.queued} song${r.queued === 1 ? "" : "s"} to bring up to date`);
+    refreshJobs(); refreshSongs(true);
+  } catch (err) { toast(err.message, true); }
+});

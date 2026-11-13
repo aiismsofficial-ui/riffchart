@@ -20,7 +20,9 @@ from ..paths import PROJECT
 
 STAGE_LABEL = {"load": "loading audio", "separate": "separating guitar", "beats": "tracking beats",
                "chart": "charting", "post": "polishing", "write": "writing files",
-               "lyrics": "finding lyrics"}
+               "lyrics": "finding lyrics", "visuals": "making backgrounds"}
+# "bring up to date" jobs (no charting): splitting the instruments is nearly all of the time
+UPDATE_WEIGHTS = {"load": 0.03, "separate": 0.77, "write": 0.06, "lyrics": 0.06, "visuals": 0.08}
 
 
 @dataclass
@@ -62,6 +64,7 @@ class Job:
     upload: bool = False         # source is our upload copy (deleted after charting)
     target: str = ""             # re-chart: workspace folder to replace (names kept)
     meta: dict = field(default_factory=dict)   # re-chart: title/artist/album/genre/year to keep
+    kind: str = "chart"          # chart | update (bring a library song up to date; source = its folder)
     status: str = "queued"       # queued | running | done | skipped | failed | cancelled
     stage: str = ""
     progress: float = 0.0        # 0..1
@@ -129,8 +132,9 @@ class JobQueue:
 
     # --- API
     def add(self, source: Path, name: str, options: Options, upload: bool = False, target: str = "",
-            meta: dict | None = None) -> Job:
-        j = Job(uuid.uuid4().hex[:12], str(source), name, options, upload, target=target, meta=meta or {})
+            meta: dict | None = None, kind: str = "chart") -> Job:
+        j = Job(uuid.uuid4().hex[:12], str(source), name, options, upload, target=target, meta=meta or {},
+                kind=kind)
         with self.lock:
             self.jobs[j.id] = j
             self._save()
@@ -236,19 +240,22 @@ class JobQueue:
 
     def _chart(self, j: Job) -> None:
         from ..product.core import Style
-        order = list(self.weights)
-        done_w = {s: sum(self.weights[x] for x in order[: i]) for i, s in enumerate(order)}
+        weights = UPDATE_WEIGHTS if j.kind == "update" else self.weights
+        order = list(weights)
+        done_w = {s: sum(weights[x] for x in order[: i]) for i, s in enumerate(order)}
 
         def on_stage(name: str, frac: float | None = None) -> None:
             base = done_w.get(name, j.progress)
             if frac is not None:                        # partway through a slow stage
                 if j.stage == name:
-                    j.progress = min(base + self.weights.get(name, 0.0) * frac, 0.99)
+                    j.progress = min(base + weights.get(name, 0.0) * frac, 0.99)
                 return
             j.stage, j.message = name, ""
             j.progress = min(base, 0.99)
             self.log(f"{j.name[:60]}: {STAGE_LABEL.get(name, name)} [{self.counts()}]")
 
+        if j.kind == "update":
+            return self._update(j, on_stage)
         try:
             self._ensure_charter(j)
             o = j.options
@@ -286,3 +293,38 @@ class JobQueue:
         j.progress, j.finished = (1.0 if j.status != "failed" else j.progress), time.time()
         with self.lock:
             self._save()
+
+    def _update(self, j: Job, on_stage) -> None:
+        """Bring a library song up to date (RiffCharter.update_song): no notes change."""
+        try:
+            self._ensure_charter(j)
+            from .. import progress
+            try:
+                with self.gpu:
+                    r = self.charter.update_song(j.source, on_stage=on_stage)
+            finally:
+                progress.set_hook(None)
+            j.status, j.song = "done", Path(j.source).name
+            j.message = update_message(r)
+            self.log(f"done {j.name[:60]} {j.message} [{self.counts()}]")
+        except Exception as e:
+            j.status, j.message = "failed", f"{type(e).__name__}: {e}"
+            self.log(f"FAILED {j.name[:60]}: {j.message}\n{traceback.format_exc()}")
+        j.progress, j.finished = (1.0 if j.status != "failed" else j.progress), time.time()
+        with self.lock:
+            self._save()
+
+
+def update_message(r: dict) -> str:
+    """One line for the queue: what a "bring up to date" job did."""
+    did = []
+    if r.get("instruments"):
+        did.append("own tracks for " + ", ".join(f[:-4] for f in r["instruments"]))
+    if r.get("lyrics"):
+        did.append(f"lyrics ({r['lyrics']} words)")
+    if r.get("background"):
+        did.append("sharper background")
+    msg = ("updated: " + "; ".join(did)) if did else "nothing to update"
+    if r.get("notes"):
+        msg += " (" + "; ".join(r["notes"]) + ")"
+    return msg

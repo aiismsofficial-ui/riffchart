@@ -293,6 +293,115 @@ class RiffCharter:
         return Result(folder, meta, audio_s, {k: len(v) for k, v in song.tracks.items()}, diff, sec, play.filled_s,
                       words)
 
+    def update_song(self, folder: str | Path, on_stage=None) -> dict:
+        """Bring a library song up to what a fresh chart gets now, without touching its notes:
+          instruments  bass / drums / vocals / keys tracks split out of song.ogg (the band without the guitar
+                       track), when the song has none yet; song.ogg becomes what's left, so the mix is unchanged.
+                       The old song.ogg is kept in .riffchart/song-before-update.ogg.
+          lyrics       looked up and timed to the singing when the song has none (Settings: lyrics online)
+          background   the cover background and an animated background made again at the sharpness setting
+        Returns {"instruments": [files written], "lyrics": words or 0, "background": bool, "notes": [...]}."""
+        from . import lyrics
+        from .visuals import bg_anim, bg_mode, make_bg_anim, refresh_background
+        from ..formats.loader import load_song
+        from .. import progress
+        folder = Path(folder)
+        stage = on_stage or (lambda *_: None)
+        notes: list[str] = []
+        out = {"instruments": [], "lyrics": 0, "background": False, "notes": notes}
+        song_ogg = folder / "song.ogg"
+        ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
+        has_parts = [f"{n}.ogg" for n in INSTRUMENT_FILES.values() if (folder / f"{n}.ogg").exists()]
+        want_parts = self.cfg["audio"].get("split_instruments", True) and not has_parts and song_ogg.exists()
+        from ..paths import load_config
+        online = load_config(self.config_path).get("lyrics", "online") == "online"
+        want_lyrics = online and lyrics.load(folder) is None and ini.get("artist") and ini.get("name")
+        if has_parts:
+            notes.append("already has its own instrument tracks")
+        elif not song_ogg.exists():
+            notes.append("no song.ogg to split")
+        stems = None
+        if want_parts or (want_lyrics and not (folder / "vocals.ogg").exists()):
+            stage("load")
+            mix, _ = load_audio(song_ogg, OUT_SR, mono=False)
+            mix = np.repeat(mix[:, :1], 2, 1) if mix.shape[1] == 1 else mix[:, :2]
+            stage("separate")
+            progress.set_hook((lambda f: stage("separate", f)) if on_stage else None)
+            try:
+                stems = self.sep(soxr.resample(mix, OUT_SR, self.sep.sr) if self.sep.sr != OUT_SR else mix)
+            finally:
+                progress.set_hook(None)
+        if want_parts and stems is not None:
+            stage("write")
+            q = self.cfg["audio"]["vorbis_quality"]
+            ref = float(np.sqrt(np.mean(mix ** 2))) or 1e-9
+            parts = {}
+            for name, file in INSTRUMENT_FILES.items():
+                if name not in stems:
+                    continue
+                a = stems[name].astype(np.float32)
+                a = a if self.sep.sr == OUT_SR else soxr.resample(a, self.sep.sr, OUT_SR)
+                if float(np.sqrt(np.mean(a ** 2))) < 0.02 * ref:      # too quiet to be its own track
+                    continue
+                parts[file] = a
+            if parts:
+                k = min([len(mix)] + [len(a) for a in parts.values()])
+                rest = mix[:k].astype(np.float32).copy()
+                keep = folder / ".riffchart" / "song-before-update.ogg"
+                keep.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(song_ogg, keep)
+                for file, a in parts.items():
+                    rest -= a[:k]
+                    write_ogg(folder / f"{file}.ogg", a[:k], OUT_SR, q)
+                    out["instruments"].append(f"{file}.ogg")
+                write_ogg(folder / "song.ogg", rest, OUT_SR, q)
+            else:
+                notes.append("no instrument loud enough for its own track")
+        if want_lyrics:
+            stage("lyrics")
+            try:
+                if stems is not None:
+                    voc, vsr = stems["vocals"], self.sep.sr
+                else:
+                    voc, vsr = load_audio(folder / "vocals.ogg", OUT_SR, mono=False)
+                audio_s = len(voc) / vsr
+                lyrics.make(folder, ini["artist"], ini["name"], voc, vsr, audio_s)
+                song, _, chart_path = load_song(folder)
+                if chart_path.suffix.lower() == ".chart":
+                    words = lyrics.attach(song, folder, ini, audio_s)
+                    if words:
+                        hist = folder / ".riffchart" / "history"
+                        hist.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-lyrics-notes.chart"))
+                        chart_path.write_text(write_chart_text(
+                            song, name=ini.get("name", ""), artist=ini.get("artist", ""),
+                            charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
+                        out["lyrics"] = words
+                else:
+                    notes.append("lyrics are only written into .chart songs")
+                if not out["lyrics"] and not notes[-1:] == ["lyrics are only written into .chart songs"]:
+                    notes.append("no lyrics found online")
+            except Exception as e:                          # offline, LRCLIB down: the rest still counts
+                log.warning("lyrics skipped for %s: %s", folder.name, e)
+                notes.append(f"lyrics skipped ({type(e).__name__})")
+        elif lyrics.load(folder) is not None:
+            notes.append("already has lyrics")
+        stage("visuals")
+        try:
+            anim = bg_anim(folder)
+            if bg_mode(folder) == "auto":
+                refresh_background(folder, wait=True)      # also redraws an animated background over it
+                out["background"] = True
+            elif anim:
+                make_bg_anim(folder, anim)
+                out["background"] = True
+        except Exception as e:
+            log.warning("background skipped for %s: %s", folder.name, e)
+            notes.append(f"background skipped ({type(e).__name__})")
+        from .update import mark
+        mark(folder, out)
+        return out
+
     def add_lyrics(self, song, folder: Path, meta, an: dict, audio_s: float, stage, done) -> int:
         """Lyrics timed to the singing (`lyrics: online` looks them up on LRCLIB). A song re-charted in place
         keeps the lyrics it already has. Never fails the chart: lyrics are a bonus."""

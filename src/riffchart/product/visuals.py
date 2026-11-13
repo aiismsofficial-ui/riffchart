@@ -160,8 +160,21 @@ def _remove_bg(folder: Path) -> None:
         (folder / n).unlink(missing_ok=True)
 
 
-def refresh_background(folder: Path) -> None:
-    """Bring the background in line with the mode: auto follows the cover (none without a cover)."""
+def still_size() -> tuple[int, int]:
+    """The cover background's size: 16:9 at the height of the animated-background setting (1080 / 1440 / screen,
+    at most 2160), so it stays sharp on big screens."""
+    from . import background_anim as ba
+    try:
+        h = ba.size_for(background_quality())[1]
+    except Exception:
+        h = BG_SIZE[1]
+    h = int(min(max(h, BG_SIZE[1]), 2160))
+    return (round(h * 16 / 9) // 2 * 2, h)
+
+
+def refresh_background(folder: Path, wait: bool = False) -> None:
+    """Bring the background in line with the mode: auto follows the cover (none without a cover).
+    An animated background drawn over it is made again (on a thread, or here when `wait`)."""
     mode = bg_mode(folder)
     if "background" not in _state(folder):
         set_bg_mode(folder, mode)               # remember it, or the background made here would look like "own"
@@ -175,7 +188,8 @@ def refresh_background(folder: Path) -> None:
         from ..formats.textio import parse_ini
         ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
         try:
-            data = background_from_cover(art.read_bytes(), ini.get("name", ""), ini.get("artist", ""))
+            data = background_from_cover(art.read_bytes(), ini.get("name", ""), ini.get("artist", ""),
+                                         size=still_size())
         except Exception:                       # unreadable cover: leave the background as it is
             return
         tmp = folder / "background.jpg.tmp"
@@ -183,7 +197,11 @@ def refresh_background(folder: Path) -> None:
         _remove_bg(folder)
         tmp.replace(folder / "background.jpg")
         if bg_anim(folder):                         # the animation is drawn over this picture
-            start_bg_anim(folder, bg_anim(folder))
+            if wait:
+                with _anim_lock:
+                    make_bg_anim(folder, bg_anim(folder))
+            else:
+                start_bg_anim(folder, bg_anim(folder))
 
 
 def write_own_background(folder: Path, data: bytes) -> str:

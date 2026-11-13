@@ -37,7 +37,9 @@ minutes later. A graphics card is optional.
   (looked up on lrclib.net, a free lyrics database: only the artist, title and length are sent; switch it off
   in Settings). Songs already in your library get them from Song details.
 - **Separate audio per instrument:** guitar, bass, drums, vocals and keys each get their own track, so you
-  can turn instruments up or down in Clone Hero and YARG.
+  can turn instruments up or down in Clone Hero and YARG. Songs charted with an older version can be
+  **brought up to date** from the library (own instrument tracks, lyrics, sharper backgrounds) without
+  re-charting them.
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a
   music video file keeps the video to play behind the highway (converted to a format Clone Hero plays when
   needed). Songs without a music video can get an **animated background**: 11 presets (embers, bokeh,
