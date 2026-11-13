@@ -334,7 +334,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         tmp = folder / "notes.chart.tmp"
         tmp.write_text(text, encoding="utf-8")
         tmp.replace(folder / "notes.chart")
-        if (folder / "notes.mid").exists():         # CH prefers notes.mid: move it aside (copy is in history)
+        from ..product import vocals as voc
+        if voc.ours(folder):                        # pitched vocals: notes.mid is made again from the new chart
+            voc.sync_mid(folder)
+        elif (folder / "notes.mid").exists():       # CH prefers notes.mid: move it aside (copy is in history)
             (folder / "notes.mid").replace(folder / "notes.mid.bak")
         return {"saved": stamp, "notes": {d: len(t) for d, t in song.tracks.items()}, "history": str(hist)}
 
@@ -659,6 +662,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-lyrics-notes.chart"))
         chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
                                               charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
+        from ..product import vocals as voc
+        voc.sync_mid(folder)
         return words
 
     @app.post("/api/songs/{song_id}/lyrics")
@@ -705,6 +710,38 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         lyr.remove(folder)
         _rewrite_chart(folder)
         return {"lyrics": None}
+
+    @app.post("/api/songs/{song_id}/vocals")
+    def add_vocals(song_id: str):
+        """Pitched vocals for YARG: the lyrics as sung notes (pitch from vocals.ogg) in a notes.mid made from
+        notes.chart. notes.chart stays the song's chart; notes.mid follows every change."""
+        from ..product import lyrics as lyr, vocals as voc
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        if not (folder / "notes.chart").exists():
+            raise HTTPException(409, "pitched vocals need a .chart song")
+        if lyr.load(folder) is None:
+            raise HTTPException(409, "find the song's lyrics first: the vocals are made from them")
+        if not (folder / "vocals.ogg").exists():
+            raise HTTPException(409, "this song has no vocals.ogg yet: Bring up to date splits it out")
+        try:
+            queue.run_on_model(lambda ac: voc.analyse(folder, ac.device))
+            done = voc.sync_mid(folder)
+        except (FileNotFoundError, ValueError) as e:
+            voc.disable(folder)
+            raise HTTPException(409, str(e))
+        if done != "written":
+            voc.disable(folder)
+            raise HTTPException(409, "the chart has no lyric events to sing")
+        return {"vocals": voc.summary(folder), "export_stale": lib.export_stale(song_id)}
+
+    @app.delete("/api/songs/{song_id}/vocals")
+    def remove_vocals(song_id: str):
+        from ..product import vocals as voc
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        voc.disable(folder)
+        return {"vocals": None, "export_stale": lib.export_stale(song_id)}
 
     @app.get("/api/covers/search")
     def cover_search(artist: str = "", title: str = "", album: str = ""):

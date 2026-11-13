@@ -29,6 +29,14 @@ TAP_NOTE, SOLO_NOTE, SP_NOTE = 104, 103, 116
 TEXT_TYPES = {"text", "lyrics", "marker", "cue_marker", "track_name", "instrument_name"}
 
 
+def _text(s: str) -> str:
+    """mido reads MIDI text as latin-1; most charts store UTF-8."""
+    try:
+        return s.encode("latin-1").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s
+
+
 def _abs_events(track: mido.MidiTrack):
     t = 0
     for msg in track:
@@ -61,7 +69,7 @@ def parse_midi(path: str | Path, ini: dict[str, str] | None = None, instrument: 
         if name == "EVENTS":
             for t, msg in _abs_events(tr):
                 if msg.type in TEXT_TYPES and msg.type != "track_name":
-                    txt = msg.text.strip().strip("[]").strip()
+                    txt = _text(msg.text).strip().strip("[]").strip()
                     if txt.startswith("section "):
                         sections.append((t, txt[8:].strip()))
                     elif txt.startswith("prc_"):

@@ -40,6 +40,8 @@ minutes later. A graphics card is optional.
   can turn instruments up or down in Clone Hero and YARG. Songs charted with an older version can be
   **brought up to date** from the library (own instrument tracks, lyrics, sharper backgrounds) without
   re-charting them.
+- **Pitched vocals for YARG:** a song's lyrics can become sung notes at the pitch the singer hits, so YARG can
+  score your singing.
 - **Share or hand-edit:** download any song as a single `.sng` file (Clone Hero and YARG read these), or open
   its chart in Moonscraper Chart Editor.
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a

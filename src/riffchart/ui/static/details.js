@@ -262,11 +262,33 @@
         `<button type="button" class="linkbtn" data-k="lyrrm">Remove</button>`
       : `No lyrics. <button type="button" class="linkbtn" data-k="lyrfind">Find lyrics online</button>`;
     el.querySelector("[data-k=lyrfind]").addEventListener("click", findLyrics);
+    if (L) {
+      const V = cur.vocals, v = document.createElement("div");
+      v.className = "dt-vocals";
+      v.innerHTML = V
+        ? `Pitched vocals for YARG: ${V.notes} sung words (${V.pitched} with a pitch), in notes.mid. ` +
+          `<button type="button" class="linkbtn" data-k="vocrm">Remove</button>`
+        : `<button type="button" class="linkbtn" data-k="vocadd" title="Turns the lyrics into notes at the pitch the singer hits (from vocals.ogg), so YARG can sing along. Written to a notes.mid made from this chart; Clone Hero plays the same notes and shows the lyrics. Your edits still go to notes.chart.">Add pitched vocals for YARG</button>`;
+      el.appendChild(v);
+      const add = v.querySelector("[data-k=vocadd]"), vrm = v.querySelector("[data-k=vocrm]");
+      if (add) add.addEventListener("click", async () => {
+        v.textContent = "Finding the pitch of every word in vocals.ogg…";
+        try {
+          const r = await call(`/api/songs/${enc(cur.id)}/vocals`, { method: "POST" });
+          cur.vocals = r.vocals; showLyrics();
+          toast(`Pitched vocals added (${r.vocals.notes} words).` + (cur.exported ? " Save & update in Clone Hero to copy them there." : ""));
+        } catch (err) { showLyrics(); toast(`Vocals: ${err.message}`, true); }
+      });
+      if (vrm) vrm.addEventListener("click", async () => {
+        try { await call(`/api/songs/${enc(cur.id)}/vocals`, { method: "DELETE" }); cur.vocals = null; showLyrics(); toast("Pitched vocals removed (notes.mid deleted; notes.chart is unchanged)."); }
+        catch (err) { toast(err.message, true); }
+      });
+    }
     const rm = el.querySelector("[data-k=lyrrm]");
     if (rm) rm.addEventListener("click", async () => {
       try {
         await call(`/api/songs/${enc(cur.id)}/lyrics`, { method: "DELETE" });
-        cur.lyrics = null; showLyrics(); toast("Lyrics removed from the chart.");
+        cur.lyrics = null; cur.vocals = null; showLyrics(); toast("Lyrics removed from the chart.");
       } catch (err) { toast(err.message, true); }
     });
   }

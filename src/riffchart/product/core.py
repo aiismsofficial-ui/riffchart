@@ -158,6 +158,15 @@ def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int) -> str
     return "\n".join(lines) + "\n"
 
 
+def _sync_mid(folder: Path) -> None:
+    """notes.mid follows notes.chart when the song has pitched vocals (product/vocals.py)."""
+    try:
+        from .vocals import sync_mid
+        sync_mid(folder)
+    except Exception as e:
+        log.warning("notes.mid not updated for %s: %s", Path(folder).name, e)
+
+
 class RiffCharter:
     def __init__(self, config: str | Path = "configs/product.yaml", device: str | None = None):
         # NVIDIA (CUDA) and AMD (ROCm builds of PyTorch) GPUs both show up as "cuda"; otherwise the CPU
@@ -290,6 +299,7 @@ class RiffCharter:
         words = self.add_lyrics(song, folder, meta, an, audio_s, stage, done)
         (folder / "notes.chart").write_text(
             write_chart_text(song, name=meta.title, artist=meta.artist, charter="RiffChart"), encoding="utf-8")
+        _sync_mid(folder)
         return Result(folder, meta, audio_s, {k: len(v) for k, v in song.tracks.items()}, diff, sec, play.filled_s,
                       words)
 
@@ -377,6 +387,7 @@ class RiffCharter:
                             song, name=ini.get("name", ""), artist=ini.get("artist", ""),
                             charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
                         out["lyrics"] = words
+                        _sync_mid(folder)
                 else:
                     notes.append("lyrics are only written into .chart songs")
                 if not out["lyrics"] and not notes[-1:] == ["lyrics are only written into .chart songs"]:

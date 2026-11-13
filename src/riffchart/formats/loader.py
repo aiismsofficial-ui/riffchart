@@ -23,6 +23,8 @@ def find_chart_file(folder: Path) -> Path | None:
 def load_song(folder: str | Path, instrument: str = "guitar") -> tuple[Song, dict[str, str], Path]:
     folder = Path(folder)
     chart = find_chart_file(folder)
+    if (folder / ".riffchart" / "mid.json").exists() and (folder / "notes.chart").exists():
+        chart = folder / "notes.chart"          # notes.mid made by RiffChart from it (vocals): edit the source
     if chart is None:
         raise FileNotFoundError(f"no notes.mid/notes.chart in {folder}")
     ini_path = next((p for p in folder.iterdir() if p.name.lower() == "song.ini"), None)

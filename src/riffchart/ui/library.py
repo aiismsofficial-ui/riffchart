@@ -169,6 +169,8 @@ class Library:
         d["exported"] = (self.export_dir / song_id / "notes.chart").exists()
         from ..product import lyrics as _lyr
         d["lyrics"] = _lyr.summary(p)
+        from ..product import vocals as _voc
+        d["vocals"] = _voc.summary(p)
         try:
             from ..product.update import needs
             d["updates"] = needs(p)
