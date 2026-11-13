@@ -27,7 +27,8 @@ DEFAULT = {"name": "My highway", "top": "#16181e", "bottom": "#0e0f13", "rail": 
            # added 2026-11-13 (older designs read back with these, so they look the same)
            "rail_style": "solid", "lane_style": "solid", "lane_width": 2, "fret_tint": 0, "vignette": 0,
            "center_glow": 0, "pattern_blend": "normal",
-           "anim": "none", "anim_color": "#ffffff", "anim_strength": 60, "anim_speed": 1, "anim_seconds": 4}
+           "anim": "none", "anim_color": "#ffffff", "anim_strength": 60, "anim_speed": 1, "anim_seconds": 4,
+           "bg_preset": ""}                              # a matching animated background (a theme)
 RAIL_STYLES = ("solid", "neon", "double", "chrome")
 LANE_STYLES = ("solid", "dashed", "glow")
 BLENDS = ("normal", "screen", "multiply", "overlay")
@@ -71,6 +72,8 @@ def clean_design(d: dict) -> dict:
         out[k] = _int(d.get(k), 0, 100, DEFAULT[k])
     out["anim_speed"] = _int(d.get("anim_speed"), 1, 4, DEFAULT["anim_speed"])
     out["anim_seconds"] = _int(d.get("anim_seconds"), 2, 8, DEFAULT["anim_seconds"])
+    from .background_anim import PRESETS as BG_PRESETS
+    out["bg_preset"] = d.get("bg_preset") if d.get("bg_preset") in BG_PRESETS else ""
     if d.get("id"):
         out["id"] = check_id(str(d["id"]))
     return out
@@ -335,6 +338,26 @@ def video_path(i: str) -> Path | None:
     if not p.exists():
         p.write_bytes(render_video(d, pat))
     return p
+
+
+def theme_colors(d: dict) -> tuple[str, str]:
+    """A matching background's colours: the effect colour (or edges) and the edges."""
+    return (d["anim_color"] if d["anim"] != "none" else d["rail"]), d["rail"]
+
+
+def install_background(i: str, backgrounds_dir: Path) -> Path | None:
+    """The design's matching background, looped at the screen's full resolution (Clone Hero loops these)."""
+    from . import background_anim as ba
+    d, _ = get_design(i)
+    if not d["bg_preset"]:
+        return None
+    name = re.sub(r'[<>:"/\|?*\x00-\x1f]', "_", d["name"]).strip(" .") or i
+    size = ba.size_for("screen")
+    backgrounds_dir.mkdir(parents=True, exist_ok=True)
+    dest = backgrounds_dir / f"RiffChart - {name}.webm"
+    dest.write_bytes(ba.render(d["bg_preset"], None, size=size, crf=18, bitrate=ba.bitrate_for(size),
+                               colors=theme_colors(d)))
+    return dest
 
 
 def install_in_clone_hero(i: str, highways_dir: Path) -> Path:

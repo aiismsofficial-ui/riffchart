@@ -17,21 +17,21 @@ const STARTERS = [
   { name: "Gold", top: "#1c1608", bottom: "#0c0a04", rail: "#ffd24a", divider: "#3d331a", glow: 65, rail_width: 18,
     rail_style: "chrome" },
   // animated
-  { name: "Neon sparks", top: "#0b1026", bottom: "#05060f", rail: "#22e4ff", divider: "#1d2a4a", glow: 85,
+  { name: "Neon sparks", bg_preset: "starfield", top: "#0b1026", bottom: "#05060f", rail: "#22e4ff", divider: "#1d2a4a", glow: 85,
     rail_style: "neon", anim: "sparks", anim_color: "#7df3ff", anim_strength: 75, anim_speed: 1 },
-  { name: "Synthwave grid", top: "#2a0b3d", bottom: "#0d0418", rail: "#ff3ec8", divider: "#4a1d5e", glow: 80,
+  { name: "Synthwave grid", bg_preset: "synthwave", top: "#2a0b3d", bottom: "#0d0418", rail: "#ff3ec8", divider: "#4a1d5e", glow: 80,
     rail_style: "neon", anim: "grid", anim_color: "#22e4ff", anim_strength: 70, anim_speed: 2, vignette: 40 },
-  { name: "Storm", top: "#121826", bottom: "#070a10", rail: "#9fc6ff", divider: "#24324a", glow: 55,
+  { name: "Storm", bg_preset: "storm", top: "#121826", bottom: "#070a10", rail: "#9fc6ff", divider: "#24324a", glow: 55,
     anim: "lightning", anim_color: "#cfe6ff", anim_strength: 80, anim_seconds: 6 },
-  { name: "Inferno", top: "#1e0a06", bottom: "#0b0403", rail: "#ff5a1f", divider: "#3e1a12", glow: 70,
+  { name: "Inferno", bg_preset: "embers", top: "#1e0a06", bottom: "#0b0403", rail: "#ff5a1f", divider: "#3e1a12", glow: 70,
     anim: "fire", anim_color: "#ff6a00", anim_strength: 75, anim_speed: 2, center_glow: 15 },
-  { name: "Aurora", top: "#06141a", bottom: "#03080b", rail: "#4dffb8", divider: "#123a35", glow: 50,
+  { name: "Aurora", bg_preset: "aurora", top: "#06141a", bottom: "#03080b", rail: "#4dffb8", divider: "#123a35", glow: 50,
     anim: "aurora", anim_color: "#38ff9c", anim_strength: 70, anim_seconds: 8 },
-  { name: "Warp drive", top: "#0a0a14", bottom: "#040408", rail: "#b48cff", divider: "#262040", glow: 60,
+  { name: "Warp drive", bg_preset: "starfield", top: "#0a0a14", bottom: "#040408", rail: "#b48cff", divider: "#262040", glow: 60,
     anim: "warp", anim_color: "#d9c8ff", anim_strength: 80, anim_speed: 2, fret_tint: 25 },
-  { name: "Fret lanes", top: "#141418", bottom: "#08080b", rail: "#e8e8e8", divider: "#3a3a44", glow: 30,
+  { name: "Fret lanes", bg_preset: "equalizer", top: "#141418", bottom: "#08080b", rail: "#e8e8e8", divider: "#3a3a44", glow: 30,
     fret_tint: 70, lane_style: "glow", anim: "sheen", anim_color: "#ffffff", anim_strength: 45 },
-  { name: "Rainbow pulse", top: "#101018", bottom: "#06060a", rail: "#ff3e3e", divider: "#2a2a36", glow: 90,
+  { name: "Rainbow pulse", bg_preset: "plasma", top: "#101018", bottom: "#06060a", rail: "#ff3e3e", divider: "#2a2a36", glow: 90,
     rail_style: "neon", anim: "hue", anim_strength: 60, anim_seconds: 6 },
 ];
 
@@ -105,6 +105,26 @@ function formData(withId) {
 function schedule(ms = 140) {
   clearTimeout(renderTimer); renderTimer = setTimeout(render, ms);
   clearTimeout(videoTimer); videoTimer = setTimeout(renderVideo, Math.max(ms, 450));
+  clearTimeout(stageTimer); stageTimer = setTimeout(renderStage, Math.max(ms, 600));
+}
+// the matching background behind the 3D preview, in the highway's colours
+let stageTimer = null, stageSeq = 0, stageUrl = null, stageKey = "";
+async function renderStage() {
+  const v = $("#stagebg"), seq = ++stageSeq;
+  const colors = [cur.anim && cur.anim !== "none" ? cur.anim_color : cur.rail, cur.rail];
+  const key = JSON.stringify([cur.bg_preset, colors]);
+  if (!cur.bg_preset) { v.hidden = true; v.removeAttribute("src"); stageKey = ""; return; }
+  if (key === stageKey) return;
+  try {
+    const r = await fetch("/api/backgrounds/preview", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ preset: cur.bg_preset, colors }) });
+    if (!r.ok) throw new Error((await r.json()).detail || r.statusText);
+    const blob = await r.blob();
+    if (seq !== stageSeq) return;
+    if (stageUrl) URL.revokeObjectURL(stageUrl);
+    stageUrl = URL.createObjectURL(blob); stageKey = key;
+    v.src = stageUrl; v.hidden = false; v.play().catch(() => {});
+  } catch (e) { toast(`Background preview failed: ${e.message}`, true); }
 }
 // animated designs: a small preview video, drawn repeating down the 3D highway on a canvas
 async function renderVideo() {
@@ -195,6 +215,14 @@ async function refresh() {
   blank = r.blank; designs = r.designs; libDefault = r.default; chOk = r.clone_hero;
   const sel = $("#anim");
   if (!sel.options.length) sel.innerHTML = Object.entries(r.effects).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("");
+  const bsel = $("#bgpreset");
+  if (bsel.options.length < 2) {
+    try {
+      const b = await api("/api/backgrounds");
+      bsel.insertAdjacentHTML("beforeend", b.presets.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join(""));
+      bsel.value = cur.bg_preset || "";
+    } catch { /* no presets: leave None */ }
+  }
   renderLists();
 }
 
@@ -252,12 +280,17 @@ $("#makedefault").addEventListener("click", async () => {
 $("#install").addEventListener("click", async () => {
   if (!(await needSaved())) return;
   try {
+    $("#install").disabled = true;
+    toast(cur.bg_preset ? "Installing (the full-resolution background takes up to a minute)…" : "Installing…");
     const r = await post(`/api/highways/${enc(curId)}/install`);
     const parts = r.installed.split(/[\\/]/);
-    toast(/highway\.webm$/i.test(r.installed)
+    const bg = r.background
+      ? ` Matching background: “${r.background.split(/[\\/]/).pop().replace(/\.webm$/i, "")}” under Video Backgrounds.` : "";
+    toast((/highway\.webm$/i.test(r.installed)
       ? `Installed in Clone Hero's Video Highways as “${parts[parts.length - 2]}”. Pick it as your profile's highway there.`
-      : `Installed as ${parts.pop()}. In Clone Hero, pick it as your profile's highway.`);
+      : `Installed as ${parts.pop()}. In Clone Hero, pick it as your profile's highway.`) + bg);
   } catch (e) { toast(e.message, true); }
+  finally { $("#install").disabled = false; }
 });
 async function setDefault(v) {
   try {

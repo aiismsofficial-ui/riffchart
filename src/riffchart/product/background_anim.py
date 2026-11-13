@@ -53,6 +53,20 @@ def screen_size() -> tuple[int, int]:
     return 1920, 1080
 
 
+QUALITY = {"screen": (3840, 2160), "1440": (3440, 1440), "1080": (2560, 1080)}   # caps (w, h) per setting
+
+
+def size_for(quality: str = "screen", screen: tuple[int, int] | None = None) -> tuple[int, int]:
+    """The video size for a quality setting, with the screen's shape: "screen" = the screen itself (up to 4K)."""
+    mw, mh = QUALITY.get(quality, QUALITY["screen"])
+    return target_size(screen, mw, mh)
+
+
+def bitrate_for(size: tuple[int, int]) -> str:
+    """About 1.6 Mbit/s per megapixel (8 Mbit/s at 3440x1440, 3.3 at 1920x1080)."""
+    return f"{max(2000, round(size[0] * size[1] / 1e6 * 1600))}k"
+
+
 def target_size(screen: tuple[int, int] | None = None, max_w: int = 2560, max_h: int = 1080) -> tuple[int, int]:
     """Video size with the screen's shape: Clone Hero fills the screen, so a 16:9 video on an ultrawide is cut
     top and bottom and blown up. Up to 1080 high and 2560 wide (3440x1440 -> 2560x1072), even numbers."""
@@ -346,11 +360,14 @@ def repeat_to(loop: bytes, seconds: float, out: Path) -> None:
 
 
 def render(preset_id: str, base_image: bytes | None, size=SIZE, seconds: float = LOOP_S, fps: int = FPS,
-           strength: float = 0.8, crf: int = 28, bitrate: str = "1500k") -> bytes:
-    p = PRESETS[preset_id]
+           strength: float = 0.8, crf: int = 28, bitrate: str = "1500k", colors: tuple[str, str] | None = None) -> bytes:
+    p = dict(PRESETS[preset_id])
+    if colors:                                         # a theme: the highway's colours
+        p["color"], p["color2"] = colors
     a = Animator(p, base_from_image(base_image, size), fps, seconds, strength)
     return encode_loop(a, size, crf, bitrate)
 
 
-def preview(preset_id: str, base_image: bytes | None) -> bytes:
-    return render(preset_id, base_image, (480, 270), seconds=LOOP_S, fps=20, crf=30, bitrate="700k")
+def preview(preset_id: str, base_image: bytes | None, colors: tuple[str, str] | None = None,
+            size=(480, 270)) -> bytes:
+    return render(preset_id, base_image, size, seconds=LOOP_S, fps=20, crf=30, bitrate="700k", colors=colors)

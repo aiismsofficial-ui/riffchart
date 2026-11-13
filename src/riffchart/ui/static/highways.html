@@ -63,14 +63,16 @@
     <fieldset class="hw-animset">
       <legend>Animation</legend>
       <label>Effect <select data-k="anim" id="anim"></select></label>
+      <label title="Installed with the highway as Clone Hero's background, in the highway's colours">Matching background
+        <select data-k="bg_preset" id="bgpreset"><option value="">None</option></select></label>
       <div class="hw-animopts">
         <label class="hw-color"><input type="color" data-k="anim_color"> Effect colour</label>
         <div class="slider"><span class="hw-lab">Strength</span><input type="range" data-k="anim_strength" min="0" max="100"><output></output></div>
         <div class="slider"><span class="hw-lab">Speed</span><input type="range" data-k="anim_speed" min="1" max="4"><output></output></div>
         <div class="slider"><span class="hw-lab">Loop length</span><input type="range" data-k="anim_seconds" min="2" max="8"><output></output></div>
-        <p class="muted small">Clone Hero only plays animated highways as your everyday highway: use
-          <b>Install in Clone Hero</b> (it appears under Video Highways in your profile). On a single song the design
-          shows still, because Clone Hero doesn't animate a song's own highway.</p>
+        <p class="muted small">Clone Hero plays animated highways as your everyday highway: <b>Install in Clone
+          Hero</b> adds it under Video Highways, and the matching background under Video Backgrounds, at your screen's
+          full resolution (both loop). On a single song a design shows still: Clone Hero doesn't animate a song's own highway.</p>
       </div>
     </fieldset>
 
@@ -117,6 +119,7 @@
   <section class="card hw-preview">
     <h2>Preview</h2>
     <div class="hw-stage" id="stage">
+      <video id="stagebg" muted loop playsinline hidden></video>
       <div class="hw-road" id="road"></div>
       <div class="hw-strike"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></div>
     </div>

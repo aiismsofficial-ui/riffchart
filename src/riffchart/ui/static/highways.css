@@ -59,6 +59,7 @@
 .hw-flat { display: flex; justify-content: center; background: var(--panel2); border-radius: 8px; padding: 10px; }
 .hw-flat img { height: 300px; aspect-ratio: 1 / 2; border: 1px solid var(--line); }
 .hw-preview p { margin: 8px 0 0; }
+.hw-stage video#stagebg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .hw-road canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .hw-flat video { height: 300px; aspect-ratio: 1 / 2; border: 1px solid var(--line); }
 .hw-animopts { display: flex; flex-direction: column; gap: 8px; }

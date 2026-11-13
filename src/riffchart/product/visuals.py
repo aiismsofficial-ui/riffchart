@@ -533,6 +533,16 @@ def bg_anim(folder: Path) -> str | None:
     return None
 
 
+def background_quality() -> str:
+    """screen / 1440 / 1080 (`background_quality` in configs/product.yaml, set in Settings)."""
+    from ..paths import load_config
+    try:
+        q = load_config("configs/product.yaml").get("background_quality", "screen")
+    except Exception:
+        q = "screen"
+    return q if q in ("screen", "1440", "1080") else "screen"
+
+
 def _song_seconds(folder: Path) -> float:
     from ..formats.textio import parse_ini
     ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
@@ -557,8 +567,20 @@ def make_bg_anim(folder: Path, preset: str) -> None:
         raise ValueError(f"unknown animated background {preset!r}")
     if find_first(folder, VIDEO_FILES) and bg_anim(folder) is None:
         raise ValueError("this song has a music video: remove it first")
-    bg = find_first(folder, BG_FILES)
-    loop = ba.render(preset, bg.read_bytes() if bg else None, size=ba.target_size(), crf=22, bitrate="4M")
+    size = ba.size_for(background_quality())
+    base = None
+    art = find_art(folder)
+    if bg_mode(folder) == "auto" and art is not None:      # the cover background again, made at the video's size
+        from ..formats.textio import parse_ini
+        ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
+        try:
+            base = background_from_cover(art.read_bytes(), ini.get("name", ""), ini.get("artist", ""), size=size)
+        except Exception:
+            base = None
+    if base is None:
+        bg = find_first(folder, BG_FILES)
+        base = bg.read_bytes() if bg else None
+    loop = ba.render(preset, base, size=size, crf=22, bitrate=ba.bitrate_for(size))
     tmp = folder / "video.webm.tmp"
     ba.repeat_to(loop, _song_seconds(folder), tmp)
     for n in VIDEO_FILES:

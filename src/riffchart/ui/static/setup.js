@@ -43,6 +43,7 @@ function render() {
   }
   renderProt();
   $("#lyrics").checked = S.lyrics !== "off";
+  $("#bgq").value = S.background_quality || "screen";
   const box = $("#opts");
   box.innerHTML = "";
   for (const [k, label] of Object.entries(ch.labels)) {
@@ -83,7 +84,7 @@ $("#save").addEventListener("click", async () => {
     clone_hero_exe: $("#exe").value.trim().replace(/^"|"$/g, "") || null,
     protected: prot.filter((p) => p.on).map((p) => p.path),
     register: !$("#regrow").hidden && $("#register").checked, options,
-    lyrics: $("#lyrics").checked ? "online" : "off" };
+    lyrics: $("#lyrics").checked ? "online" : "off", background_quality: $("#bgq").value };
   if (!body.export_dir) { toast("Choose a folder for your finished songs", true); $("#export").focus(); return; }
   if (prot.some((p) => p.on && norm(body.export_dir).startsWith(norm(p.path) + "\\"))) {
     toast("The songs folder can't be inside a folder RiffChart never changes", true); return;

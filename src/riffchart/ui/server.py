@@ -128,6 +128,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
                 "lyrics": str(_paths_load(product_cfg).get("lyrics", "online")),
+                "background_quality": str(_paths_load(product_cfg).get("background_quality", "screen")),
                 "clone_hero": {"settings": str(st), "found": st.exists(), "exe": str(exe) if exe else None,
                                "running": clonehero.is_running(), "folders": folders,
                                "options": setup.read_options(st), "labels": setup.CH_OPTIONS}}
@@ -180,6 +181,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         lib.export_dir, lib.protected = export, prot
         if body.get("lyrics") in ("online", "off"):
             setup.write_local(product_cfg, {"lyrics": body["lyrics"]})
+        if body.get("background_quality") in ("screen", "1440", "1080"):
+            setup.write_local(product_cfg, {"background_quality": body["background_quality"]})
         done = {"registered": False, "options_changed": False}
         if touches_ch:
             if register:
@@ -676,11 +679,18 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         preset = str(body.get("preset") or "")
         if preset not in ba.PRESETS:
             raise HTTPException(400, "unknown animated background")
+        colors = body.get("colors")
+        if colors is not None:
+            import re as _re
+            if not (isinstance(colors, list) and len(colors) == 2
+                    and all(isinstance(c, str) and _re.fullmatch(r"#[0-9a-fA-F]{6}", c) for c in colors)):
+                raise HTTPException(400, "colors must be two colours like #ff8800")
+            colors = tuple(colors)
         img = None
         if body.get("song_id"):
             bg = find_first(song_folder(str(body["song_id"])), BG_FILES)
             img = bg.read_bytes() if bg else None
-        return Response(ba.preview(preset, img), media_type="video/webm", headers={"Cache-Control": "no-store"})
+        return Response(ba.preview(preset, img, colors), media_type="video/webm", headers={"Cache-Control": "no-store"})
 
     @app.post("/api/backgrounds/{preset}/install")
     def install_background(preset: str):
@@ -696,7 +706,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         check_writable(dest, lib.protected)
         dest.mkdir(parents=True, exist_ok=True)
         f = dest / f"RiffChart - {ba.PRESETS[preset]['name']}.webm"
-        f.write_bytes(ba.render(preset, None, size=ba.target_size(), crf=18, bitrate="6M"))   # Clone Hero loops it
+        size = ba.size_for("screen")                     # Clone Hero loops it: full sharpness, still small
+        f.write_bytes(ba.render(preset, None, size=size, crf=18, bitrate=ba.bitrate_for(size)))
         return {"installed": str(f)}
 
     @app.post("/api/backgrounds/apply")
@@ -911,7 +922,12 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         if dest is None:
             raise HTTPException(404, "Clone Hero's folder wasn't found (clone_hero_settings in configs/ui.yaml)")
         check_writable(dest, lib.protected)
-        return {"installed": str(highways.install_in_clone_hero(design_id, dest))}
+        out = {"installed": str(highways.install_in_clone_hero(design_id, dest))}
+        bgdir = dest.parent / "Video Backgrounds"
+        check_writable(bgdir, lib.protected)
+        bg = highways.install_background(design_id, bgdir)
+        out["background"] = str(bg) if bg else ""
+        return out
 
     @app.post("/api/songs/{song_id}/highway/file")
     async def set_highway_file(song_id: str, file: UploadFile = File(...)):
