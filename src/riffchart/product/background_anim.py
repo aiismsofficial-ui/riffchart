@@ -36,6 +36,35 @@ PRESETS = {
 }
 
 
+def screen_size() -> tuple[int, int]:
+    """This PC's main screen in real pixels (1920x1080 when it can't be read)."""
+    try:
+        import ctypes
+        u = ctypes.windll.user32
+        try:
+            u.SetProcessDPIAware()
+        except Exception:
+            pass
+        w, h = int(u.GetSystemMetrics(0)), int(u.GetSystemMetrics(1))
+        if w >= 640 and h >= 360:
+            return w, h
+    except Exception:
+        pass
+    return 1920, 1080
+
+
+def target_size(screen: tuple[int, int] | None = None, max_w: int = 2560, max_h: int = 1080) -> tuple[int, int]:
+    """Video size with the screen's shape: Clone Hero fills the screen, so a 16:9 video on an ultrawide is cut
+    top and bottom and blown up. Up to 1080 high and 2560 wide (3440x1440 -> 2560x1072), even numbers."""
+    w, h = screen or screen_size()
+    aspect = w / h
+    oh = min(max_h, h)
+    ow = oh * aspect
+    if ow > max_w:
+        ow, oh = max_w, max_w / aspect
+    return int(round(ow / 2) * 2), int(round(oh / 2) * 2)
+
+
 def base_from_image(data: bytes | None, size=SIZE, dim: float = 0.8) -> np.ndarray:
     """The picture under the effect: the song's background (fitted, slightly dimmed so effects show), or a
     dark gradient."""

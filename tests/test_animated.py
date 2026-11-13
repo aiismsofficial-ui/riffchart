@@ -55,3 +55,11 @@ def test_repeat_reaches_song_length(tmp_path):
     with av.open(str(tmp_path / "v.webm")) as c:
         n = sum(1 for _ in c.decode(video=0))
     assert n == 5 * ba.FPS                                # whole loops until past 4.5 s
+
+
+def test_background_matches_screen_shape():
+    assert ba.target_size((3440, 1440)) == (2560, 1072)          # ultrawide keeps 21:9
+    assert ba.target_size((1920, 1080)) == (1920, 1080)
+    assert ba.target_size((2560, 1440)) == (1920, 1080)          # 16:9, capped at 1080 high
+    w, h = ba.target_size((1366, 768))
+    assert w % 2 == 0 and h % 2 == 0

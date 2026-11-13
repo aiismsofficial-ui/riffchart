@@ -47,8 +47,9 @@ minutes later. A graphics card is optional.
   designer has colours, edge styles (neon tube, double, chrome) and glow, lane styles and fret-coloured lanes,
   centre glow, dark sides, a pattern image with blend modes and your own text, with a live 3D preview.
   **Animated highways:** 11 looping effects (sparks, warp, rain, edge lightning, edge fire, synthwave grid,
-  plasma, aurora, pulse, colour cycle, sheen). Use a design on one song, all songs or new songs, or install it
-  in Clone Hero as your everyday highway (animated ones as a video highway).
+  plasma, aurora, pulse, colour cycle, sheen), installed in Clone Hero as your everyday video highway (Clone
+  Hero only animates its own highways; on a single song a design shows still). Use a design on one song, all
+  songs or new songs, or install it in Clone Hero.
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,

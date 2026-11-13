@@ -696,7 +696,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         check_writable(dest, lib.protected)
         dest.mkdir(parents=True, exist_ok=True)
         f = dest / f"RiffChart - {ba.PRESETS[preset]['name']}.webm"
-        f.write_bytes(ba.render(preset, None))
+        f.write_bytes(ba.render(preset, None, size=ba.target_size(), crf=18, bitrate="6M"))   # Clone Hero loops it
         return {"installed": str(f)}
 
     @app.post("/api/backgrounds/apply")

@@ -203,7 +203,7 @@ def write_own_background(folder: Path, data: bytes) -> str:
 
 # ---------------------------------------------------------------- highway (Clone Hero: "Song Highways" setting)
 HW_FILES = ("highway.png", "highway.jpg")
-HW_VIDEO = "highway.webm"          # an animated design's per-song video highway (VP8), beside its highway.png
+HW_VIDEO = "highway.webm"          # tried 2026-11-13: Clone Hero ignores it in a song folder; removed if found
 HW_SIZE = (512, 1024)                           # Clone Hero's recommended size; it tiles down the highway
 HW_MODES = ("riffchart", "cover", "design", "own", "none")
 RIFFCHART_COLORS = {"top": (22, 24, 30), "bottom": (14, 15, 19), "rail": (245, 165, 36), "divider": (48, 52, 62),
@@ -350,16 +350,14 @@ def refresh_highway(folder: Path) -> None:
     if mode == "none":
         _remove_hw(folder)
         return
-    data = vid = None
+    data = None
     if mode == "design":
         sd = highways.song_design(folder)
         if sd:
             try:
-                data = highways.render(*sd)
-                if highways.animated(sd[0]):
-                    vid = highways.render_video(*sd)
+                data = highways.render(*sd)        # still: Clone Hero only animates its own Video Highways
             except Exception:                           # broken pattern image: the RiffChart one
-                data = vid = None
+                data = None
     if data is None:
         art = find_art(folder) if mode == "cover" else None
         try:
@@ -370,8 +368,6 @@ def refresh_highway(folder: Path) -> None:
     tmp.write_bytes(data)
     _remove_hw(folder)
     tmp.replace(folder / "highway.png")
-    if vid:
-        (folder / HW_VIDEO).write_bytes(vid)
 
 
 def write_own_highway(folder: Path, data: bytes) -> str:
@@ -562,7 +558,7 @@ def make_bg_anim(folder: Path, preset: str) -> None:
     if find_first(folder, VIDEO_FILES) and bg_anim(folder) is None:
         raise ValueError("this song has a music video: remove it first")
     bg = find_first(folder, BG_FILES)
-    loop = ba.render(preset, bg.read_bytes() if bg else None)
+    loop = ba.render(preset, bg.read_bytes() if bg else None, size=ba.target_size(), crf=22, bitrate="4M")
     tmp = folder / "video.webm.tmp"
     ba.repeat_to(loop, _song_seconds(folder), tmp)
     for n in VIDEO_FILES:
