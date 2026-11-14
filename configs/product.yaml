@@ -18,6 +18,7 @@ audio:
   vorbis_quality: 0.6
 highway: riffchart         # each song's highway.png (Clone Hero: Song Highways setting): riffchart | cover | none
 keep_video: true           # charting a music video (mp4 / webm / mkv) keeps its picture as video.mp4 / .webm
+sections: auto             # auto = name the parts (Intro, Verse 1, Chorus 1, ...) from the audio; off = none
 lyrics: online             # online = find lyrics on lrclib.net (sends artist, title, length) and time them to the singing; off = none
 background_quality: screen  # animated song backgrounds: screen (your screen's resolution, ~100 MB a song) | 1440 | 1080 (smallest)
 convert_video: true        # ...and converts VP9 / AV1 / HEVC (most YouTube downloads) to VP8 webm, which Clone Hero plays

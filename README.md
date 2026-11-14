@@ -61,7 +61,8 @@ minutes later. A graphics card is optional.
   control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,
   star power, solos, sections, undo and redo. A sync nudge moves the whole chart earlier or later
   against the audio in 5 ms steps, the song-list preview can be set at the playhead, and every earlier
-  version of a chart can be looked at and restored. A **tempo map editor** lets you fix BPM and time signatures, tap a tempo, or drag beat lines onto the
+  version of a chart can be looked at and restored. Sections (Intro, Verse 1, Chorus 1, Guitar Solo…) are named automatically from the audio,
+  and can be redone or renamed in the editor. A **tempo map editor** lets you fix BPM and time signatures, tap a tempo, or drag beat lines onto the
   beats in the waveform. After editing Expert, **Easier from Expert** makes
   Hard, Medium and Easy again from it in one click (undoable).
 - **Live playability check:** problems such as impossible chords, notes too fast for the difficulty or

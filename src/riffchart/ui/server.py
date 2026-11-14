@@ -364,6 +364,26 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         out = song_to_json(Song(song.resolution, song.tempo, tracks, song.sections))["tracks"]
         return {"tracks": out, "notes": {d: len(t) for d, t in tracks.items()}}
 
+    @app.post("/api/songs/{song_id}/sections/auto")
+    def auto_sections(song_id: str, body: dict = Body(...)):
+        """Section names for body.chart (the editor's current chart) from the song's audio: the stems summed,
+        vocals.ogg and guitar.ogg when present, and the timed lyrics. Nothing is written."""
+        from ..audio.io import load_audio
+        from ..product import lyrics as lyr, structure
+        folder = song_folder(song_id)
+        try:
+            song = json_to_song(body["chart"])
+            song.chart_offset_s = float(body["chart"].get("offset_s", 0) or 0)
+        except (KeyError, TypeError, ValueError) as e:
+            raise HTTPException(400, f"bad request: {e}")
+        mix, sr = folder_mix(folder)
+        stem = lambda n: load_audio(folder / f"{n}.ogg", sr, mono=True)[0] if (folder / f"{n}.ogg").exists() else None
+        secs = structure.auto_sections(song, mix, sr, vocals=stem("vocals"), guitar=stem("guitar"),
+                                       lines=lyr.load(folder))
+        if not secs:
+            raise HTTPException(409, "the song is too short to split into sections")
+        return {"sections": [[t, n] for t, n in secs]}
+
     @app.post("/api/songs/{song_id}/preview")
     def set_preview(song_id: str, body: dict = Body(...)):
         """Where the song-list preview starts (song.ini preview_start_time, ms). Clone Hero and YARG play

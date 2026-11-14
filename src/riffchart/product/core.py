@@ -297,6 +297,8 @@ class RiffCharter:
             pass
         done("write")
         words = self.add_lyrics(song, folder, meta, an, audio_s, stage, done)
+        if not song.sections and self.cfg.get("sections", "auto") == "auto":
+            song.sections = self.auto_sections(song, folder, an, play)
         (folder / "notes.chart").write_text(
             write_chart_text(song, name=meta.title, artist=meta.artist, charter="RiffChart"), encoding="utf-8")
         _sync_mid(folder)
@@ -412,6 +414,17 @@ class RiffCharter:
         from .update import mark
         mark(folder, out)
         return out
+
+    def auto_sections(self, song, folder: Path, an: dict, play) -> list[tuple[int, str]]:
+        """Intro / Verse / Chorus / ... names at the section starts (product/structure.py). Never fails a chart."""
+        from . import lyrics, structure
+        try:
+            r = lambda a: a if self.sep.sr == OUT_SR else soxr.resample(a, self.sep.sr, OUT_SR)
+            return structure.auto_sections(song, an["mix"], OUT_SR, vocals=r(an["stems"]["vocals"]),
+                                           guitar=r(play.audio), lines=lyrics.load(folder))
+        except Exception as e:
+            log.warning("sections skipped for %s: %s", folder.name, e)
+            return []
 
     def add_lyrics(self, song, folder: Path, meta, an: dict, audio_s: float, stage, done) -> int:
         """Lyrics timed to the singing (`lyrics: online` looks them up on LRCLIB). A song re-charted in place

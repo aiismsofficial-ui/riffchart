@@ -564,3 +564,22 @@ async function regenerateLower() {
   btn.disabled = false; btn.innerHTML = label;
 }
 $("#lowerbtn").addEventListener("click", regenerateLower);
+
+// ---------------------------------------------------------------- sections named from the audio
+async function autoSections() {
+  const btn = $("#secbtn");
+  if (!S.edit) return;
+  if (S.chart.sections.length && !confirm(`Replace the ${S.chart.sections.length} sections with names worked out from the audio?` +
+      "\n\nUndo (Ctrl+Z) brings the old ones back; nothing is saved until you Save.")) return;
+  btn.disabled = true; const label = btn.innerHTML; btn.textContent = "Listening…";
+  try {
+    const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/sections/auto`, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ chart: chartPayload() }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    edit("sections from the audio", () => { S.chart.sections = j.sections; });
+    toast(`${j.sections.length} sections: ${j.sections.slice(0, 6).map((x) => x[1]).join(", ")}${j.sections.length > 6 ? "…" : ""} (N renames one at the playhead)`);
+  } catch (e) { toast("Couldn't name the sections: " + e.message, true); }
+  btn.disabled = false; btn.innerHTML = label;
+}
+$("#secbtn").addEventListener("click", autoSections);
