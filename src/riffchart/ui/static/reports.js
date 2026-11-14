@@ -59,6 +59,7 @@ function toggleReports() {
   if (!p.hidden) {
     $("#issues").hidden = true; $("#history").hidden = true;
     if (typeof TP !== "undefined" && TP.open) toggleTempo();
+    if (typeof closeLyrics === "function") closeLyrics();
     if (typeof closeRechart === "function" && !$("#rechart").hidden) closeRechart();
     renderReports();
   }

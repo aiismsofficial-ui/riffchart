@@ -70,7 +70,8 @@ minutes later. A graphics card is optional.
   against the audio in 5 ms steps, the song-list preview can be set at the playhead, and every earlier
   version of a chart can be looked at and restored. Sections (Intro, Verse 1, Chorus 1, Guitar Solo…) are named automatically from the audio,
   and can be redone or renamed in the editor. A **tempo map editor** lets you fix BPM and time signatures, tap a tempo, or drag beat lines onto the
-  beats in the waveform. After editing Expert, **Easier from Expert** makes
+  beats in the waveform. **Lyrics** can be fixed in the editor too: change the words, drag them on the
+  waveform, or tap along to time them. After editing Expert, **Easier from Expert** makes
   Hard, Medium and Easy again from it in one click (undoable).
 - **Live playability check:** problems such as impossible chords, notes too fast for the difficulty or
   sustains running into the next note are marked on the highway as you edit.

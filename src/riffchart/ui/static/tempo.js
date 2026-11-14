@@ -204,6 +204,7 @@ function toggleTempo() {
   TP.open = !p.hidden;
   if (TP.open) {
     $("#issues").hidden = true; $("#history").hidden = true;
+    if (typeof closeLyrics === "function") closeLyrics();
     if (typeof closeRechart === "function" && !$("#rechart").hidden) closeRechart();
     renderTempo();
   } else { TP.hover = null; hw.style.cursor = ""; }

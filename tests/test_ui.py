@@ -295,6 +295,41 @@ def test_save_writes_chart_keeps_history_and_types(env):
     assert "Name = \"Uprising\"" in (folder / "notes.chart").read_text(encoding="utf-8")
 
 
+def test_lyrics_edited_in_the_editor(env):
+    c, folder = env.client, _charted(env)
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    assert d["lyrics"] == {"lines": [], "source": ""}
+    # a chart's own lyric events come back as lines in seconds (120 BPM, 192 ticks a beat: 0.5 s per beat)
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    ev = '  384 = E "phrase_start"\n  384 = E "lyric Hel-"\n  480 = E "lyric lo"\n  768 = E "phrase_end"\n'
+    (folder / "notes.chart").write_text(text.replace("[Events]\n{\n", "[Events]\n{\n" + ev), encoding="utf-8")
+    d = c.get("/api/songs/Muse - Uprising/chart").json()
+    bpm = d["tempo"][0][1]
+    beat = 60 / bpm
+    ly = d["lyrics"]
+    assert ly["source"] == "chart" and len(ly["lines"]) == 1
+    assert [w[1] for w in ly["lines"][0]["words"]] == ["Hel-", "lo"]
+    assert ly["lines"][0]["words"][0][0] == pytest.approx(2 * beat + d["offset_s"], abs=1e-3)
+    # saving without "lyrics" keeps the chart's own events
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    assert '"lyric Hel-"' in (folder / "notes.chart").read_text(encoding="utf-8")
+    # edited: lyrics.json is written (seconds) and the chart gets the new words, the syllable "-" kept
+    d["lyrics"] = [{"start": 1.0, "end": 2.5, "words": [[1.0, "Hel-"], [1.5, "lo"], [2.0, "world"]]}]
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    chart = (folder / "notes.chart").read_text(encoding="utf-8")
+    assert '"lyric Hel-"' in chart and '"lyric world"' in chart and chart.count("phrase_start") == 1
+    d2 = c.get("/api/songs/Muse - Uprising/chart").json()
+    assert [w[1] for w in d2["lyrics"]["lines"][0]["words"]] == ["Hel-", "lo", "world"]
+    assert d2["lyrics"]["source"] == "chart"
+    # all lines removed: no lyrics left in the chart
+    d2["lyrics"] = []
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d2).status_code == 200
+    assert "lyric" not in (folder / "notes.chart").read_text(encoding="utf-8")
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["lyrics"]["lines"] == []
+    bad = dict(d2, lyrics=[{"start": "x"}])
+    assert c.post("/api/songs/Muse - Uprising/chart", json=bad).status_code == 400
+
+
 @pytest.mark.skipif(not (PROJECT / "data/checkpoints/reduce/reduce.pkl").exists(), reason="no reducer model")
 def test_easier_difficulties_from_expert(env):
     c, folder = env.client, _charted(env)

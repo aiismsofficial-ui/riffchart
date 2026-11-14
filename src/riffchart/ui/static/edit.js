@@ -38,6 +38,9 @@ function editTracks(chart) {      // server tracks (final note types) -> editabl
 }
 function initEdit(chart) {
   S.edit = editTracks(chart);
+  S.lyrics = (chart.lyrics && chart.lyrics.lines) || [];     // [{start, end, words: [[s, word]...]}], audio time
+  S.lyricsSource = (chart.lyrics && chart.lyrics.source) || "";
+  E.lyricsClean = JSON.stringify(S.lyrics);
   for (const d of DIFFS) rebuild(d);
   E.clean = contentSnap();
   initSync();
@@ -71,14 +74,14 @@ function rebuildAll() {
 // ---------------------------------------------------------------- undo / redo / dirty
 // timing = tempo map, time signatures, resolution and HOPO threshold (a sync nudge or a restored version)
 const timing = () => ({ tempo: S.chart.tempo, ts: S.chart.ts, res: S.chart.resolution, thr: S.chart.hopo_threshold });
-const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, timing: timing(), sel: [E.sel.diff, [...E.sel.ticks]] });
+const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, lyrics: S.lyrics, timing: timing(), sel: [E.sel.diff, [...E.sel.ticks]] });
 function setTempo(tempo) { S.chart.tempo = tempo; S.tempo = new Tempo(S.chart.resolution, tempo, S.chart.ts); }
 function setTiming(t) {
   S.chart.ts = t.ts; S.chart.resolution = t.res; S.chart.hopo_threshold = t.thr; setTempo(t.tempo);
 }
 function restore(snap) {
   const o = JSON.parse(snap);
-  S.edit = o.edit; S.chart.sections = o.sections;
+  S.edit = o.edit; S.chart.sections = o.sections; S.lyrics = o.lyrics || [];
   if (JSON.stringify(o.timing) !== JSON.stringify(timing())) setTiming(o.timing);
   E.sel = { diff: o.sel[0], ticks: new Set(o.sel[1]) };
   rebuildAll();
@@ -97,14 +100,16 @@ function undo() {
   E.redo.push({ snap: snapshot(), label: u.label }); restore(u.snap); markDirty(); showSync(); toast("Undo: " + u.label);
   if (typeof historyChanged === "function") historyChanged(false);
   if (typeof tempoChanged === "function") tempoChanged();
+  if (typeof lyricsChanged === "function") lyricsChanged();
 }
 function redo() {
   const r = E.redo.pop(); if (!r) return toast("Nothing to redo");
   E.undo.push({ snap: snapshot(), label: r.label }); restore(r.snap); markDirty(); showSync(); toast("Redo: " + r.label);
   if (typeof historyChanged === "function") historyChanged(false);
   if (typeof tempoChanged === "function") tempoChanged();
+  if (typeof lyricsChanged === "function") lyricsChanged();
 }
-const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, timing: timing() });
+const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, lyrics: S.lyrics, timing: timing() });
 function markDirty() { E.dirty = contentSnap() !== E.clean; updateButtons(); }   // undo back to saved = clean
 function updateButtons() {
   $("#save").disabled = !E.dirty || E.saving; $("#undo").disabled = !E.undo.length; $("#redo").disabled = !E.redo.length;
@@ -134,11 +139,13 @@ async function save() {
   E.saving = true; updateButtons();
   const sent = contentSnap();
   const body = chartPayload();
+  const lyr = JSON.stringify(S.lyrics || []);
+  if (lyr !== E.lyricsClean) body.lyrics = S.lyrics;          // only when edited: lyrics.json is rewritten
   try {
     const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/chart`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
-    E.clean = sent; E.dirty = contentSnap() !== sent; E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    E.clean = sent; E.lyricsClean = lyr; E.dirty = contentSnap() !== sent; E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     toast(j.warning ? `Saved notes.chart. ${j.warning}` : "Saved notes.chart (the previous version is kept: History lists it)", !!j.warning);
     if (typeof historyChanged === "function") historyChanged(true);
   } catch (e) { toast("Save failed: " + e.message, true); }

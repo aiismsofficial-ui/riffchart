@@ -205,18 +205,22 @@ def load(folder: Path) -> list[Line] | None:
 _CH_SPECIAL = re.compile(r'["#^*%/+$_§=\[\]{}<>]')
 
 
-def _word(w: str) -> str:
-    """Clone Hero reads some symbols as markup (- joins syllables, = is a hyphen, # ^ * are vocal marks)."""
+def _word(w: str, syllables: bool = False) -> str:
+    """Clone Hero reads some symbols as markup (- joins syllables, = is a hyphen, # ^ * are vocal marks).
+    syllables: keep a trailing "-" (lyrics edited by hand: "Hel-" "lo" shows as "Hello")."""
     w = _CH_SPECIAL.sub("", w).strip()
+    if syllables and len(w) > 1 and w.endswith("-"):
+        return w.rstrip("-") + "-"
     return w.rstrip("-") if w.endswith("-") else w
 
 
-def to_events(lines: list[Line], tempo, offset_s: float = 0.0, end_s: float | None = None) -> list[tuple[int, str]]:
+def to_events(lines: list[Line], tempo, offset_s: float = 0.0, end_s: float | None = None,
+              syllables: bool = False) -> list[tuple[int, str]]:
     """.chart [Events] entries. offset_s: audio time = chart time + offset_s."""
     ev: list[tuple[int, str]] = []
     last_end = -1
     for ln in lines:
-        words = [(t, _word(w)) for t, w in ln.words]
+        words = [(t, _word(w, syllables)) for t, w in ln.words]
         words = [(t, w) for t, w in words if w and (end_s is None or t < end_s)]
         if not words:
             continue
@@ -233,6 +237,41 @@ def to_events(lines: list[Line], tempo, offset_s: float = 0.0, end_s: float | No
         ev.append((end, "phrase_end"))
         last_end = end
     return ev
+
+
+def from_events(events: list[tuple[int, str]], tempo, offset_s: float = 0.0) -> list[Line]:
+    """Lines (audio seconds) from a chart's own lyric events: phrase_start / lyric x / phrase_end. A lyric
+    outside a phrase starts one; the vocal marks (# ^ = and the like) are left in the words as written."""
+    sec = lambda k: float(tempo.tick_to_sec(k)) + offset_s
+    lines: list[Line] = []
+    cur: Line | None = None
+    for tick, e in sorted(events, key=lambda x: x[0]):
+        if e == "phrase_start" or (e.startswith("lyric ") and cur is None):
+            if cur is not None and cur.words:
+                lines.append(cur)
+            cur = Line(sec(tick), sec(tick), [])
+        if e.startswith("lyric "):
+            w = e[6:].strip()
+            if w:
+                cur.words.append((sec(tick), w))
+                cur.end = max(cur.end, sec(tick) + 0.3)
+        elif e == "phrase_end" and cur is not None:
+            cur.end = max(sec(tick), cur.words[-1][0] + 0.05 if cur.words else sec(tick))
+            if cur.words:
+                lines.append(cur)
+            cur = None
+    if cur is not None and cur.words:
+        lines.append(cur)
+    return lines
+
+
+def info(folder: Path) -> dict:
+    """lyrics.json's fields besides the lines (source, word_sync, edited...), or {}."""
+    try:
+        d = json.loads((Path(folder) / ".riffchart" / FILE).read_text(encoding="utf-8"))
+        return {k: v for k, v in d.items() if k != "lines"}
+    except (OSError, ValueError):
+        return {}
 
 
 def summary(folder: Path) -> dict | None:
@@ -262,7 +301,8 @@ def attach(song, folder: Path, ini: dict | None = None, audio_s: float | None = 
         delay = float((ini or {}).get("delay", 0) or 0) / 1000
     except ValueError:
         pass
-    song.lyrics = to_events(lines, song.tempo, song.chart_offset_s + delay, audio_s)
+    song.lyrics = to_events(lines, song.tempo, song.chart_offset_s + delay, audio_s,
+                            syllables=bool(info(folder).get("edited")))
     return sum(1 for _, e in song.lyrics if e.startswith("lyric "))
 
 

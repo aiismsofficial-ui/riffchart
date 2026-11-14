@@ -55,6 +55,7 @@
   <button id="lowerbtn" class="ghost small" title="Make Hard, Medium and Easy again from the Expert you see now, the way a fresh chart makes them (one Undo step; nothing is saved until you Save)">&#8681; Easier from Expert</button>
   <button id="secbtn" class="ghost small" title="Name the song's parts (Intro, Verse 1, Chorus 1, Guitar Solo…) from the audio and lyrics. Replaces the sections; one Undo step, nothing saved until you Save">&#9776; Auto sections</button>
   <button id="tempobtn" class="ghost small" title="BPM and time-signature markers: edit them, tap a tempo, or drag beat lines on the waveform to line the chart up with the audio">&#9833; Tempo map</button>
+  <button id="lyrbtn" class="ghost small" title="The song's lyrics: fix words, drag them on the waveform or tap along to time them, shift them all">&#9835; Lyrics</button>
   <button id="rptbtn" class="ghost small" title="Flag a place where the chart goes wrong (F), with a short note, for the feedback file">&#9873; Report a spot</button>
   <button id="histbtn" class="ghost small" title="Earlier versions of this chart: look at one, then Save to restore it">History</button>
   <button id="issuesbtn" class="ghost small issuesbtn" title="Playability problems in this difficulty (. and , jump to the next / previous)">Checking…</button>
@@ -133,6 +134,19 @@
     <div class="trow" style="padding:6px 12px"><button class="small" id="rhere">⚑ Report the playhead (F)</button></div>
     <ol id="rlist"></ol>
   </aside>
+  <aside id="lyricspanel" class="issues histpanel lyrpanel" hidden aria-label="Lyrics">
+    <div class="ihead"><b>Lyrics</b> <span class="muted" id="lsrc"></span>
+      <button class="ghost small" id="lclose" aria-label="Close">✕</button></div>
+    <p class="muted hnote">Change a line's words in its box (Enter). <b>Drag a word on the waveform</b> to where
+      it's sung, or use <b>Tap timing</b>: play and press <kbd>W</kbd> as each yellow word starts. "Hel- lo" shows
+      as "Hello" in the game. Save writes them into the chart.</p>
+    <div class="trow"><button class="ghost small" id="ladd" title="A new line starting at the playhead">+ Line at playhead</button>
+      <button class="ghost small" id="ltap" title="Time the words by tapping W along with the singing">Tap timing</button></div>
+    <div class="trow"><span class="muted">All lyrics</span>
+      <button class="ghost small icon" id="learly" title="All lyrics 50 ms earlier (Shift: 200 ms)" aria-label="Earlier">&minus;</button>
+      <button class="ghost small icon" id="llate" title="All lyrics 50 ms later (Shift: 200 ms)" aria-label="Later">+</button></div>
+    <ol id="llist"></ol>
+  </aside>
   <div id="loading" class="loading">Loading chart and audio…</div>
 </div>
 
@@ -147,7 +161,8 @@
         <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p>
         <p><kbd>Shift</kbd>+<kbd>[</kbd><kbd>]</kbd> sync: whole chart 5 ms earlier / later</p>
         <p><b>Tempo map</b>: drag beat lines on the waveform · <kbd>B</kbd> tap tempo</p>
-        <p><kbd>F</kbd> report a spot where the chart goes wrong</p></div>
+        <p><kbd>F</kbd> report a spot where the chart goes wrong</p>
+        <p><b>Lyrics</b>: drag words on the waveform · <kbd>W</kbd> tap timing</p></div>
       <div><h4>Notes</h4>
         <p><b>Click</b> empty lane: add (snaps to the grid) · <b>right-click</b> a gem: delete it</p>
         <p><kbd>1</kbd>–<kbd>5</kbd> toggle G R Y B O on the selection, or add at the playhead · <kbd>0</kbd> open</p>
@@ -176,5 +191,6 @@
 <script src="history.js"></script>
 <script src="tempo.js"></script>
 <script src="reports.js"></script>
+<script src="lyrics.js"></script>
 </body>
 </html>

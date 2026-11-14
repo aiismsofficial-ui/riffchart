@@ -300,8 +300,21 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 pass
         d = song_to_json(song, ini, audio_s)
         d.update(id=song_id, file=chart_path.name, stems=[f.name for f in stems],
-                 title=ini.get("name", song_id), artist=ini.get("artist", ""), warnings=song.warnings[:20])
+                 title=ini.get("name", song_id), artist=ini.get("artist", ""), warnings=song.warnings[:20],
+                 lyrics=_lyrics_json(folder, song, d["offset_s"]))
         return d
+
+    def _lyrics_json(folder: Path, song, offset_s: float) -> dict:
+        """The editor's lyrics: lines of [time s, word] in audio time, from lyrics.json (found online or
+        written down from the singing) or else the chart's own lyric events (saving writes notes.chart)."""
+        from ..product import lyrics as lyr
+        lines = lyr.load(folder)
+        source = lyr.info(folder).get("source", "") if lines else ""
+        if not lines and song.lyrics:
+            lines, source = lyr.from_events(song.lyrics, song.tempo, offset_s), "chart"
+        return {"lines": [{"start": round(ln.start, 3), "end": round(ln.end, 3),
+                           "words": [[round(t, 3), w] for t, w in ln.words]} for ln in lines or []],
+                "source": source}
 
     @app.post("/api/songs/{song_id}/chart")
     def save_chart(song_id: str, body: dict = Body(...)):
@@ -321,7 +334,22 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         except Exception:
             pass
         from ..product import lyrics as lyr      # timed in seconds, so tempo edits never move them
-        if not lyr.attach(song, folder, ini) and old is not None:
+        edited = isinstance(body.get("lyrics"), list)   # edited in the editor (sent only when changed)
+        if edited:
+            try:
+                lines = [lyr.Line(float(ln["start"]), float(ln["end"]),
+                                  [(float(t), str(w).strip()) for t, w in ln["words"] if str(w).strip()])
+                         for ln in body["lyrics"] or []]
+            except (KeyError, TypeError, ValueError) as e:
+                raise HTTPException(400, f"bad lyrics: {e}")
+            lines = sorted((ln for ln in lines if ln.words), key=lambda ln: ln.start)
+            if lines:
+                prev = lyr.info(folder)
+                lyr.save(folder, lines, {**prev, "source": prev.get("source") or "chart", "edited": True})
+            else:
+                lyr.remove(folder)
+                song.lyrics = []
+        if not lyr.attach(song, folder, ini) and old is not None and not edited:
             song.lyrics = list(getattr(old, "lyrics", []))
         text = write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
                                 charter=ini.get("charter", "RiffChart"), ini=ini)
