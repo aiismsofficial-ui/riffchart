@@ -266,14 +266,95 @@ def attach(song, folder: Path, ini: dict | None = None, audio_s: float | None = 
     return sum(1 for _, e in song.lyrics if e.startswith("lyric "))
 
 
-def make(folder: Path, artist: str, title: str, vocals: np.ndarray, sr: int, audio_s: float) -> dict:
-    """Look the lyrics up, fit them to the vocals, save them in the song folder. Returns a short report."""
-    rec = fetch(artist, title, audio_s)
-    if rec is None:
-        return {"found": False}
-    lines = parse(rec)
+# ---------------------------------------------------------------- transcribing on this PC (no lyrics online)
+MIN_WORDS = 20            # fewer words than this from the vocal track: an instrumental, or noise; don't keep it
+
+
+MODES = ("online", "local", "off")   # online: lrclib.net, else transcribe here; local: only transcribe here
+
+
+def mode(config: str = "configs/product.yaml") -> str:
+    from ..paths import load_config
+    m = str(load_config(config).get("lyrics", "online"))
+    return m if m in MODES else "online"
+
+
+def sung_enough(vocals: np.ndarray, mix: np.ndarray | None) -> bool:
+    """False for an instrumental: separation leaves a vocal track 14 dB+ below the mix (product/structure.py)."""
+    if mix is None:
+        return True
+    def p95(a):
+        a = a.mean(1) if a.ndim == 2 else a
+        n = len(a) // 2048 * 2048
+        r = np.sqrt((a[:n].reshape(-1, 2048) ** 2).mean(1) + 1e-10)
+        return float(np.percentile(20 * np.log10(r), 95))
+    return p95(vocals) - p95(mix) > -14.0
+
+
+def can_transcribe() -> bool:
+    """openai-whisper installed (the optional `transcribe` extra)."""
+    try:
+        import whisper  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def transcribe(vocals: np.ndarray, sr: int, model: str = "turbo", device: str | None = None) -> list[Line]:
+    """Words and their times from the separated vocal track with Whisper, run here (the model is downloaded
+    once to data/checkpoints/whisper). Segments that look like silence or a hallucinated loop are dropped."""
+    import soxr
+    import torch
+    import whisper
+    from ..paths import project_path
+    y = vocals.mean(1) if vocals.ndim == 2 else vocals
+    y16 = soxr.resample(y.astype(np.float32), sr, 16000) if sr != 16000 else y.astype(np.float32)
+    dev = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    if dev == "cpu" and model in ("turbo", "large", "large-v3", "large-v3-turbo", "medium"):
+        model = "small"                                  # the big ones take many minutes a song without a GPU
+    m = whisper.load_model(model, device=dev, download_root=str(project_path("data/checkpoints/whisper")))
+    try:
+        r = m.transcribe(y16, word_timestamps=True, condition_on_previous_text=False, fp16=dev == "cuda",
+                         no_speech_threshold=0.6, logprob_threshold=-1.0, compression_ratio_threshold=2.4,
+                         verbose=None)
+    finally:
+        del m
+        if dev == "cuda":
+            torch.cuda.empty_cache()
+    lines: list[Line] = []
+    for seg in r.get("segments", []):
+        if seg.get("no_speech_prob", 0) > 0.6 or seg.get("avg_logprob", 0) < -1.2 or \
+                seg.get("compression_ratio", 1) > 2.4:
+            continue
+        words = [(float(w["start"]), w["word"].strip()) for w in seg.get("words", [])
+                 if w["word"].strip() and w.get("probability", 1.0) > 0.2]
+        if not words:
+            continue
+        text = " ".join(w for _, w in words).lower()
+        if len(lines) >= 3 and all(" ".join(w for _, w in ln.words).lower() == text for ln in lines[-3:]):
+            continue                                     # the same line a 4th time running: a loop
+        lines.append(Line(min(float(seg["start"]), words[0][0]), float(seg["end"]), words))
+    return lines
+
+
+def make(folder: Path, artist: str, title: str, vocals: np.ndarray, sr: int, audio_s: float,
+         online: bool = True, local: bool = True, device: str | None = None, mix: np.ndarray | None = None) -> dict:
+    """Look the lyrics up and fit them to the vocals; with none online (or no names to look up), transcribe
+    the vocal track on this PC when Whisper is installed. Saves them in the song folder; returns a report."""
+    rec = fetch(artist, title, audio_s) if online and artist and title else None
+    lines = parse(rec) if rec is not None else []
     if not lines:
-        return {"found": False}
+        if not (local and can_transcribe()):
+            return {"found": False}
+        if not sung_enough(vocals, mix):
+            return {"found": False, "instrumental": True}
+        lines = transcribe(vocals, sr, device=device)
+        n = sum(len(ln.words) for ln in lines)
+        if n < MIN_WORDS:
+            return {"found": False, "transcribed_words": n}
+        info = {"source": "whisper", "word_sync": True, "shift_s": 0.0}
+        save(folder, lines, info)
+        return {"found": True, "words": n, **info}
     # Same length as the database's recording: the same cut, so only a small slip is possible, and searching
     # wide only finds chance matches (seen: +13.8 s on a song that needed -0.2 s). A different length (a video
     # intro, a radio edit) needs the wide search and a clearer winner. Unsure: keep the database's timing.

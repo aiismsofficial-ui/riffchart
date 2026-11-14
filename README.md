@@ -35,7 +35,9 @@ minutes later. A graphics card is optional.
   online (opt-in: only the artist and title are sent).
 - **Lyrics:** charts get the song's lyrics, timed word by word to the singing, shown by Clone Hero and YARG
   (looked up on lrclib.net, a free lyrics database: only the artist, title and length are sent; switch it off
-  in Settings). Songs already in your library get them from Song details.
+  in Settings). When a song isn't there, or you'd rather nothing is sent, the singing is written down by
+  speech recognition (Whisper) running on your own PC. Songs already in your library get them from Song
+  details.
 - **Separate audio per instrument:** guitar, bass, drums, vocals and keys each get their own track, so you
   can turn instruments up or down in Clone Hero and YARG. Songs charted with an older version can be
   **brought up to date** from the library (own instrument tracks, lyrics, sharper backgrounds) without
@@ -110,7 +112,7 @@ For development:
 
 ```bash
 python -m pip install --user uv
-uv sync --extra dev --extra cuda --python 3.12      # or --extra cpu
+uv sync --extra dev --extra cuda --extra transcribe --python 3.12      # or --extra cpu
 .venv/Scripts/python -m pytest -q
 ```
 

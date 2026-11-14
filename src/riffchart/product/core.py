@@ -325,9 +325,10 @@ class RiffCharter:
         ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
         has_parts = [f"{n}.ogg" for n in INSTRUMENT_FILES.values() if (folder / f"{n}.ogg").exists()]
         want_parts = self.cfg["audio"].get("split_instruments", True) and not has_parts and song_ogg.exists()
-        from ..paths import load_config
-        online = load_config(self.config_path).get("lyrics", "online") == "online"
-        want_lyrics = online and lyrics.load(folder) is None and ini.get("artist") and ini.get("name")
+        lmode = lyrics.mode(self.config_path)
+        named = bool(ini.get("artist") and ini.get("name"))
+        want_lyrics = lyrics.load(folder) is None and (
+            (lmode == "online" and (named or lyrics.can_transcribe())) or (lmode == "local" and lyrics.can_transcribe()))
         if has_parts:
             notes.append("already has its own instrument tracks")
         elif not song_ogg.exists():
@@ -377,7 +378,10 @@ class RiffCharter:
                 else:
                     voc, vsr = load_audio(folder / "vocals.ogg", OUT_SR, mono=False)
                 audio_s = len(voc) / vsr
-                lyrics.make(folder, ini["artist"], ini["name"], voc, vsr, audio_s)
+                lyrics.make(folder, ini.get("artist", ""), ini.get("name", ""), voc, vsr, audio_s,
+                            online=lmode == "online", device=self.device,
+                            mix=soxr.resample(mix, OUT_SR, vsr) if stems is not None and vsr != OUT_SR else
+                            (mix if stems is not None else None))
                 song, _, chart_path = load_song(folder)
                 if chart_path.suffix.lower() == ".chart":
                     words = lyrics.attach(song, folder, ini, audio_s)
@@ -393,7 +397,7 @@ class RiffCharter:
                 else:
                     notes.append("lyrics are only written into .chart songs")
                 if not out["lyrics"] and not notes[-1:] == ["lyrics are only written into .chart songs"]:
-                    notes.append("no lyrics found online")
+                    notes.append("no lyrics found" + (" online" if lmode == "online" and not lyrics.can_transcribe() else ""))
             except Exception as e:                          # offline, LRCLIB down: the rest still counts
                 log.warning("lyrics skipped for %s: %s", folder.name, e)
                 notes.append(f"lyrics skipped ({type(e).__name__})")
@@ -427,15 +431,17 @@ class RiffCharter:
             return []
 
     def add_lyrics(self, song, folder: Path, meta, an: dict, audio_s: float, stage, done) -> int:
-        """Lyrics timed to the singing (`lyrics: online` looks them up on LRCLIB). A song re-charted in place
+        """Lyrics timed to the singing (`lyrics: online` looks them up on LRCLIB, else transcribes the vocal track
+        here when Whisper is installed; `local` only transcribes). A song re-charted in place
         keeps the lyrics it already has. Never fails the chart: lyrics are a bonus."""
         from . import lyrics
         try:
-            from ..paths import load_config
-            online = load_config(self.config_path).get("lyrics", "online") == "online"   # Settings may change it
-            if lyrics.load(folder) is None and online and meta.artist and meta.title:
+            lmode = lyrics.mode(self.config_path)                               # Settings may change it
+            if lyrics.load(folder) is None and lmode != "off":
                 stage("lyrics")
-                lyrics.make(folder, meta.artist, meta.title, an["stems"]["vocals"], self.sep.sr, audio_s)
+                mix = an["mix"] if self.sep.sr == OUT_SR else soxr.resample(an["mix"], OUT_SR, self.sep.sr)
+                lyrics.make(folder, meta.artist, meta.title, an["stems"]["vocals"], self.sep.sr, audio_s,
+                            online=lmode == "online", device=self.device, mix=mix)
                 done("lyrics")
             return lyrics.attach(song, folder, audio_s=audio_s)
         except Exception as e:                             # offline, LRCLIB down, odd data

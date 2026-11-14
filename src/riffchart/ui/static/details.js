@@ -257,10 +257,10 @@
   function showLyrics() {
     const L = cur.lyrics, el = q(".dt-lyrics");
     el.innerHTML = L
-      ? `Lyrics: ${L.words} words${L.word_sync ? ", timed word by word" : ", timed by line"} (lrclib.net). ` +
+      ? `Lyrics: ${L.words} words${L.word_sync ? ", timed word by word" : ", timed by line"} (${L.source === "whisper" ? "written down from the singing on this PC: check for misheard words" : "lrclib.net"}). ` +
         `<button type="button" class="linkbtn" data-k="lyrfind">Look again</button> · ` +
         `<button type="button" class="linkbtn" data-k="lyrrm">Remove</button>`
-      : `No lyrics. <button type="button" class="linkbtn" data-k="lyrfind">Find lyrics online</button>`;
+      : `No lyrics. <button type="button" class="linkbtn" data-k="lyrfind">Find lyrics</button>`;
     el.querySelector("[data-k=lyrfind]").addEventListener("click", findLyrics);
     if (L) {
       const V = cur.vocals, v = document.createElement("div");
@@ -308,14 +308,15 @@
   }
   async function findLyrics() {
     const el = q(".dt-lyrics");
-    el.textContent = "Looking for lyrics and timing them to the singing…";
+    el.textContent = "Looking for lyrics and timing them to the singing (writing them down from the singing can take a minute)…";
     try {
       const r = await call(`/api/songs/${enc(cur.id)}/lyrics`, { method: "POST" });
       if (r.found) {
         cur.lyrics = r.lyrics; showLyrics();
         toast(`Added ${r.words} words of lyrics.` + (cur.exported ? " Save & update in Clone Hero to copy them there." : ""));
       } else {
-        showLyrics(); toast("lrclib.net has no timed lyrics for this artist and title. Check the names and try again.", true);
+        showLyrics(); toast(r.transcribed ? "No lyrics found online, and no clear singing to write down (an instrumental?)."
+          : "lrclib.net has no timed lyrics for this artist and title. Check the names and try again.", true);
       }
     } catch (err) { showLyrics(); toast(`Lyrics: ${err.message}`, true); }
   }

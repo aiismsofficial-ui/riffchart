@@ -128,11 +128,16 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
                 "lyrics": str(_paths_load(product_cfg).get("lyrics", "online")),
+                "can_transcribe": _can_transcribe(),
                 "background_quality": str(_paths_load(product_cfg).get("background_quality", "screen")),
                 "moonscraper": _moonscraper(),
                 "clone_hero": {"settings": str(st), "found": st.exists(), "exe": str(exe) if exe else None,
                                "running": clonehero.is_running(), "folders": folders,
                                "options": setup.read_options(st), "labels": setup.CH_OPTIONS}}
+
+    def _can_transcribe() -> bool:
+        from ..product.lyrics import can_transcribe
+        return can_transcribe()
 
     def _moonscraper() -> str | None:
         from ..product.sng import find_moonscraper
@@ -192,7 +197,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True,
                    clone_hero_exe=str(exe) if exe else None, moonscraper_exe=str(ms) if ms else None)
         lib.export_dir, lib.protected = export, prot
-        if body.get("lyrics") in ("online", "off"):
+        if body.get("lyrics") in ("online", "local", "off"):
             setup.write_local(product_cfg, {"lyrics": body["lyrics"]})
         if body.get("background_quality") in ("screen", "1440", "1080"):
             setup.write_local(product_cfg, {"background_quality": body["background_quality"]})
@@ -696,8 +701,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         check_writable(folder, lib.protected)
         ini = _ini(folder)
         artist, title = ini.get("artist", "").strip(), ini.get("name", "").strip()
-        if not artist or not title:
-            raise HTTPException(400, "give the song an artist and a title first")
+        online = lyr.mode(product_cfg) != "local"               # the button asks; Settings "on this PC only" wins
+        if not lyr.can_transcribe() and (not online or not artist or not title):
+            raise HTTPException(400, "give the song an artist and a title first" if online else
+                                "transcribing needs Whisper: install RiffChart's 'transcribe' extra")
         stems = audio_files(folder)
         if not stems:
             raise HTTPException(409, "this song has no audio")
@@ -714,11 +721,15 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                     _sep.append(Separator(device="cuda" if torch.cuda.is_available() else "cpu"))
                 vocals = _sep[0](mix)["vocals"]
         try:
-            rep = lyr.make(folder, artist, title, vocals, sr, audio_s)
+            if lyr.can_transcribe():                            # may run Whisper: one GPU user at a time
+                rep = queue.run_on_model(lambda ac: lyr.make(folder, artist, title, vocals, sr, audio_s,
+                                                             online=online, device=ac.device))
+            else:
+                rep = lyr.make(folder, artist, title, vocals, sr, audio_s, online=online)
         except OSError as e:
             raise HTTPException(502, f"couldn't reach lrclib.net: {e}")
         if not rep.get("found"):
-            return {"found": False, "lyrics": None}
+            return {"found": False, "lyrics": None, "transcribed": lyr.can_transcribe()}
         rep["words"] = _rewrite_chart(folder)
         return {**rep, "lyrics": lyr.summary(folder)}
 

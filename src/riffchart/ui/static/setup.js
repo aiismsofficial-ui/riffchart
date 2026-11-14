@@ -45,7 +45,9 @@ function render() {
     for (const p of ch.folders) if (!seen.has(norm(p)) && norm(p) !== norm(S.export_dir)) { prot.push({ path: p, on: first, ch: true }); seen.add(norm(p)); }
   }
   renderProt();
-  $("#lyrics").checked = S.lyrics !== "off";
+  $("#lyrics").value = ["online", "local", "off"].includes(S.lyrics) ? S.lyrics : "online";
+  $("#lyrstate").textContent = S.can_transcribe ? "" :
+    "Writing lyrics down from the singing needs the optional 'transcribe' part of RiffChart (see the README); without it only online lyrics are added.";
   $("#bgq").value = S.background_quality || "screen";
   const box = $("#opts");
   box.innerHTML = "";
@@ -88,7 +90,7 @@ $("#save").addEventListener("click", async () => {
     moonscraper_exe: $("#msexe").value.trim().replace(/^"|"$/g, "") || null,
     protected: prot.filter((p) => p.on).map((p) => p.path),
     register: !$("#regrow").hidden && $("#register").checked, options,
-    lyrics: $("#lyrics").checked ? "online" : "off", background_quality: $("#bgq").value };
+    lyrics: $("#lyrics").value, background_quality: $("#bgq").value };
   if (!body.export_dir) { toast("Choose a folder for your finished songs", true); $("#export").focus(); return; }
   if (prot.some((p) => p.on && norm(body.export_dir).startsWith(norm(p.path) + "\\"))) {
     toast("The songs folder can't be inside a folder RiffChart never changes", true); return;

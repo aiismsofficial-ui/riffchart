@@ -59,10 +59,16 @@
 
   <section class="card">
     <h2><span class="su-n">5</span> Lyrics</h2>
-    <label class="su-check"><input type="checkbox" id="lyrics" checked> Add lyrics to new charts</label>
-    <p class="muted">RiffChart looks the song up on <a href="https://lrclib.net" target="_blank" rel="noopener">lrclib.net</a>,
+    <label>Lyrics for new charts <select id="lyrics">
+      <option value="online">Look them up online, else write them down from the singing on this PC</option>
+      <option value="local">Only write them down from the singing, on this PC (nothing is sent anywhere)</option>
+      <option value="off">No lyrics</option></select></label>
+    <p class="muted">Online, RiffChart looks the song up on <a href="https://lrclib.net" target="_blank" rel="noopener">lrclib.net</a>,
       a free lyrics database (only the artist, title and length are sent), and times the words to the singing in your
-      file. Clone Hero shows them when its Lyrics option is on.</p>
+      file. When it has none, or with "only on this PC", the singing is written down by speech recognition
+      (Whisper) running on your PC: about half a minute a song with a graphics card, and a one-time 1.5 GB download.
+      It mishears some words; fix them in the chart if you like. Clone Hero shows lyrics when its Lyrics option is on.</p>
+    <p class="muted su-state" id="lyrstate"></p>
   </section>
 
   <section class="card">

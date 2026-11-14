@@ -97,7 +97,8 @@ Say "  installing for: $(if ($flavour -eq 'cuda') { 'NVIDIA graphics card' } els
 Step 3 "Python 3.12 and the app's packages (several minutes the first time)"
 Push-Location $Root
 try {
-    & $Uv sync --frozen --python 3.12 --extra $flavour
+    # transcribe = Whisper, for lyrics when none are online (its model downloads on first use only)
+    & $Uv sync --frozen --python 3.12 --extra $flavour --extra transcribe
     if ($LASTEXITCODE -ne 0) { Fail "installing the packages failed (see the messages above)" }
 } finally { Pop-Location }
 $Py = Join-Path $Root ".venv\Scripts\python.exe"

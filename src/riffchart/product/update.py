@@ -43,7 +43,7 @@ def settings() -> tuple[bool, bool]:
     if _cfg.get("key") != key:
         c = load_config("configs/product.yaml")
         _cfg.update(key=key, v=(bool(c.get("audio", {}).get("split_instruments", True)),
-                                c.get("lyrics", "online") == "online"))
+                                c.get("lyrics", "online") in ("online", "local")))
     return _cfg["v"]
 
 

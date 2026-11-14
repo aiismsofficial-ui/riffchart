@@ -74,3 +74,22 @@ def test_attach_reads_saved_lyrics(tmp_path):
     song = Song(192, _tempo(), {})
     assert L.attach(song, tmp_path) == 1
     assert [e for _, e in song.lyrics] == ["phrase_start", "lyric yo", "phrase_end"]
+
+
+def test_transcribe_fallback_when_nothing_online(tmp_path, monkeypatch):
+    import numpy as np
+    from riffchart.product import lyrics as lyr
+    monkeypatch.setattr(lyr, "fetch", lambda *a, **k: None)
+    monkeypatch.setattr(lyr, "can_transcribe", lambda: True)
+    words = [(1.0 + i * 0.5, f"w{i}") for i in range(30)]
+    monkeypatch.setattr(lyr, "transcribe", lambda v, sr, device=None: [lyr.Line(1.0, 16.0, words)])
+    loud = np.ones(44100 * 20, np.float32) * 0.1
+    rep = lyr.make(tmp_path, "", "", loud, 44100, 20.0)               # no names: straight to transcribing
+    assert rep["found"] and rep["source"] == "whisper" and rep["words"] == 30
+    assert lyr.summary(tmp_path)["source"] == "whisper"
+    lyr.remove(tmp_path)
+    quiet = loud * 0.01                                                # an instrumental's leftover vocal track
+    assert lyr.make(tmp_path, "", "", quiet, 44100, 20.0, mix=loud)["found"] is False
+    monkeypatch.setattr(lyr, "transcribe", lambda v, sr, device=None: [lyr.Line(1.0, 2.0, words[:3])])
+    assert lyr.make(tmp_path, "", "", loud, 44100, 20.0)["found"] is False   # a few stray words: no lyrics
+    assert lyr.make(tmp_path, "a", "b", loud, 44100, 20.0, local=False)["found"] is False
