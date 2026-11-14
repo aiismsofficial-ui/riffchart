@@ -4,11 +4,12 @@
 # models. Nothing is installed system-wide and nothing needs admin rights. To uninstall, run
 # uninstall.bat.
 #
-#   install.ps1 [-Cpu | -Cuda] [-NoShortcut] [-NoStart] [-Yes]
+#   install.ps1 [-Cpu | -Cuda] [-NoShortcut] [-NoStart] [-Yes] [-PauseOnError]
 #     -Cpu / -Cuda  skip the question (PyTorch for any PC, or for NVIDIA graphics cards)
 #     -Yes          accept the suggested answers (for unattended installs)
+#     -PauseOnError keep the window open when something fails (Setup.exe runs it this way)
 
-param([switch]$Cpu, [switch]$Cuda, [switch]$NoShortcut, [switch]$NoStart, [switch]$Yes)
+param([switch]$Cpu, [switch]$Cuda, [switch]$NoShortcut, [switch]$NoStart, [switch]$Yes, [switch]$PauseOnError)
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"            # Invoke-WebRequest is very slow with its progress bar
@@ -23,6 +24,8 @@ function Step($n, $msg) { Write-Host ""; Write-Host "[$n/5] $msg" -ForegroundCol
 function Fail($msg) {
     Write-Host ""; Write-Host "Installation stopped: $msg" -ForegroundColor Red
     Write-Host "Fix that and run install.bat again: finished steps are skipped." -ForegroundColor Yellow
+    Write-Host "(This window's text is saved in tools\install.log, for a bug report.)" -ForegroundColor Yellow
+    if ($PauseOnError) { Read-Host "Press Enter to close this window" | Out-Null }
     exit 1
 }
 function Ask($question, $default) {
@@ -31,6 +34,9 @@ function Ask($question, $default) {
     if ([string]::IsNullOrWhiteSpace($a)) { return $default }
     return $a.Trim()
 }
+
+New-Item -ItemType Directory -Force -Path (Join-Path $Root "tools") | Out-Null
+try { Start-Transcript -Path (Join-Path $Root "tools\install.log") -Append | Out-Null } catch { }   # for bug reports
 
 Write-Host ""
 Write-Host "  RiffChart installer" -ForegroundColor Yellow
@@ -69,9 +75,14 @@ $nvidia = $gpus | Where-Object { $_ -match "NVIDIA" } | Select-Object -First 1
 $driverOk = $false
 if ($nvidia) {
     $smi = Get-Command nvidia-smi -ErrorAction SilentlyContinue
+    if (-not $smi) {                                # not on PATH: the driver's usual places
+        $smi = @((Join-Path $env:SystemRoot "System32\nvidia-smi.exe"),
+                 (Join-Path $env:ProgramFiles "NVIDIA Corporation\NVSMI\nvidia-smi.exe")) |
+               Where-Object { Test-Path $_ } | Select-Object -First 1
+    } else { $smi = $smi.Source }
     if ($smi) {
         try {
-            $ver = (& nvidia-smi --query-gpu=driver_version --format=csv,noheader | Select-Object -First 1).Trim()
+            $ver = (& $smi --query-gpu=driver_version --format=csv,noheader | Select-Object -First 1).Trim()
             $driverOk = ([double]($ver.Split(".")[0])) -ge $MinNvidiaDriver
             Say "  found $nvidia (driver $ver)"
         } catch { Say "  found $nvidia (driver version unknown)" }

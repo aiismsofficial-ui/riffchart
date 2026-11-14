@@ -116,7 +116,7 @@ async function newTake() {
     const t0 = performance.now();
     const seed = Math.floor(Math.random() * 1e9);
     const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/section`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chart: chartPayload(), start: R.a, end: R.b, seed, options: o }) });
+      body: JSON.stringify({ chart: chartPayload(), start: R.a, end: R.b, seed, options: o, part: PART }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     if (j.start !== R.a || j.end !== R.b) throw new Error("the section changed while charting; try again");
@@ -161,6 +161,8 @@ function renderRechart() {
 }
 function openRechart() {
   if (!S.edit) return;
+  if (typeof PART !== "undefined" && PART !== "guitar")
+    return toast(`Re-charting a section works on the guitar part only (the ${PART} part is charted from its own track)`, true);
   R.bars = rcBars();
   if (R.bars.length < 2) return toast("This chart has no bars to re-chart", true);
   $("#issues").hidden = true;

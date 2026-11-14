@@ -23,7 +23,9 @@ from ..audio.io import AUDIO_EXT
 from .meta import GENERIC
 
 STAGE_LABEL = {"load": "loading", "separate": "separating guitar", "beats": "tracking beats",
-               "chart": "charting", "post": "polishing", "write": "writing"}
+               "chart": "charting", "post": "polishing", "write": "writing", "bass": "charting the bass",
+               "keys": "charting the keys", "lyrics": "finding lyrics", "visuals": "making backgrounds",
+               "video": "converting the music video"}
 
 
 BACKGROUND_VIDEO = {"video", "background", "bg"}
@@ -103,9 +105,9 @@ def main(argv=None) -> int:
     bar = tqdm(files, unit="song", dynamic_ncols=True, bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}]")
     for i, f in enumerate(bar):
         def on_stage(name, f=f, i=i):
-            bar.set_description(f"{display_name(f)[:40]} | {STAGE_LABEL[name]}")
-            log.write(time.strftime("%H:%M:%S ") + f"[{i + 1}/{len(files)}] {display_name(f)[:60]}: "
-                      f"{STAGE_LABEL[name]}\n")
+            label = STAGE_LABEL.get(name, name)              # a stage added later never stops a chart
+            bar.set_description(f"{display_name(f)[:40]} | {label}")
+            log.write(time.strftime("%H:%M:%S ") + f"[{i + 1}/{len(files)}] {display_name(f)[:60]}: {label}\n")
             log.flush()
         try:
             r = ac.chart_file(f, out, args.difficulties, style, write_stems=not args.no_stems,

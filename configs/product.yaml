@@ -19,6 +19,10 @@ audio:
 highway: riffchart         # each song's highway.png (Clone Hero: Song Highways setting): riffchart | cover | none
 keep_video: true           # charting a music video (mp4 / webm / mkv) keeps its picture as video.mp4 / .webm
 bass_chart: true           # also chart the bass (from the bass track; about doubles the charting time). Settings
+keys_chart: false          # experimental: also chart the keys (piano track). Weaker than guitar / bass (eval: F1 0.54 Expert). Settings
+keys:                      # tuning (scripts/eval_bass.py --part keys)
+  density: 0.0
+  singles: false
 bass:                      # tuning (product/bass.py, scripts/eval_bass.py)
   density: 0.0             # the chart model's sparser (-1) / denser (+1) control for bass
   singles: true            # chords made single notes (human bass parts: 2% chords; exact frets 16% -> 26%)
@@ -26,6 +30,7 @@ sections: auto             # auto = name the parts (Intro, Verse 1, Chorus 1, ..
 lyrics: online             # online = find lyrics on lrclib.net (sends artist, title, length) and time them to the singing; off = none
 background_quality: screen  # animated song backgrounds: screen (your screen's resolution, ~100 MB a song) | 1440 | 1080 (smallest)
 convert_video: true        # ...and converts VP9 / AV1 / HEVC (most YouTube downloads) to VP8 webm, which Clone Hero plays
+video_webm: true           # ...and H.264 .mp4 too: VP8 webm is the only video Clone Hero plays on every platform. Settings
 # diff_guitar from Expert notes per second: cut points midway between the per-level medians of the
 # train songs' song.ini ratings (775 rated songs, Spearman 0.52 with notes/s, Phase 6 notes)
 diff_guitar_nps_cuts: [2.6, 3.5, 4.05, 4.75, 5.8, 7.5]

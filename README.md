@@ -6,12 +6,12 @@ with a local web app to manage your songs and a chart editor to review and fix t
 
 Everything runs on your own PC. Your songs and charts are never uploaded anywhere.
 
-**Version 1.0** for Windows 10 / 11. Download, double-click `install.bat`, and chart your first song a few
-minutes later. A graphics card is optional.
+**Version 1.1** for Windows 10 / 11. Run **RiffChart-Setup.exe** (or unzip the ZIP and double-click
+`install.bat`), and chart your first song a few minutes later. A graphics card is optional.
 
 ## What it does
 
-- **Charts a song in about 30 seconds** on a modern NVIDIA GPU (3-4 minute song): separates the guitar
+- **Charts a song in about a minute** on a modern NVIDIA GPU (3-4 minute song; about 30 s for the guitar alone, plus the bass and keys): separates the guitar
   from the mix, finds the beats and builds a tempo map, writes the notes with a transformer model, then
   cleans the chart up so it is playable.
 - **Four difficulties that step down properly:** Hard, Medium and Easy are generated with the song and
@@ -47,6 +47,9 @@ minutes later. A graphics card is optional.
   as well as the guitar charts do (76-79% matched on Expert/Hard, vs 75% for copying the guitar part); which
   fret each note gets is rougher, so the editor has a **Bass** tab to fix it with the same tools. A dedicated
   bass model is planned.
+- **Keys charts (experimental, off by default):** the same from the piano / keyboard track, on songs that have
+  one loud enough. Rougher than guitar and bass (about 54% of notes matched on Expert, and busier than human
+  keys parts), so treat them as a first draft for the editor's **Keys** tab. Turn them on in Settings.
 - **Pitched vocals for YARG:** a song's lyrics can become sung notes at the pitch the singer hits, so YARG can
   score your singing.
 - **Report a spot:** press F in the editor where a chart goes wrong and type what's wrong; the library's
@@ -93,30 +96,34 @@ much faster). It's about twice as fast on an NVIDIA GTX 16 / RTX 20-series card 
 AMD Radeon RX 9000 / 7900 cards may work with AMD's ROCm build of PyTorch for Windows (untested).
 `device: auto | cuda | cpu` in `configs/product.yaml` picks where it runs (auto: the GPU if there is one).
 
-**Install:** download the latest release's ZIP (Releases, on the right of the GitHub page, or Code > Download
-ZIP), unzip it somewhere like `C:\RiffChart`, and double-click **install.bat**. If Windows says "Windows
-protected your PC", click **More info**, then **Run anyway**. It shows that for any script downloaded from
-the internet. To avoid that, right-click the ZIP before unzipping, choose **Properties**, tick **Unblock**
-and click OK. It needs no admin rights and installs nothing system-wide. Everything goes in that
-folder:
+**Install:** download **RiffChart-Setup.exe** from the latest release (Releases, on the right of the GitHub
+page) and run it. Windows shows "Windows protected your PC" for new programs that aren't code-signed: click
+**More info**, then **Run anyway**. Setup needs no admin rights. It copies the app into your own Programs folder,
+then a window downloads what it needs (several minutes; an NVIDIA card with a recent driver is used
+automatically, otherwise the CPU version):
 - **uv:** the tool that installs Python and the app's packages.
-- **Python 3.12.**
-- **PyTorch:** for an NVIDIA card if you have one with a recent driver, otherwise the CPU version. It asks.
+- **Python 3.12** and **PyTorch**.
 - **The model files.**
-- **Shortcuts:** RiffChart on the Desktop and in the Start menu.
 
-Expect about 3 GB with an NVIDIA card, or 1.5 GB for the CPU version. Run install.bat again at any time to repair
-or update; finished steps are skipped. To uninstall, run **uninstall.bat**. It removes the app and its
-models but keeps your charted songs unless you choose otherwise; then delete the folder.
+Expect about 3 GB with an NVIDIA card, or 1.5 GB for the CPU version. RiffChart then appears in the Start menu
+(and on the desktop if you ticked it) and in Windows' **Installed apps**, where you can uninstall it: that
+removes the app, Python and the models but keeps your charted songs; the copies in your Clone Hero songs folder
+are never touched.
 
-**Update to a new version:** download the new ZIP, unzip it over your RiffChart folder (replace the files),
-and run **install.bat** again. Your songs, highway designs and settings are kept, because they aren't in the ZIP.
-Settings shows which version you have.
+**Update to a new version:** the library shows a note when one is out. Run the new RiffChart-Setup.exe: it
+installs over the old one and keeps your songs, highway designs and settings. Coming from **RiffChart 1.0**
+(the ZIP you unzipped yourself)? On Setup's folder page click **Browse** and choose that RiffChart folder, so
+your library comes along (or unzip the new ZIP over it and run install.bat). Then **Bring up to date** in the
+library adds what's new to the songs you charted before.
+
+**Without the Setup:** download the release's ZIP instead, unzip it somewhere like `C:\RiffChart` (right-click
+the ZIP first, Properties, tick **Unblock**), and double-click **install.bat**; **uninstall.bat** removes it
+again. Run install.bat again at any time to repair; finished steps are skipped.
 
 **Problems?** [Report them on GitHub](https://github.com/aiismsofficial-ui/riffchart/issues/new/choose) with your version number (Settings),
 Windows version, CPU or graphics card, and the last lines in the RiffChart window.
 
-**Start:** the RiffChart shortcut, or `RiffChart.bat`. It opens the app in your browser; close the RiffChart
+**Start:** the RiffChart shortcut (or `RiffChart.bat` in its folder). It opens the app in your browser; close the RiffChart
 window to stop it.
 
 For development:
@@ -183,18 +190,21 @@ RiffChart is free and made by one person in their spare time. If it saves you ho
 (a dedicated bass model and drums are next on the list). Bug reports, song requests and charts that came out wrong are just as welcome:
 open an issue.
 
+## Sharing charts
+
+- **Share the chart, not the song.** A song folder or `.sng` from RiffChart contains the song's audio, which
+  is someone else's copyrighted recording. Only share it where you're allowed to share that music. The chart
+  itself (`notes.chart` + `song.ini`) has no audio in it; others can line it up with their own copy.
+- **Keep the label.** RiffChart charts say `charter = RiffChart` in `song.ini` and "Charted automatically by
+  RiffChart" on the loading screen. Please leave that in when you share one (with your name added if you've
+  edited it), so players and charters can always tell an AI chart from a hand-made one.
+- **Hand-made charts stay best.** RiffChart is for songs nobody has charted, or as a first draft to edit; if
+  a song has a good community chart, play that one.
+
 ## Licence
 
-The code is GPL-3.0 (see `LICENSE`). The model files are CC BY-NC 4.0: free to use and share with credit,
-not for commercial use. The beat tracker builds on Beat This (MIT).
-
-The charts you make are for your own play. The songs themselves are copyrighted, so think twice before
-sharing song folders that contain the audio.
-
-## Licence
-
-GPL-3.0-or-later (see [LICENSE](LICENSE)). The licence covers this code. Models, when released, will
-come with their own terms.
+The code is GPL-3.0-or-later (see [LICENSE](LICENSE)). The model files are CC BY-NC 4.0: free to use and
+share with credit, not for commercial use. The beat tracker builds on Beat This (MIT).
 
 ## Credits
 

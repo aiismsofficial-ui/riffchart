@@ -110,6 +110,35 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done(), "tip_url": tip_url(),
                 "version": __version__, "issues_url": str(cfg.get("issues_url") or "")}
 
+    _latest: dict = {}
+
+    def _vtuple(v: str) -> tuple:
+        return tuple(int(x) for x in re.findall(r"\d+", str(v))[:3]) or (0,)
+
+    @app.get("/api/update-check")
+    def update_check():
+        """Is a newer RiffChart released? Asks GitHub's releases API (nothing about you or your songs is sent;
+        at most every 6 hours). Off when Settings says so. -> {enabled, current, latest, newer, url}"""
+        url = str(cfg.get("releases_url") or "").rstrip("/")
+        if not cfg.get("update_check", True) or not url.startswith("https://github.com/"):
+            return {"enabled": False, "current": __version__}
+        now = time.time()
+        if _latest.get("at", 0) < now - 6 * 3600:
+            import urllib.request
+            api = url.replace("https://github.com/", "https://api.github.com/repos/", 1) + "/latest"
+            try:
+                req = urllib.request.Request(api, headers={"User-Agent": "RiffChart", "Accept": "application/vnd.github+json"})
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    rel = json.loads(r.read().decode("utf-8"))
+                _latest.clear()
+                _latest.update(at=now, tag=str(rel.get("tag_name", "")), url=str(rel.get("html_url") or url),
+                               name=str(rel.get("name") or rel.get("tag_name") or ""))
+            except Exception as e:                                # offline: try again later, say nothing
+                return {"enabled": True, "current": __version__, "newer": False, "error": type(e).__name__}
+        tag = _latest.get("tag", "")
+        return {"enabled": True, "current": __version__, "latest": tag.lstrip("v"), "name": _latest.get("name", ""),
+                "url": _latest.get("url", url), "newer": bool(tag) and _vtuple(tag) > _vtuple(__version__)}
+
     def tip_url() -> str:
         u = str(cfg.get("tip_url") or "").strip()
         return u if u.startswith("https://") else ""
@@ -131,6 +160,9 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
                 "lyrics": str(_paths_load(product_cfg).get("lyrics", "online")),
                 "bass_chart": bool(_paths_load(product_cfg).get("bass_chart", True)),
+                "keys_chart": bool(_paths_load(product_cfg).get("keys_chart", False)),
+                "video_webm": bool(_paths_load(product_cfg).get("video_webm", True)),
+                "update_check": bool(cfg.get("update_check", True)),
                 "can_transcribe": _can_transcribe(),
                 "background_quality": str(_paths_load(product_cfg).get("background_quality", "screen")),
                 "moonscraper": _moonscraper(),
@@ -197,13 +229,18 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                                            "clone_hero_exe": str(exe) if exe else None,
                                            "moonscraper_exe": str(ms) if ms else None,
                                            "protected": [str(p) for p in prot], "setup_done": True})
+        if isinstance(body.get("update_check"), bool):
+            setup.write_local(cfg["_config"], {"update_check": body["update_check"]})
+            cfg["update_check"] = body["update_check"]
+            _latest.clear()
         cfg.update(export_dir=export, clone_hero_settings=st, protected=prot, setup_done=True,
                    clone_hero_exe=str(exe) if exe else None, moonscraper_exe=str(ms) if ms else None)
         lib.export_dir, lib.protected = export, prot
         if body.get("lyrics") in ("online", "local", "off"):
             setup.write_local(product_cfg, {"lyrics": body["lyrics"]})
-        if isinstance(body.get("bass_chart"), bool):
-            setup.write_local(product_cfg, {"bass_chart": body["bass_chart"]})
+        for k in ("bass_chart", "keys_chart", "video_webm"):
+            if isinstance(body.get(k), bool):
+                setup.write_local(product_cfg, {k: body[k]})
         if body.get("background_quality") in ("screen", "1440", "1080"):
             setup.write_local(product_cfg, {"background_quality": body["background_quality"]})
         done = {"registered": False, "options_changed": False}
@@ -291,7 +328,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         order = {"song": 0, "guitar": 1}
         return sorted(fs, key=lambda f: (order.get(f.stem.lower(), 2), f.name.lower()))
 
-    EDIT_PARTS = ("guitar", "bass")                 # the 5-fret parts the editor can open
+    EDIT_PARTS = ("guitar", "bass", "keys")         # the 5-fret parts the editor can open
 
     def _part(part: str) -> str:
         if part not in EDIT_PARTS:
@@ -322,7 +359,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         d = song_to_json(song, ini, audio_s)
         d.update(id=song_id, file=chart_path.name, stems=[f.name for f in stems],
                  title=ini.get("name", song_id), artist=ini.get("artist", ""), warnings=song.warnings[:20],
-                 lyrics=_lyrics_json(folder, song, d["offset_s"]), part=part,
+                 lyrics=_lyrics_json(folder, song, d["offset_s"]), part=part, version=_chart_version(folder),
                  parts=[p for p in EDIT_PARTS if p == part or any(len(t) for t in song.parts.get(p, {}).values())])
         return d
 
@@ -350,15 +387,39 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         song.instrument = part
         if not any(len(t) for t in song.tracks.values()):
             raise HTTPException(400, "refusing to save a chart with no notes in any difficulty")
+        from ..product import chartfile
+        with chartfile.lock(folder):              # Bring up to date / Find lyrics write this chart too
+            if body.get("version") and body["version"] != _chart_version(folder):
+                raise HTTPException(409, "this chart was changed since the editor opened it (another tab, or "
+                                         "Bring up to date). Reload the editor to see it; your edits aren't saved yet")
+            return _save_chart(folder, song, part, body)
+
+    def _chart_version(folder: Path) -> str:
+        """Changes whenever notes.chart / notes.mid is written: the editor sends it back with a save."""
+        return ":".join(str(p.stat().st_mtime_ns) if p.exists() else "-"
+                        for p in (folder / "notes.chart", folder / "notes.mid"))
+
+    def _save_chart(folder: Path, song, part: str, body: dict) -> dict:
+        from ..product import chartfile
         ini = _ini(folder)
         old = None
         try:                                       # keep the chart's own [Song] Offset: the page sends ticks
             old = load_song(folder, part, parts=True)[0]                   # relative to it
+        except Exception as e:
+            chart = folder / "notes.chart"
+            if chart.exists():                     # a broken or partless notes.mid: notes.chart is what's saved
+                from ..formats.chart_parser import parse_chart
+                try:
+                    old = parse_chart(chart, ini, part)
+                except Exception as e2:            # never write over parts we couldn't read
+                    raise HTTPException(409, "the chart on disk can't be read, so saving could lose its other "
+                                             f"parts: {e2}")
+            elif not isinstance(e, ValueError):    # (ValueError: a .mid without this part, nothing to keep)
+                raise HTTPException(409, f"the chart on disk can't be read, so saving could lose its other parts: {e}")
+        if old is not None:
             song.chart_offset_s = old.chart_offset_s
             # the other parts (bass, drums...) the editor doesn't show, at the saved chart's resolution
             song.parts, song.raw_sections = rescale_parts(old, song.resolution)
-        except Exception:
-            pass
         from ..product import lyrics as lyr      # timed in seconds, so tempo edits never move them
         edited = isinstance(body.get("lyrics"), list)   # edited in the editor (sent only when changed)
         if edited:
@@ -376,7 +437,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 lyr.remove(folder)
                 song.lyrics = []
         if not lyr.attach(song, folder, ini) and old is not None and not edited:
-            song.lyrics = list(getattr(old, "lyrics", []))
+            # the chart's own lyric events (no lyrics.json): kept at the same times on the new tempo map
+            sec = lambda k: float(old.tempo.tick_to_sec(k)) + old.chart_offset_s
+            song.lyrics = [(int(round(float(song.tempo.sec_to_tick(max(0.0, sec(k) - song.chart_offset_s))))), e)
+                           for k, e in getattr(old, "lyrics", [])]
         text = write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
                                 charter=ini.get("charter", "RiffChart"), ini=ini)
         hist = folder / ".riffchart" / "history"
@@ -391,9 +455,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 shutil.copy2(old, hist / f"{stamp}-{name}")
         for old in sorted(hist.glob("*-notes.*"))[:-int(cfg.get("history_keep", 30))]:
             old.unlink(missing_ok=True)
-        tmp = folder / "notes.chart.tmp"
-        tmp.write_text(text, encoding="utf-8")
-        tmp.replace(folder / "notes.chart")
+        chartfile.write_atomic(folder / "notes.chart", text)
         from ..product import vocals as voc
         warning = None
         if voc.ours(folder):                        # pitched vocals: notes.mid is made again from the new chart
@@ -405,7 +467,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         elif (folder / "notes.mid").exists():       # CH prefers notes.mid: move it aside (copy is in history)
             (folder / "notes.mid").replace(folder / "notes.mid.bak")
         return {"saved": stamp, "notes": {d: len(t) for d, t in song.tracks.items()}, "history": str(hist),
-                "warning": warning}
+                "warning": warning, "version": _chart_version(folder)}
 
     @app.post("/api/songs/{song_id}/lower")
     def regenerate_lower(song_id: str, body: dict = Body(...)):
@@ -480,20 +542,21 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         return (parse_midi(f, ini, part) if f.suffix.lower() in (".mid", ".midi") else parse_chart(f, ini, part)), ini
 
     @app.get("/api/songs/{song_id}/history")
-    def history(song_id: str):
+    def history(song_id: str, part: str = "guitar"):
         """Newest first: name, made (when that version was written), replaced (when a save or re-chart
-        replaced it), reason (save / rechart), notes per difficulty."""
+        replaced it), reason (save / rechart), notes per difficulty of `part`."""
         folder = song_folder(song_id)
+        part = _part(part)
         out = []
         for f in history_files(folder):
             m = re.match(r"(\d{8}-\d{6})-(?:([a-z]+)-)?notes\.", f.name)    # save / rechart / lyrics / bass ...
             if not m:
                 continue
             st = f.stat()
-            key = (str(f), st.st_size, int(st.st_mtime))
+            key = (str(f), st.st_size, int(st.st_mtime), part)
             if key not in hist_counts:
                 try:
-                    song, _ = history_song(folder, f)
+                    song, _ = history_song(folder, f, part)
                     hist_counts[key] = {d: len(t) for d, t in song.tracks.items()}
                 except Exception as e:                       # unreadable: still listed
                     hist_counts[key] = {"error": str(e)[:200]}
@@ -518,6 +581,43 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         if not any(len(t) for t in song.tracks.values()):
             raise HTTPException(404, f"that version has no {part} part")
         return song_to_json(song, ini)
+
+    @app.post("/api/songs/{song_id}/history/{name}/restore")
+    def history_restore(song_id: str, name: str):
+        """Make an old notes.chart the chart again as a whole: every part, tempo map, sections and lyrics (the
+        editor's Save restores only the part it shows). The current chart goes into history first."""
+        from ..product import chartfile, vocals as voc
+        from ..product.bass import PARTS
+        from ..formats.chart_parser import parse_chart
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        f = next((x for x in history_files(folder) if x.name == name), None)
+        if f is None:
+            raise HTTPException(404, f"no history version {name!r}")
+        if f.suffix.lower() != ".chart":
+            raise HTTPException(409, "only .chart versions can be restored as a whole")
+        try:
+            old = parse_chart(f, _ini(folder), "guitar")
+        except Exception as e:
+            raise HTTPException(422, f"that version can't be read: {e}")
+        with chartfile.lock(folder):
+            cur = folder / "notes.chart"
+            if cur.exists():
+                chartfile.history_copy(folder, cur, "restore")
+            chartfile.write_atomic(cur, f.read_text(encoding="utf-8"))
+            ini = _ini(folder)
+            fill = {spec["ini"]: ini.get("diff_guitar", "") for p, spec in PARTS.items()
+                    if any(len(t) for t in old.parts.get(p, {}).values()) and not str(ini.get(spec["ini"], "")).strip()}
+            if fill:                                    # a removed part's difficulty was cleared: a guess again
+                write_ini_fields(folder / "song.ini", fill)
+            if voc.ours(folder):
+                try:
+                    voc.sync_mid(folder)
+                except ValueError:
+                    voc.disable(folder)
+            elif (folder / "notes.mid").exists():       # CH prefers notes.mid: move it aside (as a save does)
+                (folder / "notes.mid").replace(folder / "notes.mid.bak")
+        return {"restored": name, "export_stale": lib.export_stale(song_id)}
 
     @app.post("/api/check")
     def check_chart(body: dict = Body(...)):
@@ -597,6 +697,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         from ..product.core import Style
         from ..product.section import audio_key, chart_section, save_features, section_features
         folder = song_folder(song_id)
+        if _part(str(body.get("part") or "guitar")) != "guitar":
+            raise HTTPException(400, "re-charting a section works on the guitar part only")
         try:
             opts = Options.parse(body.get("options"))
             song = json_to_song(body["chart"])
@@ -740,20 +842,16 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
 
     def _rewrite_chart(folder: Path) -> int:
         """Write notes.chart again with the folder's current lyrics (the old chart goes to history)."""
-        from ..product import lyrics as lyr
-        song, ini, chart_path = load_song(folder)
-        if chart_path.suffix.lower() != ".chart":
-            raise HTTPException(409, "lyrics can only be added to .chart songs")
-        words = lyr.attach(song, folder, ini)
-        if not words:
-            song.lyrics = []
-        hist = folder / ".riffchart" / "history"
-        hist.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-lyrics-notes.chart"))
-        chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
-                                              charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
-        from ..product import vocals as voc
-        voc.sync_mid(folder)
+        from ..product import chartfile, lyrics as lyr, vocals as voc
+        with chartfile.lock(folder):
+            song, ini, chart_path = load_song(folder)
+            if chart_path.suffix.lower() != ".chart":
+                raise HTTPException(409, "lyrics can only be added to .chart songs")
+            words = lyr.attach(song, folder, ini)
+            if not words:
+                song.lyrics = []
+            chartfile.rewrite(folder, chart_path, song, ini, "lyrics")
+            voc.sync_mid(folder)
         return words
 
     @app.post("/api/songs/{song_id}/lyrics")
@@ -773,18 +871,19 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         stems = audio_files(folder)
         if not stems:
             raise HTTPException(409, "this song has no audio")
-        if (folder / "vocals.ogg").exists():                    # the song has its own vocal track
-            vocals, sr = load_audio(folder / "vocals.ogg", 44100, mono=False)
-            audio_s = len(vocals) / sr
-        else:                                                   # separate it from song.ogg (all but the guitar)
-            mix, sr = load_audio(stems[0], 44100, mono=False)
-            audio_s = len(mix) / sr
-            with _sep_lock:
-                if not _sep:
-                    from ..audio.separate import Separator
-                    import torch
-                    _sep.append(Separator(device="cuda" if torch.cuda.is_available() else "cpu"))
-                vocals = _sep[0](mix)["vocals"]
+        # the singing separated from the whole song (every track summed), never vocals.ogg / song.ogg alone:
+        # where the guitar is quiet, guitar.ogg borrows the vocals (product/follow.py), so they miss verses
+        from ..audio.io import load_mix
+        sr = 44100
+        mix = load_mix(stems, sr, mono=False)
+        mix = np.repeat(mix[:, :1], 2, 1) if mix.shape[1] == 1 else mix[:, :2]
+        audio_s = len(mix) / sr
+        with _sep_lock:
+            if not _sep:
+                from ..audio.separate import Separator
+                import torch
+                _sep.append(Separator(device="cuda" if torch.cuda.is_available() else "cpu"))
+            vocals = _sep[0](mix)["vocals"]
         try:
             if lyr.can_transcribe():                            # may run Whisper: one GPU user at a time
                 rep = queue.run_on_model(lambda ac: lyr.make(folder, artist, title, vocals, sr, audio_s,
@@ -809,22 +908,29 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
 
     @app.delete("/api/songs/{song_id}/bass")
     def remove_bass(song_id: str):
-        """Take the bass part out of the chart (the old chart goes to history)."""
+        return remove_part(song_id, "bass")
+
+    @app.delete("/api/songs/{song_id}/parts/{part}")
+    def remove_part(song_id: str, part: str):
+        """Take the bass or keys part out of the chart (the old chart goes to history)."""
+        from ..product.bass import PARTS
+        if part not in PARTS:
+            raise HTTPException(400, f"part must be one of {', '.join(PARTS)}")
+        from ..product import chartfile, vocals as voc
+        from ..product.bass import ours
+        from .library import write_ini_fields
         folder = song_folder(song_id)
         check_writable(folder, lib.protected)
-        song, ini, chart_path = load_song(folder)
-        if chart_path.suffix.lower() != ".chart" or not song.parts.pop("bass", None):
-            raise HTTPException(404, "this chart has no bass part RiffChart can remove")
-        hist = folder / ".riffchart" / "history"
-        hist.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-nobass-notes.chart"))
-        chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
-                                              charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
-        from .library import write_ini_fields
-        write_ini_fields(folder / "song.ini", {"diff_bass": ""})
-        from ..product import vocals as voc
-        voc.sync_mid(folder)
-        return {"bass": None, "export_stale": lib.export_stale(song_id)}
+        with chartfile.lock(folder):
+            song, ini, chart_path = load_song(folder)
+            if not ours(ini):                       # a hand-made part is never taken out from here
+                raise HTTPException(409, f"this chart wasn't made by RiffChart: edit its {part} part in Moonscraper")
+            if chart_path.suffix.lower() != ".chart" or not song.parts.pop(part, None):
+                raise HTTPException(404, f"this chart has no {part} part RiffChart can remove")
+            chartfile.rewrite(folder, chart_path, song, ini, f"no{part}")
+            write_ini_fields(folder / "song.ini", {PARTS[part]["ini"]: ""})
+            voc.sync_mid(folder)
+        return {part: None, "export_stale": lib.export_stale(song_id)}
 
     @app.post("/api/songs/{song_id}/vocals")
     def add_vocals(song_id: str):
@@ -895,18 +1001,23 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
 
     @app.post("/api/clonehero/display")
     def set_ch_display(body: dict = Body(...)):
-        """mode "installed": Song Highways and Use Song Backgrounds off, so the highway and background installed in
-        Clone Hero show on every song (song music videos still play). mode "songs": both on again."""
+        """{"song_highway": bool} and / or {"song_backgrounds": bool}, each on its own: Song Highways off shows the
+        installed (animated) highway on every song; Use Song Backgrounds off hides each song's background picture
+        (cover and name), so only Clone Hero's own background video shows (black if none is picked).
+        Old form: mode "installed" / "songs" sets both."""
         st = _ch_settings()
         if st is None:
             raise HTTPException(404, "Clone Hero's settings file wasn't found (Settings)")
         if clonehero.is_running():
             raise HTTPException(409, "close Clone Hero first: it overwrites its settings when it exits")
-        mode = body.get("mode")
-        if mode not in ("installed", "songs"):
-            raise HTTPException(400, "mode must be installed or songs")
-        v = 0 if mode == "installed" else 1
-        setup.set_options(st, {"song_highway": v, "song_backgrounds": v})
+        if body.get("mode") in ("installed", "songs"):
+            v = int(body["mode"] == "songs")
+            want = {"song_highway": v, "song_backgrounds": v}
+        else:
+            want = {k: int(body[k]) for k in ("song_highway", "song_backgrounds") if isinstance(body.get(k), bool)}
+        if not want:
+            raise HTTPException(400, "give song_highway and / or song_backgrounds (true / false)")
+        setup.set_options(st, want)
         return ch_display()
 
     @app.get("/api/backgrounds")
@@ -1307,6 +1418,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         try:
             item = {"id": uuid.uuid4().hex[:8], "created": time.time(), "time_s": round(float(body["time_s"]), 3),
                     "tick": int(body["tick"]), "difficulty": str(body.get("difficulty", "expert"))[:10],
+                    "part": _part(str(body.get("part") or "guitar")),
                     "note": str(body.get("note", "")).strip()[:500],
                     "excerpt": [[int(x) for x in n[:4]] for n in (body.get("excerpt") or [])[:200]]}
         except (KeyError, TypeError, ValueError) as e:

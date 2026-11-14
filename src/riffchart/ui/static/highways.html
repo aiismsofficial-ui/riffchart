@@ -33,14 +33,17 @@
         <li><b>Animated highway:</b> in Clone Hero, on the difficulty screen press <b>Start</b> &rarr; <b>Highway</b> &rarr;
           “RiffChart - <i>name</i>”.</li>
         <li><b>Animated background:</b> Clone Hero <b>Settings &rarr; Gameplay &rarr; Background Video</b>.</li>
-        <li>They only show on songs that don't bring their own, so for every song turn off Song Highways and Use
-          Song Backgrounds (button below). Music videos still play.</li>
+        <li>They only show on songs that don't bring their own: for the animated highway on every song, turn off
+          Song Highways (below). Each song keeps its own background (cover and name) unless you also turn off song
+          backgrounds. Music videos still play.</li>
       </ul>
     </div>
   </div>
-  <div class="hw-chstate"><span id="chstate" class="muted">Checking Clone Hero…</span>
-    <button id="chinstalled" class="ghost small" hidden>Show my installed highway and background on every song</button>
-    <button id="chsongs" class="ghost small" hidden>Show each song's own highway and background</button></div>
+  <div class="hw-chstate"><span id="chstate" class="muted">Checking Clone Hero…</span></div>
+  <div class="hw-chstate" id="chrows" hidden>
+    <div><b>Highway:</b> <span id="chhw"></span> <button id="chhwbtn" class="ghost small"></button></div>
+    <div><b>Background:</b> <span id="chbg"></span> <button id="chbgbtn" class="ghost small"></button></div>
+  </div>
 </section>
 
 <main class="hw-main">

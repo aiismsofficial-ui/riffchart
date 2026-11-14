@@ -58,7 +58,7 @@
   </section>
 
   <section class="card">
-    <h2><span class="su-n">5</span> Lyrics and bass</h2>
+    <h2><span class="su-n">5</span> Lyrics, bass and keys</h2>
     <label>Lyrics for new charts <select id="lyrics">
       <option value="online">Look them up online, else write them down from the singing on this PC</option>
       <option value="local">Only write them down from the singing, on this PC (nothing is sent anywhere)</option>
@@ -70,9 +70,16 @@
       It mishears some words; fix them in the chart if you like. Clone Hero shows lyrics when its Lyrics option is on.</p>
     <p class="muted su-state" id="lyrstate"></p>
     <label class="su-check"><input type="checkbox" id="basschart"> Chart the bass too</label>
-    <p class="muted">A 5-fret bass part (all four difficulties) from the song's bass, which Clone Hero and YARG offer
-      as its bass instrument. It about doubles the time a song takes to chart. Bring up to date adds one to songs
-      charted before.</p>
+    <label class="su-check"><input type="checkbox" id="keyschart"> Chart the keys too (experimental)</label>
+    <p class="muted">5-fret bass and keys parts (all four difficulties) from the song's bass and piano, which
+      Clone Hero and YARG offer as its bass and keys instruments. The bass about doubles the time a song takes to
+      chart. Keys add as much again on songs with a loud enough piano or keyboard, and are rougher than the guitar
+      and bass charts (a busy first draft to fix up in the editor), so they're off unless you want them. Bring up to
+      date adds them to songs charted before.</p>
+    <label class="su-check"><input type="checkbox" id="vidwebm"> Music videos as webm</label>
+    <p class="muted">A song charted from a music video keeps its picture as the background video. Clone Hero only
+      plays webm (VP8) videos on every platform, so mp4 and other videos are converted (under a minute a song).
+      Bring up to date converts the videos of songs charted before.</p>
   </section>
 
   <section class="card">
@@ -83,6 +90,13 @@
       <option value="1080">1080p (smallest, about 35 MB a song)</option></select></label>
     <p class="muted">For animated backgrounds on single songs: Clone Hero plays a song's video once, so it has to last the
       whole song. Backgrounds and themes installed in Clone Hero loop, so they're always full sharpness and small.</p>
+  </section>
+
+  <section class="card">
+    <h2><span class="su-n">7</span> Updates</h2>
+    <label class="su-check"><input type="checkbox" id="updcheck"> Tell me when a newer RiffChart is out</label>
+    <p class="muted">The library shows a note with what's new. To know, RiffChart asks GitHub for its latest release
+      (at most every 6 hours); nothing about you or your songs is sent.</p>
   </section>
 
   <div class="su-actions"><span class="muted" id="savestate"></span><button id="save">Save</button></div>

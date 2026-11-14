@@ -311,7 +311,9 @@ def test_lyrics_edited_in_the_editor(env):
     assert [w[1] for w in ly["lines"][0]["words"]] == ["Hel-", "lo"]
     assert ly["lines"][0]["words"][0][0] == pytest.approx(2 * beat + d["offset_s"], abs=1e-3)
     # saving without "lyrics" keeps the chart's own events
-    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    r = c.post("/api/songs/Muse - Uprising/chart", json=d)
+    assert r.status_code == 200
+    d["version"] = r.json()["version"]                  # as the editor does after a save
     assert '"lyric Hel-"' in (folder / "notes.chart").read_text(encoding="utf-8")
     # edited: lyrics.json is written (seconds) and the chart gets the new words, the syllable "-" kept
     d["lyrics"] = [{"start": 1.0, "end": 2.5, "words": [[1.0, "Hel-"], [1.5, "lo"], [2.0, "world"]]}]
@@ -326,7 +328,7 @@ def test_lyrics_edited_in_the_editor(env):
     assert c.post("/api/songs/Muse - Uprising/chart", json=d2).status_code == 200
     assert "lyric" not in (folder / "notes.chart").read_text(encoding="utf-8")
     assert c.get("/api/songs/Muse - Uprising/chart").json()["lyrics"]["lines"] == []
-    bad = dict(d2, lyrics=[{"start": "x"}])
+    bad = dict(d2, lyrics=[{"start": "x"}], version=None)
     assert c.post("/api/songs/Muse - Uprising/chart", json=bad).status_code == 400
 
 
@@ -397,6 +399,51 @@ def test_bass_offered_shown_and_removed(env):
     assert c.get("/api/songs/Muse - Uprising/chart").json()["parts"] == ["guitar"]
 
 
+def test_keys_part_listed_edited_and_removed(env, monkeypatch):
+    from riffchart.product import bass
+    c, folder = env.client, _charted(env)
+    (folder / "keys.ogg").write_bytes((folder / "song.ogg").read_bytes())
+    assert "keys" not in c.get("/api/songs/Muse - Uprising").json()["updates"]     # keys are off by default
+    monkeypatch.setattr(bass, "enabled", lambda config="configs/product.yaml", part="bass": True)
+    from riffchart.product import update as upd
+    upd._cfg.clear()
+    folder.joinpath("song.ini").touch()                                            # library cache: look again
+    assert "keys" in c.get("/api/songs/Muse - Uprising").json()["updates"]
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    (folder / "notes.chart").write_text(text + "[ExpertKeyboard]\n{\n  0 = N 0 0\n  96 = N 2 0\n  96 = N 4 0\n}\n",
+                                        encoding="utf-8")
+    info = c.get("/api/songs/Muse - Uprising").json()
+    assert info["keys"] == {"expert": 2} and info["bass"] is None and "keys" not in info["updates"]
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["parts"] == ["guitar", "keys"]
+    k = c.get("/api/songs/Muse - Uprising/chart?part=keys").json()
+    assert [n[1] for n in k["tracks"]["expert"]["notes"]] == [1, 0b10100]                 # chords kept
+    assert c.post("/api/songs/Muse - Uprising/chart", json=dict(k, part="keys")).status_code == 200
+    assert "[ExpertKeyboard]" in (folder / "notes.chart").read_text(encoding="utf-8")
+    assert c.delete("/api/songs/Muse - Uprising/parts/keys").status_code == 200
+    assert "[ExpertKeyboard]" not in (folder / "notes.chart").read_text(encoding="utf-8")
+    assert c.delete("/api/songs/Muse - Uprising/parts/drums").status_code == 400
+
+
+def test_update_check_says_when_a_newer_release_is_out(env, monkeypatch):
+    import io
+    import json as _json
+    import urllib.request
+    calls = []
+
+    def fake(req, timeout=0):
+        calls.append(req.full_url)
+        return io.BytesIO(_json.dumps({"tag_name": "v99.0.0", "html_url": "https://github.com/x/y/releases/tag/v99.0.0"}).encode())
+    monkeypatch.setattr(urllib.request, "urlopen", fake)
+    env.cfg["releases_url"] = "https://github.com/x/y/releases"
+    r = env.client.get("/api/update-check").json()
+    assert r["enabled"] and r["newer"] and r["latest"] == "99.0.0" and r["url"].endswith("v99.0.0")
+    assert calls == ["https://api.github.com/repos/x/y/releases/latest"]
+    env.client.get("/api/update-check")
+    assert len(calls) == 1                                           # cached: asked at most every 6 hours
+    env.cfg["update_check"] = False
+    assert env.client.get("/api/update-check").json()["enabled"] is False
+
+
 def test_batch_actions(env):
     c = env.client
     _charted(env)
@@ -437,7 +484,9 @@ def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):
     empty = dict(d, tracks={k: dict(v, notes=[]) for k, v in d["tracks"].items()})
     assert c.post("/api/songs/Muse - Uprising/chart", json=empty).status_code == 400
     (folder / "notes.mid").write_bytes(b"MThd")
-    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 409     # changed since loaded
+    d.pop("version")                                                                   # (a broken notes.mid: the
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200     # other parts from .chart)
     assert not (folder / "notes.mid").exists() and (folder / "notes.mid.bak").exists()
     assert any(p.name.endswith("notes.mid") for p in (folder / ".riffchart" / "history").iterdir())
 
@@ -752,7 +801,9 @@ def test_history_list_and_open(env):
     assert c.get(f"{base}/history").json() == []
     d = c.get(f"{base}/chart").json()
     d["tracks"]["expert"]["notes"] = d["tracks"]["expert"]["notes"][:1]
-    assert c.post(f"{base}/chart", json=d).status_code == 200            # keeps the 3-note version
+    r = c.post(f"{base}/chart", json=d)                                  # keeps the 3-note version
+    assert r.status_code == 200
+    d["version"] = r.json()["version"]
     d["tracks"]["expert"]["notes"] = []
     d["tracks"]["hard"]["notes"] = [[0, 2, 0, 0], [192, 4, 0, 0]]
     assert c.post(f"{base}/chart", json=d).status_code == 200            # same second: still two versions
@@ -868,3 +919,101 @@ def test_version_and_report_link(env):
     assert s["version"] == __version__ and s["issues_url"] == ""
     env.cfg["issues_url"] = "https://github.com/x/y/issues/new/choose"
     assert env.client.get("/api/setup").json()["issues_url"].endswith("/issues/new/choose")
+
+
+def test_failed_jobs_say_why_in_plain_words():
+    import errno
+    from riffchart.ui.jobs import friendly_error
+    assert friendly_error(OSError(errno.ENOSPC, "No space left on device")).startswith("The disk is full")
+    assert "graphics card ran out of memory" in friendly_error(RuntimeError("CUDA out of memory. Tried to allocate"))
+    assert "model file is missing" in friendly_error(FileNotFoundError("data/checkpoints/chart/step60000.pt"))
+    assert "couldn't be read as audio" in friendly_error(RuntimeError("Error opening 'x.mp3': Format not recognised."))
+    assert friendly_error(ValueError("something else")) == "ValueError: something else"
+    assert "couldn't be read as audio" in friendly_error(
+        ValueError("the file holds only 0.0 s of audio: it may be empty or damaged"))
+
+
+
+# ---------------------------------------------------------------- pre-1.1 review fixes
+def _add_bass(folder):
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    (folder / "notes.chart").write_text(text + "[ExpertDoubleBass]\n{\n  0 = N 0 0\n  192 = N 1 0\n}\n", encoding="utf-8")
+
+
+def test_removed_part_restored_from_history_and_hand_parts_kept(env):
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    _add_bass(folder)
+    assert c.delete(f"{base}/parts/bass").status_code == 200
+    assert "[ExpertDoubleBass]" not in (folder / "notes.chart").read_text(encoding="utf-8")
+    h = c.get(f"{base}/history?part=bass").json()
+    assert h[0]["reason"] == "nobass" and h[0]["notes"]["expert"] == 2      # counts the part the editor shows
+    r = c.post(f"{base}/history/{h[0]['name']}/restore")
+    assert r.status_code == 200, r.text
+    assert "[ExpertDoubleBass]" in (folder / "notes.chart").read_text(encoding="utf-8")
+    assert c.get(f"{base}/history").json()[0]["reason"] == "restore"           # the replaced chart is kept
+    assert c.post(f"{base}/history/nope-notes.chart/restore").status_code == 404
+    # a chart RiffChart didn't make: its bass part is never removed from here
+    ini = (folder / "song.ini").read_text(encoding="utf-8")
+    assert "charter = riffchart" in ini
+    (folder / "song.ini").write_text(ini.replace("charter = riffchart", "charter = Someone"), encoding="utf-8")
+    assert c.delete(f"{base}/parts/bass").status_code == 409
+    assert "[ExpertDoubleBass]" in (folder / "notes.chart").read_text(encoding="utf-8")
+
+
+def test_stale_editor_save_refused(env):
+    """Two tabs, or Bring up to date writing the chart while the editor is open: the older copy can't
+    overwrite the newer file."""
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    a = c.get(f"{base}/chart").json()
+    b = c.get(f"{base}/chart").json()
+    r = c.post(f"{base}/chart", json=a)
+    assert r.status_code == 200 and r.json()["version"] != a["version"]
+    assert c.post(f"{base}/chart", json=b).status_code == 409
+    assert c.post(f"{base}/chart", json=dict(a, version=r.json()["version"])).status_code == 200
+
+
+def test_chart_lyric_events_keep_their_time_on_a_new_tempo(env):
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    ev = '  384 = E "phrase_start"\n  384 = E "lyric Hel="\n  480 = E "lyric lo#"\n  768 = E "phrase_end"\n'
+    (folder / "notes.chart").write_text(text.replace("[Events]\n{\n", "[Events]\n{\n" + ev), encoding="utf-8")
+    d = c.get(f"{base}/chart").json()
+    before = [(round(t, 3), w) for t, w in d["lyrics"]["lines"][0]["words"]]
+    d["tempo"] = [[0, d["tempo"][0][1] * 2]] + d["tempo"][1:]                  # twice as fast: ticks change
+    assert c.post(f"{base}/chart", json=d).status_code == 200
+    d2 = c.get(f"{base}/chart").json()
+    after = [(round(t, 3), w) for t, w in d2["lyrics"]["lines"][0]["words"]]
+    assert [t for t, _ in after] == pytest.approx([t for t, _ in before], abs=0.01)
+    assert '"lyric Hel="' in (folder / "notes.chart").read_text(encoding="utf-8")   # marks as they were
+    assert '"lyric lo#"' in (folder / "notes.chart").read_text(encoding="utf-8")
+
+
+def test_section_rechart_is_guitar_only_and_reports_keep_the_part(env):
+    c, folder = env.client, _charted(env)
+    base = "/api/songs/Muse - Uprising"
+    d = c.get(f"{base}/chart").json()
+    r = c.post(f"{base}/section", json={"chart": d, "start": 0, "end": 192, "part": "bass"})
+    assert r.status_code == 400
+    r = c.post(f"{base}/reports", json={"time_s": 1.0, "tick": 192, "difficulty": "expert", "part": "bass"})
+    assert r.status_code == 200 and r.json()["part"] == "bass"
+    assert c.post(f"{base}/reports", json={"time_s": 1.0, "tick": 192, "part": "drums"}).status_code == 400
+
+
+def test_clone_hero_highway_and_background_switch_separately(env, monkeypatch):
+    """The video highway needs only Song Highways off: song backgrounds (cover + name) stay on."""
+    monkeypatch.setattr(clonehero, "is_running", lambda: False)
+    c = env.client
+    d = c.get("/api/clonehero/display").json()
+    assert d["found"] and d["song_highway"] and d["song_backgrounds"]
+    d = c.post("/api/clonehero/display", json={"song_highway": False}).json()
+    assert not d["song_highway"] and d["song_backgrounds"]
+    d = c.post("/api/clonehero/display", json={"song_backgrounds": False}).json()
+    assert not d["song_highway"] and not d["song_backgrounds"]
+    d = c.post("/api/clonehero/display", json={"mode": "songs"}).json()
+    assert d["song_highway"] and d["song_backgrounds"]
+    assert c.post("/api/clonehero/display", json={}).status_code == 400
+    monkeypatch.setattr(clonehero, "is_running", lambda: True)
+    assert c.post("/api/clonehero/display", json={"song_highway": True}).status_code == 409

@@ -379,19 +379,30 @@ async function chState() {
   try {
     const r = await api("/api/clonehero/display");
     if (!r.found) { $("#chstate").textContent = "Clone Hero's settings weren't found (see Settings)."; return; }
-    const own = r.song_highway || r.song_backgrounds;
-    $("#chstate").innerHTML = own
-      ? `Your Clone Hero now shows <b>each song's own</b> ${r.song_highway ? "highway" : ""}${r.song_highway && r.song_backgrounds ? " and " : ""}${r.song_backgrounds ? "background" : ""}` +
-        " (installed ones only show on songs without their own)."
-      : "Your Clone Hero now shows <b>your installed highway and background</b> on every song (music videos still play).";
-    $("#chinstalled").hidden = !own; $("#chsongs").hidden = own;
+    CH = r;
+    $("#chstate").textContent = "What your Clone Hero shows on each song (change it with Clone Hero closed):";
+    $("#chrows").hidden = false;
+    $("#chhw").innerHTML = r.song_highway
+      ? "each song's own still highway (your installed animated highway only shows on songs without one)."
+      : "<b>your installed highway</b> on every song (pick it on the difficulty screen: Start → Highway).";
+    $("#chhwbtn").textContent = r.song_highway ? "Use my installed highway on every song" : "Use each song's own highway";
+    $("#chbg").innerHTML = r.song_backgrounds
+      ? "each song's own background (its cover and name, or its music video)."
+      : "<b>Clone Hero's background video</b> on every song (black unless one is picked in Settings → Gameplay → Background Video; music videos still play).";
+    $("#chbgbtn").textContent = r.song_backgrounds ? "Use my background video instead" : "Use each song's own background";
   } catch (e) { $("#chstate").textContent = e.message; }
 }
-for (const [btn, mode] of [["#chinstalled", "installed"], ["#chsongs", "songs"]])
-  $(btn).addEventListener("click", async () => {
-    try { await post("/api/clonehero/display", { mode }); await chState(); toast("Done. Start Clone Hero to see it."); }
-    catch (e) { toast(e.message, true); }
-  });
+let CH = {};
+async function setCh(body) {
+  try { await post("/api/clonehero/display", body); await chState(); toast("Done. Start Clone Hero to see it."); }
+  catch (e) { toast(e.message, true); }
+}
+$("#chhwbtn").addEventListener("click", () => setCh({ song_highway: !CH.song_highway }));
+$("#chbgbtn").addEventListener("click", () => {
+  if (CH.song_backgrounds && !confirm("Songs will no longer show their own background (cover art and name). Clone Hero then " +
+      "shows its background video, or black if none is picked in Settings → Gameplay → Background Video.\n\nContinue?")) return;
+  setCh({ song_backgrounds: !CH.song_backgrounds });
+});
 chState();
 
 (async () => {

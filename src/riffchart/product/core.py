@@ -38,7 +38,7 @@ from ..timing.trackers import get_tracker
 from .follow import MODES as FOLLOW_MODES, playable_part, INSTRUMENT_FILES, instrument_parts
 from .difficulty import estimate as estimate_difficulty, load_model as load_difficulty_model
 from .meta import SongMeta, cover_art, read_meta
-from .visuals import CH_VIDEO_OK, VIDEO_FILES, convert_video, find_art, find_first, refresh_visuals, save_video
+from .visuals import VIDEO_FILES, convert_video, find_art, find_first, refresh_visuals, save_video, wants_convert
 
 log = logging.getLogger(__name__)
 
@@ -144,7 +144,8 @@ def estimate_diff(n_expert: int, first_s: float, last_s: float, cuts: list[float
     return int(np.searchsorted(cuts, nps))
 
 
-def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int, diff_bass: int | None = None) -> str:
+def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int, part_diffs: dict | None = None) -> str:
+    """part_diffs: {"diff_bass": n, "diff_keys": n} for the extra parts the chart has."""
     lines = ["[song]", f"name = {meta.title}", f"artist = {meta.artist}"]
     if meta.album:
         lines.append(f"album = {meta.album}")
@@ -154,8 +155,8 @@ def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int, diff_b
         lines.append(f"year = {meta.year}")
     lines += ["charter = RiffChart", f"song_length = {int(audio_s * 1000)}",
               f"preview_start_time = {int(preview_s * 1000)}", f"diff_guitar = {diff}"]
-    if diff_bass is not None:
-        lines.append(f"diff_bass = {diff_bass}")
+    for k, v in (part_diffs or {}).items():
+        lines.append(f"{k} = {v}")
     lines += ["delay = 0",
               "loading_phrase = Charted automatically by RiffChart"]
     return "\n".join(lines) + "\n"
@@ -254,41 +255,63 @@ class RiffCharter:
         stage("chart")
         song, play, _ = self.chart_analysis(an, difficulties, style)
         done("chart")
-        diff_bass = None
-        if "bass" in an["stems"]:
-            stage("bass")
-            bass = self.bass_tracks(an, an["stems"]["bass"], song)
-            if bass:
-                song.parts["bass"] = bass
-                diff_bass = self.guitar_difficulty(Song(song.resolution, song.tempo, bass))
-            done("bass")
+        from .bass import PARTS
+        split = self.cfg["audio"].get("split_instruments", True)
+        # each extra part is charted from what its own track will hold (keys: minus what the guitar part took)
+        own = instrument_parts(an["stems"], play, self.sep.sr) if split else {}
+        part_diffs = {}
+        for part, spec in PARTS.items():
+            audio = own.get(spec["file"][:-4]) if split else an["stems"].get(spec["stem"])
+            if audio is None:
+                continue
+            stage(part)
+            tracks = self.part_tracks(part, an, audio, song)
+            if tracks:
+                song.parts[part] = tracks
+                part_diffs[spec["ini"]] = self.guitar_difficulty(Song(song.resolution, song.tempo, tracks))
+            done(part)
         mix, audio_s, mono, downs = an["mix"], an["audio_s"], an["mono"], an["downs"]
 
         stage("write")
         folder.mkdir(parents=True, exist_ok=True)
         q = self.cfg["audio"]["vorbis_quality"]
+        # every track written under a temporary name first, then swapped in: a failure while writing (full
+        # disk, out of memory) leaves a re-charted song's old tracks as they were
+        new: dict[str, Path] = {}
+        try:
+            if stems:
+                parts = {"guitar": play.audio}
+                if split:
+                    parts.update(own)
+                k = len(mix)
+                rest = mix.astype(np.float32).copy()
+                for name, a in parts.items():
+                    a = a if self.sep.sr == OUT_SR else soxr.resample(a, self.sep.sr, OUT_SR)
+                    k = min(k, len(a))
+                    parts[name] = a
+                rest = rest[:k]
+                for name, a in parts.items():              # song.ogg = what's left: every file sums to the mix
+                    rest -= a[:k]
+                    new[f"{name}.ogg"] = folder / f".{name}.new.ogg"
+                    write_ogg(new[f"{name}.ogg"], a[:k].astype(np.float32), OUT_SR, q)
+                new["song.ogg"] = folder / ".song.new.ogg"
+                write_ogg(new["song.ogg"], rest, OUT_SR, q)
+            else:
+                new["song.ogg"] = folder / ".song.new.ogg"
+                write_ogg(new["song.ogg"], mix.astype(np.float32), OUT_SR, q)
+        except BaseException:                              # (t is the stage timer: other names here)
+            for tmp_file in new.values():
+                tmp_file.unlink(missing_ok=True)
+                tmp_file.with_suffix(".tmp.ogg").unlink(missing_ok=True)
+            raise
         for f in ("guitar.ogg",) + tuple(f"{n}.ogg" for n in INSTRUMENT_FILES.values()):
-            (folder / f).unlink(missing_ok=True)           # re-charting: no stems left from the last settings
-        if stems:
-            parts = {"guitar": play.audio}
-            if self.cfg["audio"].get("split_instruments", True):
-                parts.update(instrument_parts(an["stems"], play, self.sep.sr))
-            k = len(mix)
-            rest = mix.astype(np.float32).copy()
-            for name, a in parts.items():
-                a = a if self.sep.sr == OUT_SR else soxr.resample(a, self.sep.sr, OUT_SR)
-                k = min(k, len(a))
-                parts[name] = a
-            rest = rest[:k]
-            for name, a in parts.items():                  # song.ogg = what's left: every file sums to the mix
-                rest -= a[:k]
-                write_ogg(folder / f"{name}.ogg", a[:k].astype(np.float32), OUT_SR, q)
-            write_ogg(folder / "song.ogg", rest, OUT_SR, q)
-        else:
-            write_ogg(folder / "song.ogg", mix.astype(np.float32), OUT_SR, q)
+            if f not in new:
+                (folder / f).unlink(missing_ok=True)       # re-charting: no stems left from the last settings
+        for name, tmp_file in new.items():
+            tmp_file.replace(folder / name)
         diff = self.guitar_difficulty(song)
         prev = preview_start(mono, OUT_SR, downs, audio_s)
-        ini = song_ini(meta, audio_s, prev, diff, diff_bass)
+        ini = song_ini(meta, audio_s, prev, diff, part_diffs)
         old_ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
         video = None
         if self.cfg.get("keep_video", True) and Path(path).suffix.lower() in FFMPEG_EXT:
@@ -296,8 +319,9 @@ class RiffCharter:
                 video = save_video(path, folder)           # a music video becomes the background video
             except Exception:
                 video = None
-            if video and video["codec"] not in CH_VIDEO_OK and self.cfg.get("convert_video", True):
-                try:                                       # VP9 / AV1 / HEVC: Clone Hero can't play it
+            if video and self.cfg.get("convert_video", True) and wants_convert(
+                    video, self.cfg.get("video_webm", True)):
+                try:                                       # VP9 / AV1 / HEVC (and H.264 mp4): VP8 webm
                     convert_video(folder)
                 except Exception:                          # keep the copy; Song details offers it again
                     pass
@@ -330,8 +354,10 @@ class RiffCharter:
                        track), when the song has none yet; song.ogg becomes what's left, so the mix is unchanged.
                        The old song.ogg is kept in .riffchart/song-before-update.ogg.
           lyrics       looked up and timed to the singing when the song has none (Settings: lyrics online)
+          video        a music video that isn't VP8 webm yet converted to it (video_webm setting)
           background   the cover background and an animated background made again at the sharpness setting
-        Returns {"instruments": [files written], "lyrics": words or 0, "background": bool, "notes": [...]}."""
+        Returns {"instruments": [files written], "lyrics": words or 0, "background": bool, "notes": [...]}
+        (+ "bass" / "keys" note counts and "video": True when they were done)."""
         from . import lyrics
         from .visuals import bg_anim, bg_mode, make_bg_anim, refresh_background
         from ..formats.loader import load_song
@@ -346,14 +372,15 @@ class RiffCharter:
         want_parts = self.cfg["audio"].get("split_instruments", True) and not has_parts and song_ogg.exists()
         lmode = lyrics.mode(self.config_path)
         named = bool(ini.get("artist") and ini.get("name"))
-        want_lyrics = lyrics.load(folder) is None and (
+        from .update import wants_lyrics
+        want_lyrics = wants_lyrics(folder, ini) and (
             (lmode == "online" and (named or lyrics.can_transcribe())) or (lmode == "local" and lyrics.can_transcribe()))
         if has_parts:
             notes.append("already has its own instrument tracks")
         elif not song_ogg.exists():
             notes.append("no song.ogg to split")
         stems = None
-        if want_parts or (want_lyrics and not (folder / "vocals.ogg").exists()):
+        if want_parts:                                      # (lyrics separate the whole song: lyrics_audio)
             stage("load")
             mix, _ = load_audio(song_ogg, OUT_SR, mono=False)
             mix = np.repeat(mix[:, :1], 2, 1) if mix.shape[1] == 1 else mix[:, :2]
@@ -394,52 +421,58 @@ class RiffCharter:
                         t.unlink(missing_ok=True)
                         t.with_suffix(".tmp.ogg").unlink(missing_ok=True)
                     raise
-                for name, t in tmp.items():
-                    t.replace(folder / name)
-                    if name != "song.ogg":
-                        out["instruments"].append(name)
+                done: list[str] = []
+                try:                                        # a file the game or a browser has open can't be
+                    for name, t in tmp.items():             # replaced on Windows: then undo the swap, or the
+                        t.replace(folder / name)            # parts would play twice (in song.ogg and their own)
+                        done.append(name)
+                except BaseException:
+                    for name in done:
+                        if name == "song.ogg":
+                            shutil.copy2(keep, song_ogg)
+                        else:
+                            (folder / name).unlink(missing_ok=True)
+                    for t in tmp.values():
+                        t.unlink(missing_ok=True)
+                    raise
+                out["instruments"] += [n for n in done if n != "song.ogg"]
             else:
                 notes.append("no instrument loud enough for its own track")
         from . import bass as bass_mod
-        if (bass_mod.enabled(self.config_path) and (folder / "notes.chart").exists()
-                and bass_mod.ours(ini) and not bass_mod.in_chart(folder)):
-            if (folder / "bass.ogg").exists():
-                stage("bass")
+        for part, spec in bass_mod.PARTS.items():
+            if not (bass_mod.enabled(self.config_path, part) and (folder / "notes.chart").exists()
+                    and bass_mod.ours(ini) and not bass_mod.in_chart(folder, part)):
+                continue
+            if (folder / spec["file"]).exists():
+                stage(part)
                 try:
-                    out["bass"] = self._update_bass(folder, ini, stems)
-                    if not out["bass"]:
-                        notes.append("the bass is too quiet to chart")
+                    out[part] = self._update_part(folder, ini, stems, part)
+                    if not out[part]:
+                        notes.append(f"the {part} part is too quiet to chart")
                 except Exception as e:                      # the rest of the update still counts
-                    log.warning("bass chart skipped for %s: %s", folder.name, e)
-                    notes.append(f"bass chart skipped ({type(e).__name__})")
-            else:
+                    log.warning("%s chart skipped for %s: %s", part, folder.name, e)
+                    notes.append(f"{part} chart skipped ({type(e).__name__})")
+            elif part == "bass":
                 notes.append("no bass track to chart")
         if want_lyrics:
             stage("lyrics")
             try:
-                if stems is not None:
-                    voc, vsr = stems["vocals"], self.sep.sr
-                else:
-                    voc, vsr = load_audio(folder / "vocals.ogg", OUT_SR, mono=False)
+                whole = stems if stems is not None and not (folder / "guitar.ogg").exists() else None
+                voc, vsr, lmix = self.lyrics_audio(folder, whole, mix if whole is not None else None)
                 audio_s = len(voc) / vsr
                 lyrics.make(folder, ini.get("artist", ""), ini.get("name", ""), voc, vsr, audio_s,
-                            online=lmode == "online", device=self.device,
-                            mix=soxr.resample(mix, OUT_SR, vsr) if stems is not None and vsr != OUT_SR else
-                            (mix if stems is not None else None))
-                song, _, chart_path = load_song(folder)
-                if chart_path.suffix.lower() == ".chart":
-                    words = lyrics.attach(song, folder, ini, audio_s)
-                    if words:
-                        hist = folder / ".riffchart" / "history"
-                        hist.mkdir(parents=True, exist_ok=True)
-                        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-lyrics-notes.chart"))
-                        chart_path.write_text(write_chart_text(
-                            song, name=ini.get("name", ""), artist=ini.get("artist", ""),
-                            charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
-                        out["lyrics"] = words
-                        _sync_mid(folder)
-                else:
-                    notes.append("lyrics are only written into .chart songs")
+                            online=lmode == "online", device=self.device, mix=lmix)
+                from . import chartfile
+                with chartfile.lock(folder):
+                    song, _, chart_path = load_song(folder)
+                    if chart_path.suffix.lower() == ".chart":
+                        words = lyrics.attach(song, folder, ini, audio_s)
+                        if words:
+                            chartfile.rewrite(folder, chart_path, song, ini, "lyrics")
+                            out["lyrics"] = words
+                            _sync_mid(folder)
+                    else:
+                        notes.append("lyrics are only written into .chart songs")
                 if not out["lyrics"] and not notes[-1:] == ["lyrics are only written into .chart songs"]:
                     notes.append("no lyrics found" + (" online" if lmode == "online" and not lyrics.can_transcribe() else ""))
             except Exception as e:                          # offline, LRCLIB down: the rest still counts
@@ -447,6 +480,16 @@ class RiffCharter:
                 notes.append(f"lyrics skipped ({type(e).__name__})")
         elif lyrics.load(folder) is not None:
             notes.append("already has lyrics")
+        from .update import settings as update_settings
+        from .visuals import video_info
+        if update_settings()[2] and not bg_anim(folder) and wants_convert(video_info(folder)):
+            stage("video")                                 # the music video as VP8 webm (plays everywhere)
+            try:
+                convert_video(folder, (lambda f: stage("video", f)) if on_stage else None)
+                out["video"] = True
+            except Exception as e:                         # the .mp4 stays; Song details offers it again
+                log.warning("video conversion skipped for %s: %s", folder.name, e)
+                notes.append(f"video conversion skipped ({type(e).__name__})")
         stage("visuals")
         try:
             anim = bg_anim(folder)
@@ -497,6 +540,8 @@ class RiffCharter:
         stage, done = stage or (lambda _: None), done or (lambda _: None)
         mix = np.repeat(mix[:, :1], 2, 1) if mix.shape[1] == 1 else mix[:, :2]
         audio_s = len(mix) / OUT_SR
+        if audio_s < 5:                                    # an empty or broken file decodes to (almost) nothing
+            raise ValueError(f"the file holds only {audio_s:.1f} s of audio: it may be empty or damaged")
         stage("separate")
         stems = self.sep(soxr.resample(mix, OUT_SR, self.sep.sr) if self.sep.sr != OUT_SR else mix)
         done("separate")
@@ -519,46 +564,74 @@ class RiffCharter:
         song, feats = self.chart_part(an, play.model_in, difficulties, style)
         return song, play, feats
 
-    def _update_bass(self, folder: Path, ini: dict, stems: dict | None) -> int:
-        """A bass chart for a charted song from its bass.ogg, on the chart's own tempo map (the beats aren't
-        tracked again); written into notes.chart (old one in history). Returns Expert's note count, 0 = none."""
+    def lyrics_audio(self, folder: Path, stems: dict | None = None, mix: np.ndarray | None = None):
+        """(vocals, sr, mix at sr): the singing to time or write down lyrics from, separated from the WHOLE song.
+        Not from vocals.ogg / song.ogg alone: where the guitar is quiet the guitar track borrows the melodic
+        parts, vocals included (follow.py), so those files are missing whole verses. stems / mix: an existing
+        separation of the whole song (at self.sep.sr / OUT_SR), reused when given."""
+        if stems is None:
+            files = [f for f in sorted(folder.iterdir()) if f.suffix.lower() in (".ogg", ".opus", ".mp3", ".wav")
+                     and f.stem.lower() in {"song", "guitar"} | set(INSTRUMENT_FILES.values())]
+            from ..audio.io import load_mix
+            mix = load_mix(files, OUT_SR, mono=False)
+            mix = np.repeat(mix[:, :1], 2, 1) if mix.shape[1] == 1 else mix[:, :2]
+            stems = self.sep(soxr.resample(mix, OUT_SR, self.sep.sr) if self.sep.sr != OUT_SR else mix)
+        vsr = self.sep.sr
+        return stems["vocals"], vsr, (soxr.resample(mix, OUT_SR, vsr) if vsr != OUT_SR else mix)
+
+    def _update_part(self, folder: Path, ini: dict, stems: dict | None, part: str = "bass") -> int:
+        """A bass (or keys) chart for a charted song from its bass.ogg (keys.ogg), on the chart's own tempo map
+        (the beats aren't tracked again); written into notes.chart (old one in history). Returns Expert's note
+        count, 0 = none."""
+        from .bass import PARTS
+        spec = PARTS[part]
         from ..audio.io import load_mix
         from ..formats.loader import load_song
         from ..formats.textio import song_delay_s
         song, _, chart_path = load_song(folder)
+        if chart_path.suffix.lower() != ".chart":            # a notes.mid the game reads first: never write
+            raise RuntimeError("the song's notes.mid is read before notes.chart, so a part can't be added")
         files = [f for f in sorted(folder.iterdir()) if f.suffix.lower() in (".ogg", ".opus", ".mp3", ".wav")
                  and f.stem.lower() in {"song", "guitar"} | set(INSTRUMENT_FILES.values())]
         mix = load_mix(files, OUT_SR, mono=False)                   # the whole song: every track summed
-        if stems is not None and "bass" in stems:
-            bass = stems["bass"]
+        if stems is not None and part == "bass" and "bass" in stems:     # just separated; keys come from the
+            audio = stems["bass"]                                         # file (the guitar part's share is out)
         else:
-            bass, _ = load_audio(folder / "bass.ogg", self.sep.sr, mono=False)
+            audio, _ = load_audio(folder / spec["file"], self.sep.sr, mono=False)
         shift = song.chart_offset_s + song_delay_s(ini)             # audio time = chart time + shift
         audio_s = len(mix) / OUT_SR
         an = {"mix": mix, "audio_s": audio_s, "m22": soxr.resample(mix.mean(1), OUT_SR, MEL_SR).astype(np.float32),
               "beats": song.tempo.beat_times(audio_s + 2) + shift, "downs": song.tempo.downbeat_times(audio_s + 2) + shift}
-        tracks = self.bass_tracks(an, bass, song, shift_s=shift)
+        tracks = self.part_tracks(part, an, audio, song, shift_s=shift)
         if not tracks or not len(tracks.get("expert", [])):
             return 0
-        song.parts["bass"] = tracks
-        hist = folder / ".riffchart" / "history"
-        hist.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-bass-notes.chart"))
-        chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
-                                              charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
-        _set_ini(folder / "song.ini", "diff_bass", str(self.guitar_difficulty(Song(song.resolution, song.tempo, tracks))))
-        _sync_mid(folder)
+        from . import chartfile
+        with chartfile.lock(folder):                 # the chart as it is now: an editor save made while the
+            now, _, now_path = load_song(folder)    # part was charted is kept
+            if now_path != chart_path or not chartfile.same_timing(now, song):
+                raise RuntimeError("the chart's tempo map changed while the part was charted: run it again")
+            if any(len(t) for t in now.parts.get(part, {}).values()):
+                return len(now.parts[part].get("expert", []))      # added meanwhile (another job, the editor)
+            now.parts[part] = tracks
+            chartfile.rewrite(folder, chart_path, now, ini, part)
+            _set_ini(folder / "song.ini", spec["ini"], str(self.guitar_difficulty(Song(song.resolution, song.tempo, tracks))))
+            _sync_mid(folder)
         return len(tracks["expert"])
 
-    def bass_tracks(self, an: dict, bass: np.ndarray, onto: Song, shift_s: float = 0.0) -> dict | None:
-        """A bass chart from the bass track (product/bass.py), on `onto`'s tempo map; None when the setting is
-        off or the bass is too quiet to chart."""
+    def part_tracks(self, part: str, an: dict, audio: np.ndarray, onto: Song, shift_s: float = 0.0) -> dict | None:
+        """A bass / keys chart from that part's track (product/bass.py), on `onto`'s tempo map; None when the
+        setting is off or the part is too quiet to chart."""
         from . import bass as bs
-        c = self.cfg.get("bass", {})
-        if not bs.enabled(self.config_path) or not bs.loud_enough(bass, an["mix"]):
+        c = self.cfg.get(part, {})
+        if not bs.enabled(self.config_path, part) or not bs.loud_enough(audio, an["mix"]):
             return None
-        song, _ = self.chart_part(an, bass, style=Style(density=float(c.get("density", 0.0))))
-        tracks = bs.singles(song.tracks) if c.get("singles", False) else song.tracks
+        song, _ = self.chart_part(an, audio, style=Style(density=float(c.get("density", 0.0))))
+        if c.get("singles", False):
+            tracks = bs.singles(song.tracks)
+        else:
+            tracks = song.tracks
+            for tr in tracks.values():
+                bs.fix_same_fret_hopos(tr)
         return bs.retime(tracks, song, onto, shift_s)
 
     def chart_part(self, an: dict, part: np.ndarray, difficulties=DIFFICULTIES, style: Style | None = None,

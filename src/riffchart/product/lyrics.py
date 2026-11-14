@@ -52,7 +52,16 @@ def _get(path: str, params: dict) -> object | None:
 
 
 def _norm(s: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
+    """Letters and digits of any script, accents off ("Måneskin" = "Maneskin", "Кино" stays "кино")."""
+    import unicodedata
+    s = "".join(c for c in unicodedata.normalize("NFKD", s.casefold()) if not unicodedata.combining(c))
+    return re.sub(r"[\W_]+", " ", s).strip()
+
+
+def _same(a: str, b: str) -> bool:
+    """Same name; an empty one (only symbols) never matches."""
+    na = _norm(a)
+    return bool(na) and na == _norm(b)
 
 
 def fetch(artist: str, title: str, duration_s: float | None = None) -> dict | None:
@@ -73,8 +82,8 @@ def fetch(artist: str, title: str, duration_s: float | None = None) -> dict | No
     for r in found:
         if r.get("instrumental") or not _timed(r):
             continue
-        same_artist = _norm(r.get("artistName", "")) == _norm(artist)
-        same_title = _norm(r.get("trackName", "")) == _norm(title)
+        same_artist = _same(r.get("artistName", ""), artist)
+        same_title = _same(r.get("trackName", ""), title)
         close = bool(duration_s and r.get("duration") and abs(float(r["duration"]) - duration_s) <= 3)
         if not same_title or not (same_artist or close):  # a title alone matches too many songs
             continue
@@ -207,11 +216,18 @@ _CH_SPECIAL = re.compile(r'["#^*%/+$_§=\[\]{}<>]')
 
 def _word(w: str, syllables: bool = False) -> str:
     """Clone Hero reads some symbols as markup (- joins syllables, = is a hyphen, # ^ * are vocal marks).
-    syllables: keep a trailing "-" (lyrics edited by hand: "Hel-" "lo" shows as "Hello")."""
+    syllables: keep the marks at the end of a word (lyrics edited by hand, or a chart's own: "Hel-" "lo" shows
+    as "Hello", "Hel=" as "Hel-lo", "#" / "^" are vocal marks)."""
+    w = w.strip()
+    tail = ""
+    if syllables:
+        m = re.search(r"[-=#^*%]+$", w)
+        if m and m.start() > 0:
+            tail, w = m.group(), w[:m.start()]
     w = _CH_SPECIAL.sub("", w).strip()
-    if syllables and len(w) > 1 and w.endswith("-"):
-        return w.rstrip("-") + "-"
-    return w.rstrip("-") if w.endswith("-") else w
+    w = re.sub(r"(?<=\w)-(?=\w)", "=", w)          # "double-four": a hyphen inside a word is shown as one (=)
+    w = w.rstrip("-")
+    return w + tail if w else ""
 
 
 def to_events(lines: list[Line], tempo, offset_s: float = 0.0, end_s: float | None = None,
@@ -251,7 +267,7 @@ def from_events(events: list[tuple[int, str]], tempo, offset_s: float = 0.0) -> 
                 lines.append(cur)
             cur = Line(sec(tick), sec(tick), [])
         if e.startswith("lyric "):
-            w = e[6:].strip()
+            w = re.sub(r"(?<=\w)=(?=\w)", "-", e[6:].strip())   # Clone Hero's = inside a word: a shown hyphen
             if w:
                 cur.words.append((sec(tick), w))
                 cur.end = max(cur.end, sec(tick) + 0.3)

@@ -67,6 +67,7 @@
             <span class="dt-animbtns"></span></div>
           <div class="dt-lyrics muted"></div>
           <div class="dt-bass muted" hidden></div>
+          <div class="dt-keys muted" hidden></div>
           <div class="dt-update muted" hidden></div>
         </div>
         <div class="dt-hwprev" title="This song's highway (it scrolls down the screen in Clone Hero)"><img alt="" hidden><span></span></div>
@@ -75,7 +76,7 @@
         "Metalcore", "Hard Rock", "Indie", "Electronic", "Classical", "Video Game", "Country", "Blues", "Jazz", "Funk",
         "Hip Hop", "R&B", "Soundtrack", "Other"].map((g) => `<option value="${g}">`).join("")}</datalist>
       <p class="dt-state muted"></p>
-      <p class="dt-more muted"><button type="button" class="linkbtn" data-k="sng" title="The whole song in one file, the way Clone Hero (v1.1 and later) and YARG can read it: easy to share or copy into a songs folder. Saved changes only.">Download as .sng</button> ·
+      <p class="dt-more muted"><button type="button" class="linkbtn" data-k="sng" title="The whole song in one file, the way Clone Hero (v1.1 and later) and YARG can read it: copy it into a songs folder on another PC. It contains the song's audio, so only share it where you're allowed to share that music. Saved changes only.">Download as .sng</button> ·
         <button type="button" class="linkbtn" data-k="moon" title="Open this song's chart in Moonscraper Chart Editor (set where it is in Settings). Save there, then reopen the song here to see the changes.">Open in Moonscraper</button></p>
       <div class="dlgbtns"><button type="button" class="ghost" data-k="cancel">Cancel</button>
         <button type="button" class="ghost" data-k="save">Save</button>
@@ -243,6 +244,7 @@
         `<button type="button" class="linkbtn" data-k="rmvid">Remove</button>`;
     } else {
       el.innerHTML = `Music video: ${v.file} (${kind}, ${v.height ? v.height + "p, " : ""}${v.mb} MB) plays behind the highway. ` +
+        (v.webm ? "" : `<button type="button" class="linkbtn" data-k="convvid" title="Clone Hero plays webm (VP8) videos on every platform; mp4 may not play everywhere">Convert to webm</button> · `) +
         `<button type="button" class="linkbtn" data-k="rmvid">Remove</button>`;
     }
     for (const b of el.querySelectorAll("[data-k=rmvid], [data-k=keepvid]"))
@@ -293,20 +295,21 @@
       } catch (err) { toast(err.message, true); }
     });
   }
-  function showBass() {
-    const el = q(".dt-bass"), B = cur.bass;
+  function showBass() { showPart("bass", "Bass"); showPart("keys", "Keys"); }
+  function showPart(part, name) {             // the chart's bass / keys part: notes per level, Edit, Remove
+    const el = q(`.dt-${part}`), B = cur[part];
     el.hidden = !B;
     if (!B) return;
     const lvl = ["expert", "hard", "medium", "easy"].filter((d) => B[d]).map((d) => `${d[0].toUpperCase() + d.slice(1)} ${B[d]}`).join(", ");
-    el.innerHTML = `Bass chart: ${lvl} notes (Clone Hero and YARG offer it as the bass part). ` +
-      `<a class="link" href="editor.html?song=${enc(cur.id)}&amp;part=bass">Edit</a> · ` +
-      `<button type="button" class="linkbtn" data-k="bassrm">Remove</button>`;
-    el.querySelector("[data-k=bassrm]").addEventListener("click", async () => {
-      if (!confirm("Remove the bass part from this chart? (The chart before is kept in its history.)")) return;
+    el.innerHTML = `${name} chart: ${lvl} notes (Clone Hero and YARG offer it as the ${part} part). ` +
+      `<a class="link" href="editor.html?song=${enc(cur.id)}&amp;part=${part}">Edit</a> · ` +
+      `<button type="button" class="linkbtn" data-k="partrm">Remove</button>`;
+    el.querySelector("[data-k=partrm]").addEventListener("click", async () => {
+      if (!confirm(`Remove the ${part} part from this chart? (The chart before is kept in its history.)`)) return;
       try {
-        const r = await call(`/api/songs/${enc(cur.id)}/bass`, { method: "DELETE" });
-        cur.bass = null; showBass();
-        toast("Bass part removed." + (r.export_stale ? " Save & update in Clone Hero to copy the change there." : ""));
+        const r = await call(`/api/songs/${enc(cur.id)}/parts/${part}`, { method: "DELETE" });
+        cur[part] = null; showPart(part, name);
+        toast(`${name} part removed.` + (r.export_stale ? " Save & update in Clone Hero to copy the change there." : ""));
       } catch (err) { toast(err.message, true); }
     });
   }
@@ -314,7 +317,7 @@
     const el = q(".dt-update"), u = cur.updates || [];
     el.hidden = !u.length;
     if (!u.length) return;
-    const words = { instruments: "own tracks for bass, drums, vocals and keys", bass: "a bass chart", lyrics: "lyrics", background: "sharper backgrounds" };
+    const words = { instruments: "own tracks for bass, drums, vocals and keys", bass: "a bass chart", keys: "a keys chart", lyrics: "lyrics", background: "sharper backgrounds" };
     el.innerHTML = `Newer RiffChart can add: ${u.map((k) => words[k] || k).join(", ")}. ` +
       `<button type="button" class="linkbtn" data-k="upgo" title="Notes and your edits stay as they are. About a minute, in the queue.">Bring up to date</button>`;
     el.querySelector("[data-k=upgo]").addEventListener("click", async () => {

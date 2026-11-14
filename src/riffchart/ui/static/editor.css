@@ -118,6 +118,7 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .histpanel li.cur { outline: 1px solid var(--accent); }
 .histpanel .hcount { grid-column: 1 / span 2; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .histpanel .hcount b { color: var(--text); font-weight: 600; }
+.histpanel .hrestore { grid-column: 1 / span 2; justify-self: start; font-size: 12px; }
 .histpanel .up { color: var(--ok); } .histpanel .down { color: var(--bad); }
 
 .tempopanel .trow { display: flex; align-items: center; gap: 8px; padding: 6px 12px; flex-wrap: wrap; }

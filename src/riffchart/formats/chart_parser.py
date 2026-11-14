@@ -103,7 +103,9 @@ def parse_chart_text(text: str, ini: dict[str, str] | None = None, instrument: s
             parts[inst] = got
     tracks = parts.pop(instrument)
     known = {"Song", "SyncTrack", "Events"} | {n for i in INSTRUMENT_SECTIONS for n in track_names(i).values()}
-    raw = {k: v for k, v in secs.items() if k not in known}
+    # a part's section with no notes (only star power or solo marks) is kept as it was, not dropped
+    empty = {sec for i, got in parts.items() for d, sec in track_names(i).items() if d in got and not len(got[d])}
+    raw = {k: v for k, v in secs.items() if k not in known or k in empty}
     return Song(resolution, tempo, tracks, sections, meta, offset, "chart", warnings, lyrics, instrument,
                 {k: v for k, v in parts.items() if any(len(t) for t in v.values())}, raw)
 

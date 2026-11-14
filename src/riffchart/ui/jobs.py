@@ -20,9 +20,11 @@ from ..paths import PROJECT
 
 STAGE_LABEL = {"load": "loading audio", "separate": "separating guitar", "beats": "tracking beats",
                "chart": "charting", "post": "polishing", "write": "writing files",
-               "lyrics": "finding lyrics", "visuals": "making backgrounds", "bass": "charting the bass"}
+               "lyrics": "finding lyrics", "visuals": "making backgrounds", "bass": "charting the bass",
+               "keys": "charting the keys", "video": "converting the music video"}
 # "bring up to date" jobs (no charting): splitting the instruments is nearly all of the time
-UPDATE_WEIGHTS = {"load": 0.03, "separate": 0.65, "write": 0.05, "bass": 0.15, "lyrics": 0.05, "visuals": 0.07}
+UPDATE_WEIGHTS = {"load": 0.03, "separate": 0.50, "write": 0.05, "bass": 0.12, "keys": 0.11, "lyrics": 0.05,
+                  "video": 0.08, "visuals": 0.06}
 
 
 @dataclass
@@ -288,7 +290,7 @@ class JobQueue:
             self._drop_upload(j)
             self.log(f"{j.status} {j.name[:60]} {j.message} [{self.counts()}]")
         except Exception as e:
-            j.status, j.message = "failed", f"{type(e).__name__}: {e}"
+            j.status, j.message = "failed", friendly_error(e)
             self.log(f"FAILED {j.name[:60]}: {j.message}\n{traceback.format_exc()}")
         j.progress, j.finished = (1.0 if j.status != "failed" else j.progress), time.time()
         with self.lock:
@@ -308,11 +310,40 @@ class JobQueue:
             j.message = update_message(r)
             self.log(f"done {j.name[:60]} {j.message} [{self.counts()}]")
         except Exception as e:
-            j.status, j.message = "failed", f"{type(e).__name__}: {e}"
+            j.status, j.message = "failed", friendly_error(e)
             self.log(f"FAILED {j.name[:60]}: {j.message}\n{traceback.format_exc()}")
         j.progress, j.finished = (1.0 if j.status != "failed" else j.progress), time.time()
         with self.lock:
             self._save()
+
+
+def friendly_error(e: BaseException) -> str:
+    """What a failed job says in the queue: the likely cause in plain words and what to do, then the technical
+    name (the full traceback is in the log)."""
+    import errno
+    tech = f"{type(e).__name__}: {e}"
+    low = tech.lower()
+    if isinstance(e, OSError) and (e.errno == errno.ENOSPC or "no space left" in low or "disk full" in low):
+        why = "the disk is full. Free some space (each song takes about 50-150 MB) and press Retry"
+    elif "out of memory" in low and ("cuda" in low or "hip" in low or type(e).__name__ == "OutOfMemoryError"):
+        why = ("the graphics card ran out of memory. Close games or other AI apps using it and press Retry "
+               "(or set device: cpu in configs/product.local.yaml: slower, but always works)")
+    elif isinstance(e, MemoryError):
+        why = "the PC ran out of memory. Close other programs and press Retry"
+    elif isinstance(e, PermissionError):
+        why = ("RiffChart isn't allowed to write a file it needs. If Clone Hero or another program has the song "
+               "open, close it and press Retry")
+    elif isinstance(e, FileNotFoundError) and any(k in low for k in (".pt", "checkpoint", "ckpt", "models", ".pkl")):
+        why = "an AI model file is missing. Run the installer again (it downloads the models) and press Retry"
+    elif isinstance(e, FileNotFoundError) and "ffmpeg" in low:
+        why = "ffmpeg (used to read video and m4a files) isn't installed. Run the installer again"
+    elif any(k in low for k in ("could not decode", "error opening", "invalid data found", "format not recognised",
+                                "unsupported format", "no audio", "libsndfile", "audioread", "ffmpeg",
+                                "may be empty or damaged")):
+        why = "this file couldn't be read as audio (it may be damaged or only partly downloaded). Try another copy"
+    else:
+        return tech
+    return f"{why[0].upper()}{why[1:]}. ({tech[:200]})"
 
 
 def update_message(r: dict) -> str:
@@ -322,8 +353,12 @@ def update_message(r: dict) -> str:
         did.append("own tracks for " + ", ".join(f[:-4] for f in r["instruments"]))
     if r.get("bass"):
         did.append(f"a bass chart ({r['bass']} notes on Expert)")
+    if r.get("keys"):
+        did.append(f"a keys chart ({r['keys']} notes on Expert)")
     if r.get("lyrics"):
         did.append(f"lyrics ({r['lyrics']} words)")
+    if r.get("video"):
+        did.append("music video as webm")
     if r.get("background"):
         did.append("sharper background")
     msg = ("updated: " + "; ".join(did)) if did else "nothing to update"

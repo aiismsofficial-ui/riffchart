@@ -436,7 +436,7 @@ setInterval(() => {
 }, 1000);
 
 // ---------- bring library songs up to date (no re-charting): own instrument tracks, lyrics, sharp backgrounds
-const UPDATE_WORDS = { instruments: "own tracks for bass, drums, vocals and keys", bass: "a bass chart", lyrics: "lyrics", background: "sharper backgrounds" };
+const UPDATE_WORDS = { instruments: "own tracks for bass, drums, vocals and keys", bass: "a bass chart", keys: "a keys chart", lyrics: "lyrics", background: "sharper backgrounds" };
 $("#upall").addEventListener("click", async () => {
   const old = songs.filter((x) => x.updates && x.updates.length);
   if (!old.length) { toast("Every song is up to date"); return; }
@@ -537,3 +537,23 @@ $("#batchbar").addEventListener("change", (e) => {
   s.value = "";
 });
 let batchRechart = null;
+
+// ---------- a newer RiffChart is out (GitHub releases; Settings can turn the check off)
+async function checkNewVersion() {
+  let r;
+  try { r = await fetch("/api/update-check").then((x) => x.json()); } catch { return; }
+  if (!r || !r.newer) return;
+  let gone = "";
+  try { gone = localStorage.getItem("riffchart.newver.dismissed") || ""; } catch { /* ignore */ }
+  if (gone === r.latest) return;
+  const el = $("#newver");
+  el.innerHTML = `RiffChart ${esc(r.latest)} is out (you have ${esc(r.current)}). ` +
+    `<a href="${esc(r.url)}" target="_blank" rel="noopener">What's new and how to update</a> ` +
+    `<button type="button" class="ghost small icon" title="Hide until the next version" aria-label="Hide">✕</button>`;
+  el.hidden = false;
+  el.querySelector("button").addEventListener("click", () => {
+    el.hidden = true;
+    try { localStorage.setItem("riffchart.newver.dismissed", r.latest); } catch { /* ignore */ }
+  });
+}
+checkNewVersion();

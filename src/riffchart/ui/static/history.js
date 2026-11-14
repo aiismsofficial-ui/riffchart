@@ -12,8 +12,10 @@ function fmtWhen(sec, secs = false) {
   if (d.toDateString() === y.toDateString()) return `yesterday ${time}`;
   return `${d.toLocaleDateString([], { day: "numeric", month: "short", year: d.getFullYear() === now.getFullYear() ? undefined : "numeric" })} ${time}`;
 }
+const noPart = (notes) => !notes.error && PART !== "guitar" && !DIFFS.some((d) => notes[d]);
 function countsHtml(notes) {
   if (notes.error) return `<span class="down">can't be read</span>`;
+  if (noPart(notes)) return `<span class="muted">no ${PART} part in this version</span>`;
   return DIFFS.map((d) => {
     const n = notes[d] || 0, cur = S.edit ? S.edit[d].notes.length : n, diff = n - cur;
     const delta = diff ? ` <span class="${diff > 0 ? "up" : "down"}">${diff > 0 ? "+" : ""}${diff}</span>` : "";
@@ -29,7 +31,8 @@ function renderHistory() {
   }
   ol.innerHTML = "";
   const REASONS = { save: "a save", rechart: "a re-chart", lyrics: "adding lyrics", bass: "adding the bass",
-    nobass: "removing the bass", update: "an update" };
+    nobass: "removing the bass", keys: "adding the keys", nokeys: "removing the keys", update: "an update",
+    restore: "restoring a version" };
   const seen = new Map();                                   // same minute twice: show seconds
   for (const v of HI.list) seen.set(fmtWhen(v.made), (seen.get(fmtWhen(v.made)) || 0) + 1);
   for (const v of HI.list) {
@@ -40,15 +43,17 @@ function renderHistory() {
     li.title = `Replaced by ${why} ${fmtWhen(v.replaced)}`;
     li.innerHTML = `<span class="ttl">${when}</span>
       <span class="when">before ${esc(why)}</span>
-      <span class="hcount">${countsHtml(v.notes)}</span>`;
-    if (!v.notes.error) li.addEventListener("click", () => openVersion(v));
+      <span class="hcount">${countsHtml(v.notes)}</span>
+      <button type="button" class="linkbtn hrestore" title="Make this whole file the chart again: every part (guitar, bass, keys, drums), the tempo map, sections and lyrics">restore all parts</button>`;
+    if (!v.notes.error && !noPart(v.notes)) li.addEventListener("click", (e) => { if (!e.target.closest(".hrestore")) openVersion(v); });
+    li.querySelector(".hrestore").addEventListener("click", () => restoreVersion(v));
     ol.appendChild(li);
   }
 }
 async function refreshHistory() {
   HI.loading = !HI.list.length; renderHistory();
   try {
-    HI.list = await fetch(`/api/songs/${encodeURIComponent(songId)}/history`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
+    HI.list = await fetch(`/api/songs/${encodeURIComponent(songId)}/history?part=${PART}`).then((r) => { if (!r.ok) throw new Error(r.statusText); return r.json(); });
   } catch (e) { toast("Could not list earlier versions: " + e.message, true); }
   HI.loading = false; renderHistory();
 }
@@ -58,6 +63,10 @@ async function openVersion(v) {
     const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/history/${encodeURIComponent(v.name)}?part=${PART}`);
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
+    const sameTiming = j.resolution === S.chart.resolution && JSON.stringify([j.tempo, j.ts]) === JSON.stringify([S.chart.tempo, S.chart.ts]);
+    if (!sameTiming && !confirm(`The version from ${fmtWhen(v.made)} has a different tempo map.\n\nOpening it brings back ` +
+        `its tempo map and sections too, which apply to every part of the song (guitar, bass, keys). Saving keeps ` +
+        `the current version in History.\n\nOpen it?`)) return;
     edit(`open the version from ${fmtWhen(v.made)}`, () => {
       S.edit = editTracks(j);
       S.chart.sections = j.sections;
@@ -69,6 +78,18 @@ async function openVersion(v) {
     renderHistory();
     toast(`Showing the version from ${fmtWhen(v.made)}. Save to make it the chart again, or Undo to go back.`);
   } catch (e) { toast("Could not open that version: " + e.message, true); }
+}
+async function restoreVersion(v) {
+  if (E.dirty && !confirm("You have unsaved changes in the editor. Restoring a version reloads the editor and drops them.\n\nRestore anyway?")) return;
+  if (!confirm(`Make the version from ${fmtWhen(v.made)} the chart again, with all its parts (guitar, bass, keys, drums), ` +
+      `tempo map, sections and lyrics?\n\nThe current chart goes into History first, so this can be undone the same way.`)) return;
+  try {
+    const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/history/${encodeURIComponent(v.name)}/restore`, { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    E.dirty = false;                                        // nothing to warn about: the reload is the point
+    location.reload();
+  } catch (e) { toast("Could not restore that version: " + e.message, true); }
 }
 function toggleHistory() {
   const p = $("#history");

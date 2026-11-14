@@ -8,7 +8,7 @@ const OPEN_COLOR = "#a855f7", SP_COLOR = "#67e8f9";
 const TYPE_NAMES = ["strum", "HOPO", "tap"];
 const songId = new URLSearchParams(location.search).get("song");
 // which part of the chart is open: guitar, or bass (its own notes; bass.ogg is the featured track)
-const PART = new URLSearchParams(location.search).get("part") === "bass" ? "bass" : "guitar";
+const PART = ["bass", "keys"].includes(new URLSearchParams(location.search).get("part")) ? new URLSearchParams(location.search).get("part") : "guitar";
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 let toastTimer;
@@ -552,6 +552,7 @@ async function load() {
         return r.json(); }),
       fetch(base + "/peaks").then((r) => (r.ok ? r.json() : []))]);
     S.chart = chart;
+    E.version = chart.version;                          // sent back with Save: refused if the file changed
     showParts(chart.parts || ["guitar"]);
     S.tempo = new Tempo(chart.resolution, chart.tempo, chart.ts);
     initEdit(chart);                                    // edit.js: editable copy + prepared tracks
@@ -640,8 +641,8 @@ function showParts(parts) {
       location.search = q.toString();
     };
   });
-  $("#vguitarlbl").firstChild.textContent = PART === "bass" ? "Bass " : "Guitar ";
-  if (PART === "bass") {
+  $("#vguitarlbl").firstChild.textContent = { bass: "Bass ", keys: "Keys " }[PART] || "Guitar ";
+  if (PART !== "guitar") {
     const rc = $("#rcbtn");
     rc.disabled = true; rc.title = "Re-charting a section works on the guitar part";
   }

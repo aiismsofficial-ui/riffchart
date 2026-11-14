@@ -1,10 +1,12 @@
-"""Bass charts without a bass model: the guitar chart model listens to the bass track (Demucs' bass stem, the
+"""Bass and keys charts without their own model: the guitar chart model listens to the bass track (Demucs' bass stem, the
 song's bass.ogg) instead of the guitar, with the full mix as its second input as always, and the result goes
 through the same post-processing (playability fixes, Hard / Medium / Easy, star power).
 
 Measured on held-out songs against human bass charts (scripts/eval_bass.py; NOTES.md "Bass from stems").
 The chart is written as the .chart's [<Diff>DoubleBass] sections (PART BASS in a notes.mid); Clone Hero and
 YARG offer it as the song's bass part. Songs whose bass is too quiet for its own track get no bass chart.
+
+Keys work the same way from the piano stem (keys.ogg), written as [<Diff>Keyboard] / PART KEYS (PARTS below).
 """
 from __future__ import annotations
 
@@ -14,14 +16,22 @@ import numpy as np
 
 from ..formats.song import GuitarTrack, NoteType, Song, popcount
 
-MIN_LEVEL = 0.02          # the bass track's RMS against the whole song's: below this it isn't charted (follow.py)
-SECTION = "ExpertDoubleBass"
+MIN_LEVEL = 0.02          # the part's RMS against the whole song's: below this it isn't charted (follow.py)
+# the extra 5-fret parts: Demucs stem, the song's audio file, the .chart section that marks it, the Settings
+# switch, the song.ini difficulty, and what the job queue calls it
+PARTS = {
+    "bass": {"stem": "bass", "file": "bass.ogg", "section": "ExpertDoubleBass", "setting": "bass_chart",
+             "ini": "diff_bass", "label": "charting the bass"},
+    "keys": {"stem": "piano", "file": "keys.ogg", "section": "ExpertKeyboard", "setting": "keys_chart",
+             "ini": "diff_keys", "label": "charting the keys"},
+}
+SECTION = PARTS["bass"]["section"]
 
 
-def enabled(config: str = "configs/product.yaml") -> bool:
-    """Settings: chart the bass too (bass_chart in product.yaml / product.local.yaml)."""
+def enabled(config: str = "configs/product.yaml", part: str = "bass") -> bool:
+    """Settings: chart this part too (bass_chart / keys_chart in product.yaml / product.local.yaml)."""
     from ..paths import load_config
-    return bool(load_config(config).get("bass_chart", True))
+    return bool(load_config(config).get(PARTS[part]["setting"], part == "bass"))   # keys: off unless chosen
 
 
 def loud_enough(bass: np.ndarray, mix: np.ndarray, min_level: float = MIN_LEVEL) -> bool:
@@ -87,11 +97,11 @@ def ours(ini: dict) -> bool:
     return str(ini.get("charter", "")).strip().lower() in OUR_CHARTERS
 
 
-def in_chart(folder) -> bool:
-    """The song's notes.chart already has a bass part (cheap: no parsing)."""
+def in_chart(folder, part: str = "bass") -> bool:
+    """The song's notes.chart already has this part (cheap: no parsing)."""
     from pathlib import Path
     p = Path(folder) / "notes.chart"
     try:
-        return p.exists() and "[ExpertDoubleBass]" in p.read_text(encoding="utf-8", errors="replace")
+        return p.exists() and f"[{PARTS[part]['section']}]" in p.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return False

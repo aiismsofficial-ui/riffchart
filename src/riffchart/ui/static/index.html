@@ -16,12 +16,13 @@
 </header>
 
 <main>
+  <div class="newver" id="newver" hidden></div>
   <section class="card add">
     <div class="addrow">
       <div id="drop" class="drop" tabindex="0">
         <div class="drop-big">＋ Add songs: drop audio files or folders here</div>
         <div class="drop-small">mp3, m4a, ogg, opus, webm, flac, wav or mp4 &middot; <label class="link">browse files<input id="pick" type="file" multiple accept=".mp3,.m4a,.aac,.ogg,.opus,.webm,.flac,.wav,.mp4,.mkv,.mka,.wma" hidden></label>
-          &middot; each song takes about 30 seconds</div>
+          &middot; each song takes about 1-2 minutes with a graphics card</div>
       </div>
       <form id="pathform" class="pathrow">
         <input id="pathin" type="text" placeholder="…or paste a file or folder path, e.g. D:\Music\Album" autocomplete="off">
@@ -93,7 +94,19 @@
         <thead><tr><th><label class="pick" title="Select all the songs shown"><input type="checkbox" id="pickall"></label>Song</th><th class="num" title="Notes per difficulty: Expert / Hard / Medium / Easy">Notes E / H / M / E</th><th class="num">Length</th><th class="num" title="Estimated guitar difficulty (0-6)">Diff</th><th>Charted</th><th></th></tr></thead>
         <tbody id="songs"></tbody>
       </table>
-      <p class="empty" id="nosongs" hidden>No songs yet. Drop some audio above to get started.</p>
+      <div class="empty welcome" id="nosongs" hidden>
+        <h3>Welcome to RiffChart: three steps to your first chart</h3>
+        <ol>
+          <li><b>Add a song.</b> Drop an audio or music-video file in the box above (or paste a folder path). A minute
+            or two later it's charted: guitar on all four difficulties, plus bass and keys when the song has them.</li>
+          <li><b>Look it over.</b> Press <b>Edit</b> next to the song and play it. Click to add a note, drag to move one,
+            right-click to delete; anything unplayable is marked for you. Nothing changes until you Save.</li>
+          <li><b>Play it.</b> <b>▶ Clone Hero</b> opens it in the game right away; <b>Export</b> copies it to your
+            Clone Hero songs folder (then Scan Songs in Clone Hero).</li>
+        </ol>
+        <p class="muted">The charts are made by AI: handy for songs nobody has charted, or as a first draft to fix up.
+          Found a spot it got wrong? Press <b>F</b> there in the editor; the <b>Feedback file</b> collects them for the developer.</p>
+      </div>
     </div>
   </section>
 </main>

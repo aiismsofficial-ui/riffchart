@@ -266,6 +266,39 @@ def test_convert_video_to_vp8(tmp_path):
     assert len(frames) == 12 and frames[0].time < 0.01 and abs(frames[-1].time - 1.1) < 0.05
 
 
+def test_h264_mp4_converted_to_webm_by_setting(tmp_path):
+    """An H.264 .mp4 plays in Clone Hero on Windows but not on every platform: with video_webm (the default)
+    Bring up to date offers to convert it, and after converting there's nothing left to do."""
+    import av
+    from riffchart.product import update
+    from riffchart.product.visuals import convert_video, is_webm, video_info, wants_convert
+    src = tmp_path / "clip.mp4"
+    try:
+        with av.open(str(src), "w") as c:
+            v = c.add_stream("libx264", rate=10)
+            v.width = v.height = 64
+            v.pix_fmt = "yuv420p"
+            for i in range(10):
+                fr = av.VideoFrame.from_ndarray(np.full((64, 64, 3), i * 20, np.uint8), format="rgb24")
+                for pkt in v.encode(fr):
+                    c.mux(pkt)
+            for pkt in v.encode():
+                c.mux(pkt)
+    except Exception as e:                               # a PyAV build without an H.264 encoder
+        pytest.skip(f"no H.264 encoder: {e}")
+    song = tmp_path / "song"
+    song.mkdir()
+    save_video(src, song)
+    info = video_info(song)
+    assert info["file"] == "video.mp4" and info["codec"] == "h264" and info["ok"] and not info["webm"]
+    assert wants_convert(info) and not wants_convert(info, webm=False) and not wants_convert(None)
+    assert "video" in update.needs(song, split=False, lyrics_online=False, webm=True)
+    assert "video" not in update.needs(song, split=False, lyrics_online=False, webm=False)
+    after = convert_video(song, max_height=48)
+    assert is_webm(after) and after["webm"] and not (song / "video.mp4").exists()
+    assert "video" not in update.needs(song, split=False, lyrics_online=False, webm=True)
+
+
 def test_cover_results_ranked_by_artist_and_title():
     r = [{"label": "When Woken: Lullaby covers of Band songs · Sleepy Tribute"}, {"label": "Live EP · Band"},
          {"label": "Song Name (feat. X) · Band"}, {"label": "Karaoke Hits · Band"}]

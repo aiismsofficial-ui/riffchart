@@ -38,7 +38,8 @@ def write_chart_text(song: Song, *, name: str = "", artist: str = "", charter: s
         out.append(f"  {t} = {txt}")
     out += ["}", "[Events]", "{"]
     events = [(int(t), 0, f"section {s}") for t, s in song.sections]
-    order = {"phrase_start": 1, "phrase_end": 3}
+    # at one tick: the last phrase ends, then a section, then the next phrase starts and its first word
+    order = {"phrase_end": -1, "phrase_start": 1}
     events += [(int(t), order.get(e, 2), e) for t, e in getattr(song, "lyrics", [])]
     for t, _, e in sorted(events, key=lambda x: (x[0], x[1])):
         out.append(f"  {t} = E {_q(e)}")
@@ -46,6 +47,7 @@ def write_chart_text(song: Song, *, name: str = "", artist: str = "", charter: s
 
     threshold = chart_hopo_threshold(res, ini)
     parts = {**getattr(song, "parts", {}), getattr(song, "instrument", "guitar"): song.tracks}
+    written = set()
     for inst in INSTRUMENT_SECTIONS:                       # guitar, bass, rhythm, keys
         for diff, sec in track_names(inst).items():
             tr = parts.get(inst, {}).get(diff)
@@ -54,8 +56,10 @@ def write_chart_text(song: Song, *, name: str = "", artist: str = "", charter: s
             out += [f"[{sec}]", "{"]
             out += _track_lines(tr, threshold)
             out.append("}")
+            written.add(sec)
     for sec, lines in getattr(song, "raw_sections", {}).items():   # drums and the like, as they were
-        out += [f"[{sec}]", "{"] + [f"  {ln}" for ln in lines] + ["}"]
+        if sec not in written:                             # (an empty part section a new part replaced: not twice)
+            out += [f"[{sec}]", "{"] + [f"  {ln}" for ln in lines] + ["}"]
     return "\n".join(out) + "\n"
 
 

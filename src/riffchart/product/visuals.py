@@ -418,6 +418,18 @@ _DECODERS = {"libdav1d": "av1", "libaom-av1": "av1", "libvpx": "vp8", "libvpx-vp
 CONVERTING: dict[str, dict] = {}          # song folder -> {progress, error} while / after converting
 
 
+def is_webm(info: dict) -> bool:
+    """VP8 webm: the one video format Clone Hero plays on every platform (its badsongs.txt warns that .mp4
+    backgrounds may not work everywhere), and YARG plays it too."""
+    return info.get("codec") == "vp8" and str(info.get("file", "")).lower().endswith(".webm")
+
+
+def wants_convert(info: dict | None, webm: bool = True) -> bool:
+    """The song's video should be re-encoded: Clone Hero can't play it, or (webm: the video_webm setting)
+    it isn't VP8 webm yet."""
+    return bool(info) and (info.get("codec") not in CH_VIDEO_OK or (webm and not is_webm(info)))
+
+
 def video_info(folder: Path) -> dict | None:
     """{file, mb, codec, width, height, ok} of the song's video (ok: Clone Hero plays it), or None."""
     vid = find_first(folder, VIDEO_FILES)
@@ -438,6 +450,7 @@ def video_info(folder: Path) -> dict | None:
         _vinfo_cache[key] = info
     d = dict(_vinfo_cache[key], file=vid.name, mb=round(st.st_size / 2**20, 1))
     d["ok"] = d["codec"] in CH_VIDEO_OK
+    d["webm"] = is_webm(d)
     conv = CONVERTING.get(str(folder))
     if conv:
         d["converting"] = dict(conv)

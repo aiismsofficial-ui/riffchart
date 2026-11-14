@@ -93,3 +93,14 @@ def test_transcribe_fallback_when_nothing_online(tmp_path, monkeypatch):
     monkeypatch.setattr(lyr, "transcribe", lambda v, sr, device=None: [lyr.Line(1.0, 2.0, words[:3])])
     assert lyr.make(tmp_path, "", "", loud, 44100, 20.0)["found"] is False   # a few stray words: no lyrics
     assert lyr.make(tmp_path, "a", "b", loud, 44100, 20.0, local=False)["found"] is False
+
+
+def test_hyphen_inside_a_word_is_shown_not_joined():
+    from riffchart.product.lyrics import _word, from_events
+    from riffchart.formats.song import TempoMap
+    import numpy as np
+    assert _word("double-four") == "double=four"            # Clone Hero shows = as a hyphen; - would join syllables
+    assert _word("Hel-", syllables=True) == "Hel-"
+    tm = TempoMap(192, np.array([0]), np.array([120.0]), np.array([0]), np.array([4]), np.array([4]))
+    lines = from_events([(0, "phrase_start"), (0, "lyric double=four"), (192, "phrase_end")], tm)
+    assert lines[0].words[0][1] == "double-four"            # the editor shows the hyphen again

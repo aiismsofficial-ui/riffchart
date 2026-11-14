@@ -70,8 +70,10 @@ def find_exe(cli: str | None = None, configured: str | None = None) -> Path | No
     return None
 
 
-def preview_command(exe: Path, folder: Path, difficulty: str = "expert") -> list[str]:
-    return [str(exe), "--song", str(Path(folder).resolve()), "--player", f"Guitar,{difficulty.capitalize()}", "-i"]
+def preview_command(exe: Path, folder: Path, difficulty: str = "expert", instrument: str = "guitar") -> list[str]:
+    """instrument: guitar | bass | keys (Clone Hero's --player names: Guitar, Bass, Keys)."""
+    return [str(exe), "--song", str(Path(folder).resolve()), "--player",
+            f"{instrument.capitalize()},{difficulty.capitalize()}", "-i"]
 
 
 def launch_preview(folder: Path, difficulty: str = "expert", exe: Path | None = None) -> list[str]:

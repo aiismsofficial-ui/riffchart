@@ -219,3 +219,13 @@ button.icon { padding: 4px 9px; }
 .batchbar[hidden] { display: none; }
 .batchbar b { margin-right: 4px; }
 .batchbar select { max-width: 210px; }
+.newver { display: flex; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 14px; border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel)); border: 1px solid var(--accent); font-size: 14px; }
+.newver a { font-weight: 600; }
+.newver button { margin-left: auto; }
+.welcome { text-align: left; max-width: 760px; margin: 8px auto; color: var(--text); }
+.welcome h3 { margin: 0 0 10px; font-size: 17px; }
+.welcome ol { margin: 0 0 12px; padding-left: 22px; line-height: 1.55; }
+.welcome li { margin-bottom: 8px; }
+/* the hidden attribute always wins over a display set above (buttons, banners, flex rows) */
+[hidden] { display: none !important; }

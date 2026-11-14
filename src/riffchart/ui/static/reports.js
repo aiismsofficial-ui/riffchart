@@ -23,7 +23,7 @@ async function reportSpot() {
   if (note === null) return;
   try {
     const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/reports`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ time_s: time, tick, difficulty: d, note, excerpt: excerptAt(d, tick) }) });
+      body: JSON.stringify({ time_s: time, tick, difficulty: d, note, excerpt: excerptAt(d, tick), part: PART }) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     RP.list.push(j); renderReports();
