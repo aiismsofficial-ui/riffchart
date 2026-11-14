@@ -53,6 +53,7 @@
   <span class="sep"></span>
   <button id="rcbtn" class="ghost small" title="Let the AI chart a section again: try takes and keep the best (R)">&#10022; Re-chart section</button>
   <button id="lowerbtn" class="ghost small" title="Make Hard, Medium and Easy again from the Expert you see now, the way a fresh chart makes them (one Undo step; nothing is saved until you Save)">&#8681; Easier from Expert</button>
+  <button id="tempobtn" class="ghost small" title="BPM and time-signature markers: edit them, tap a tempo, or drag beat lines on the waveform to line the chart up with the audio">&#9833; Tempo map</button>
   <button id="histbtn" class="ghost small" title="Earlier versions of this chart: look at one, then Save to restore it">History</button>
   <button id="issuesbtn" class="ghost small issuesbtn" title="Playability problems in this difficulty (. and , jump to the next / previous)">Checking…</button>
   <span class="muted" id="info"></span>
@@ -110,6 +111,18 @@
       Save makes it the chart again (what you have now is kept too), Undo goes back.</p>
     <ol id="hlist"></ol>
   </aside>
+  <aside id="tempo" class="issues histpanel tempopanel" hidden aria-label="Tempo map">
+    <div class="ihead"><b>Tempo map</b>
+      <button class="ghost small" id="tclose" aria-label="Close">✕</button></div>
+    <p class="muted hnote">Notes sit on beats, so they move with the tempo. <b>Drag a beat line on the waveform</b>
+      to where the beat really is: the tempo before it stretches to fit and nothing after the next marker moves.</p>
+    <div class="trow"><button class="ghost small" id="taddbpm" title="A tempo marker on the beat nearest the playhead">+ Tempo at playhead</button>
+      <button class="ghost small" id="taddts" title="A time signature on the bar nearest the playhead">+ Time signature</button></div>
+    <div class="trow"><button class="small" id="ttap" title="Tap along with the beat (or press B)">Tap</button>
+      <span class="muted" id="ttapval"></span>
+      <button class="ghost small" id="ttapuse" disabled title="Set this tempo at the beat nearest the playhead">Use</button></div>
+    <ol id="tlist"></ol>
+  </aside>
   <div id="loading" class="loading">Loading chart and audio…</div>
 </div>
 
@@ -122,7 +135,8 @@
         <p><kbd>&uarr;</kbd><kbd>&darr;</kbd> grid step · <kbd>PgUp</kbd><kbd>PgDn</kbd> bar · <kbd>Home</kbd><kbd>End</kbd></p>
         <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty · <kbd>I</kbd> song details</p>
         <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p>
-        <p><kbd>Shift</kbd>+<kbd>[</kbd><kbd>]</kbd> sync: whole chart 5 ms earlier / later</p></div>
+        <p><kbd>Shift</kbd>+<kbd>[</kbd><kbd>]</kbd> sync: whole chart 5 ms earlier / later</p>
+        <p><b>Tempo map</b>: drag beat lines on the waveform · <kbd>B</kbd> tap tempo</p></div>
       <div><h4>Notes</h4>
         <p><b>Click</b> empty lane: add (snaps to the grid) · <b>right-click</b> a gem: delete it</p>
         <p><kbd>1</kbd>–<kbd>5</kbd> toggle G R Y B O on the selection, or add at the playhead · <kbd>0</kbd> open</p>
@@ -149,5 +163,6 @@
 <script src="check.js"></script>
 <script src="rechart.js"></script>
 <script src="history.js"></script>
+<script src="tempo.js"></script>
 </body>
 </html>

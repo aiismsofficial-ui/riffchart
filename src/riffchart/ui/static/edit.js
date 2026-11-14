@@ -96,11 +96,13 @@ function undo() {
   const u = E.undo.pop(); if (!u) return toast("Nothing to undo");
   E.redo.push({ snap: snapshot(), label: u.label }); restore(u.snap); markDirty(); showSync(); toast("Undo: " + u.label);
   if (typeof historyChanged === "function") historyChanged(false);
+  if (typeof tempoChanged === "function") tempoChanged();
 }
 function redo() {
   const r = E.redo.pop(); if (!r) return toast("Nothing to redo");
   E.undo.push({ snap: snapshot(), label: r.label }); restore(r.snap); markDirty(); showSync(); toast("Redo: " + r.label);
   if (typeof historyChanged === "function") historyChanged(false);
+  if (typeof tempoChanged === "function") tempoChanged();
 }
 const contentSnap = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, timing: timing() });
 function markDirty() { E.dirty = contentSnap() !== E.clean; updateButtons(); }   // undo back to saved = clean
