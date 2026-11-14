@@ -86,9 +86,10 @@
       </div>
     </div>
     <div id="exportbar" class="exportbar"></div>
+    <div id="batchbar" class="batchbar" hidden></div>
     <div class="tablewrap">
       <table class="songs">
-        <thead><tr><th>Song</th><th class="num" title="Notes per difficulty: Expert / Hard / Medium / Easy">Notes E / H / M / E</th><th class="num">Length</th><th class="num" title="Estimated guitar difficulty (0-6)">Diff</th><th>Charted</th><th></th></tr></thead>
+        <thead><tr><th><label class="pick" title="Select all the songs shown"><input type="checkbox" id="pickall"></label>Song</th><th class="num" title="Notes per difficulty: Expert / Hard / Medium / Easy">Notes E / H / M / E</th><th class="num">Length</th><th class="num" title="Estimated guitar difficulty (0-6)">Diff</th><th>Charted</th><th></th></tr></thead>
         <tbody id="songs"></tbody>
       </table>
       <p class="empty" id="nosongs" hidden>No songs yet. Drop some audio above to get started.</p>

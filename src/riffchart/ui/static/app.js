@@ -231,8 +231,8 @@ function renderSongs() {
     const verb = j && j.kind === "update" ? "updating" : "re-charting";
     const state = j ? `<span class="tag running">${j.status === "running" ? `${verb} ${Math.round(j.progress * 100)}%` : j.kind === "update" ? "update queued" : "re-chart queued"}</span>` : "";
     const id = esc(s.id);
-    return `<tr data-id="${id}">
-      <td><a class="songlink" href="${editorUrl(s.id)}" title="Open in the editor">${s.art ? `<img class="thumb" src="/api/songs/${encodeURIComponent(s.id)}/file/${s.art}" alt="">` : `<span class="thumb none"></span>`}<span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></a>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</td>
+    return `<tr data-id="${id}" class="${picked.has(s.id) ? "picked" : ""}">
+      <td><div class="songcell"><label class="pick" title="Select for a batch action"><input type="checkbox" data-pick="${id}" ${picked.has(s.id) ? "checked" : ""}></label><div><a class="songlink" href="${editorUrl(s.id)}" title="Open in the editor">${s.art ? `<img class="thumb" src="/api/songs/${encodeURIComponent(s.id)}/file/${s.art}" alt="">` : `<span class="thumb none"></span>`}<span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></a>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</div></div></td>
       <td class="num">${notes}</td><td class="num">${fmtLen(s.length_s)}</td><td class="num">${esc(s.diff_guitar ?? "")}</td>
       <td class="when">${when(s.charted)}</td>
       <td><div class="acts">
@@ -249,6 +249,7 @@ function renderSongs() {
           </div></div>
       </div></td></tr>`;
   }).join("");
+  showBatch(list);
 }
 $("#filter").addEventListener("input", renderSongs);
 
@@ -305,7 +306,7 @@ $("#songs").addEventListener("click", async (e) => {
 // ---------- re-chart dialog
 let rechartId = null;
 function openRechart(s) {
-  rechartId = s.id;
+  rechartId = s.id; batchRechart = null;
   $("#rc-title").textContent = `Re-chart “${s.title}”`;
   const o = options();
   document.querySelectorAll("input[name=rcdiff]").forEach((x) => (x.checked = o.difficulties.includes(x.value)));
@@ -320,6 +321,12 @@ $("#rc-go").addEventListener("click", async () => {
   if (!difficulties.length) { toast("Pick at least one difficulty", true); return; }
   const opts = { difficulties, density: parseFloat($("#rc-density").value), chords: $("#rc-chords").value,
     follow: $("#rc-follow").value, stems: true };
+  if (batchRechart) {
+    $("#rechart").close();
+    batchRechart = null;
+    runBatch("rechart", { options: opts }, `Queued to re-chart (each one's current chart is kept in its history)`);
+    return;
+  }
   try {
     await post(`/api/songs/${encodeURIComponent(rechartId)}/rechart`, { options: opts });
     $("#rechart").close();
@@ -439,3 +446,91 @@ $("#upall").addEventListener("click", async () => {
     refreshJobs(); refreshSongs(true);
   } catch (err) { toast(err.message, true); }
 });
+
+// ---------- batch actions on the selected songs
+const picked = new Set();
+let shownIds = [], batchOpts = null;
+async function batchOptions() {          // highway designs and animated backgrounds, fetched once
+  if (batchOpts) return batchOpts;
+  const [hw, bg] = await Promise.all([api("/api/highways").catch(() => ({ designs: [] })), api("/api/backgrounds").catch(() => ({ presets: [] }))]);
+  return (batchOpts = { designs: hw.designs || [], presets: bg.presets || [] });
+}
+function showBatch(list) {
+  shownIds = list.map((s) => s.id);
+  for (const id of [...picked]) if (!songs.some((s) => s.id === id)) picked.delete(id);
+  const all = $("#pickall");
+  all.checked = shownIds.length > 0 && shownIds.every((id) => picked.has(id));
+  all.indeterminate = !all.checked && shownIds.some((id) => picked.has(id));
+  const bar = $("#batchbar");
+  if (!picked.size) { bar.hidden = true; bar.innerHTML = ""; return; }
+  if (!bar.hidden && bar.dataset.n === String(picked.size)) return;   // keep open selects as they are
+  bar.dataset.n = String(picked.size);
+  bar.hidden = false;
+  const o = batchOpts || { designs: [], presets: [] };
+  bar.innerHTML = `<b>${picked.size} selected</b>
+    <button class="small" data-batch="export" title="Copy to your Clone Hero songs folder (replaces copies already there)">Export</button>
+    <button class="ghost small" data-batch="update" title="Own instrument tracks, lyrics, sharper backgrounds; no re-charting">Bring up to date</button>
+    <button class="ghost small" data-batch="rechart" title="Chart them again with the settings you pick (each one's current chart is kept in its history)">Re-chart…</button>
+    <select data-batch="highway" title="The still highway Clone Hero shows on these songs when Song Highways is on"><option value="">Highway…</option>
+      <option value="riffchart">RiffChart</option><option value="cover">From the cover</option>
+      ${o.designs.map((d) => `<option value="design:${esc(d.id)}">${esc(d.name)}</option>`).join("")}
+      <option value="none">None (the player's own)</option></select>
+    <select data-batch="anim" title="An animated background on each song (songs with a music video are skipped)"><option value="">Animated background…</option>
+      ${o.presets.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join("")}
+      <option value="-">None (remove)</option></select>
+    <button class="ghost small" data-batch="clear">Clear selection</button>`;
+  if (!batchOpts) batchOptions().then(() => { bar.dataset.n = ""; showBatch(songs.filter((s) => shownIds.includes(s.id))); });
+}
+$("#songs").addEventListener("change", (e) => {
+  const c = e.target.closest("input[data-pick]"); if (!c) return;
+  if (c.checked) picked.add(c.dataset.pick); else picked.delete(c.dataset.pick);
+  c.closest("tr").classList.toggle("picked", c.checked);
+  showBatch(songs.filter((s) => shownIds.includes(s.id)));
+});
+$("#pickall").addEventListener("change", (e) => {
+  for (const id of shownIds) { if (e.target.checked) picked.add(id); else picked.delete(id); }
+  renderSongs();
+});
+async function runBatch(action, extra = {}, label = action) {
+  const ids = [...picked];
+  try {
+    const r = await post("/api/batch", { ids, action, ...extra });
+    const bad = r.failed.length ? ` ${r.failed.length} couldn't: ${r.failed.slice(0, 2).map((f) => `${(songs.find((s) => s.id === f.id) || { title: f.id }).title} (${f.error})`).join("; ")}${r.failed.length > 2 ? "…" : ""}` : "";
+    toast(`${label}: ${r.done.length} song${r.done.length === 1 ? "" : "s"}.${bad}`, !!r.failed.length);
+    refreshJobs(); refreshSongs(true);
+  } catch (err) { toast(err.message, true); }
+}
+$("#batchbar").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-batch]"); if (!b) return;
+  const n = picked.size, a = b.dataset.batch;
+  if (a === "clear") { picked.clear(); renderSongs(); return; }
+  if (a === "export") {
+    if (confirm(`Export ${n} song${n === 1 ? "" : "s"} to your Clone Hero folder? Copies already there are replaced.`)) runBatch("export", {}, "Exported");
+  } else if (a === "update") {
+    if (confirm(`Bring ${n} song${n === 1 ? "" : "s"} up to date? Notes and edits stay as they are; about a minute a song, in the queue.`)) runBatch("update", {}, "Queued to bring up to date");
+  } else if (a === "rechart") {
+    rechartId = null; batchRechart = [...picked];
+    $("#rc-title").textContent = `Re-chart ${n} song${n === 1 ? "" : "s"}`;
+    const o = options();
+    document.querySelectorAll("input[name=rcdiff]").forEach((x) => (x.checked = o.difficulties.includes(x.value)));
+    $("#rc-density").value = o.density; $("#rc-densout").textContent = densLabel(o.density);
+    $("#rc-chords").value = o.chords; $("#rc-follow").value = o.follow;
+    $("#rechart").showModal();
+  }
+});
+$("#batchbar").addEventListener("change", (e) => {
+  const s = e.target.closest("select[data-batch]"); if (!s || !s.value) return;
+  const v = s.value, n = picked.size;
+  if (s.dataset.batch === "highway") {
+    const name = s.selectedOptions[0].textContent;
+    if (confirm(`Use the "${name}" highway on ${n} song${n === 1 ? "" : "s"}?`))
+      runBatch("highway", v.startsWith("design:") ? { mode: "design", design: v.slice(7) } : { mode: v }, `Highway "${name}"`);
+  } else {
+    const name = v === "-" ? "no animated background" : s.selectedOptions[0].textContent;
+    if (confirm(v === "-" ? `Remove the animated background from ${n} song${n === 1 ? "" : "s"}?` :
+        `Make the "${name}" animated background for ${n} song${n === 1 ? "" : "s"}? About 15 s each, one after another; songs with a music video are skipped.`))
+      runBatch("anim", { preset: v === "-" ? "" : v }, v === "-" ? "Animated background removed" : `Making "${name}"`);
+  }
+  s.value = "";
+});
+let batchRechart = null;

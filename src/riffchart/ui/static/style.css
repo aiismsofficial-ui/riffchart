@@ -207,3 +207,15 @@ button.icon { padding: 4px 9px; }
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 999px; white-space: nowrap; }
 .tiplink:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .topright { display: flex; align-items: center; gap: 14px; }
+
+/* library batch actions */
+.pick { display: inline-flex; align-items: center; margin-right: 8px; vertical-align: middle; cursor: pointer; }
+.pick input { width: 16px; height: 16px; margin: 0; cursor: pointer; }
+.songcell { display: flex; align-items: flex-start; }
+.songcell .pick { margin-top: 10px; }
+.songs tr.picked td { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.batchbar { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  padding: 8px 10px; margin-bottom: 10px; background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; font-size: 13px; }
+.batchbar[hidden] { display: none; }
+.batchbar b { margin-right: 4px; }
+.batchbar select { max-width: 210px; }

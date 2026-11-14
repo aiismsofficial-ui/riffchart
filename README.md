@@ -44,6 +44,8 @@ minutes later. A graphics card is optional.
   re-charting them.
 - **Pitched vocals for YARG:** a song's lyrics can become sung notes at the pitch the singer hits, so YARG can
   score your singing.
+- **Batch actions:** select several songs (or all) to export, re-chart, bring up to date, or give them a
+  highway or an animated background in one go.
 - **Share or hand-edit:** download any song as a single `.sng` file (Clone Hero and YARG read these), or open
   its chart in Moonscraper Chart Editor.
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a

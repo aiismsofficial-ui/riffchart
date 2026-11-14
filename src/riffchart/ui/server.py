@@ -1196,6 +1196,35 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             raise HTTPException(403, str(e))
         return {"folder": str(dest)}
 
+    @app.post("/api/batch")
+    def batch(body: dict = Body(...)):
+        """One action on several library songs: {ids, action, ...}. action: export | rechart (+ options) |
+        update | highway (+ mode, design) | anim (+ preset, "" = none). Each song goes through the same
+        handler as on its own; one failing doesn't stop the rest. -> {done: [ids], failed: [{id, error}]}"""
+        ids = [str(i) for i in body.get("ids") or []]
+        action = body.get("action")
+        if not ids:
+            raise HTTPException(400, "select some songs first")
+        handlers = {
+            "export": lambda i: export(i, {"overwrite": True}),
+            "rechart": lambda i: rechart(i, {"options": body.get("options")}),
+            "update": lambda i: update_song(i),
+            "highway": lambda i: set_highway(i, {"mode": body.get("mode"), "design": body.get("design")}),
+            "anim": lambda i: set_background_animated(i, {"preset": body.get("preset") or ""}),
+        }
+        if action not in handlers:
+            raise HTTPException(400, f"action must be one of {', '.join(handlers)}")
+        done, failed = [], []
+        for i in ids:
+            try:
+                handlers[action](i)
+                done.append(i)
+            except HTTPException as e:
+                failed.append({"id": i, "error": str(e.detail)})
+            except Exception as e:                           # one bad song never stops the others
+                failed.append({"id": i, "error": f"{type(e).__name__}: {e}"})
+        return {"done": done, "failed": failed}
+
     @app.post("/api/songs/{song_id}/test")
     def test_in_ch(song_id: str, body: dict = Body(default={})):
         folder = song_folder(song_id)

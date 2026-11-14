@@ -330,6 +330,22 @@ def test_bring_songs_up_to_date(env):
     assert c.post("/api/library/update").json()["queued"] == 0
 
 
+def test_batch_actions(env):
+    c = env.client
+    _charted(env)
+    _charted(env, "Band - Two")
+    r = c.post("/api/batch", json={"ids": ["Muse - Uprising", "Band - Two", "nope"], "action": "export"}).json()
+    assert sorted(r["done"]) == ["Band - Two", "Muse - Uprising"] and [f["id"] for f in r["failed"]] == ["nope"]
+    assert (env.cfg["export_dir"] / "Band - Two" / "notes.chart").exists()
+    r = c.post("/api/batch", json={"ids": ["Muse - Uprising", "Band - Two"], "action": "highway", "mode": "none"}).json()
+    assert len(r["done"]) == 2 and c.get("/api/songs/Band - Two").json()["highway"]["mode"] == "none"
+    r = c.post("/api/batch", json={"ids": ["Band - Two"], "action": "update"}).json()
+    assert r["done"] == ["Band - Two"]
+    wait_idle(c)
+    assert c.post("/api/batch", json={"ids": [], "action": "export"}).status_code == 400
+    assert c.post("/api/batch", json={"ids": ["Band - Two"], "action": "delete"}).status_code == 400
+
+
 def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):
     c, folder = env.client, _charted(env)
     d = c.get("/api/songs/Muse - Uprising/chart").json()
