@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -1195,6 +1196,79 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         except ProtectedPathError as e:
             raise HTTPException(403, str(e))
         return {"folder": str(dest)}
+
+    # ---- reported spots: places in a chart the user flagged (F in the editor), for a feedback file
+    def _reports_file(folder: Path) -> Path:
+        return folder / ".riffchart" / "reports.json"
+
+    def _reports(folder: Path) -> list[dict]:
+        try:
+            return json.loads(_reports_file(folder).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return []
+
+    def _save_reports(folder: Path, items: list[dict]) -> None:
+        p = _reports_file(folder)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(items, ensure_ascii=False, indent=1), encoding="utf-8")
+
+    @app.get("/api/songs/{song_id}/reports")
+    def list_reports(song_id: str):
+        return _reports(song_folder(song_id))
+
+    @app.post("/api/songs/{song_id}/reports")
+    def add_report(song_id: str, body: dict = Body(...)):
+        """{time_s, tick, difficulty, note, excerpt: [[tick, mask, sustain, type]...]} -> the saved spot."""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        try:
+            item = {"id": uuid.uuid4().hex[:8], "created": time.time(), "time_s": round(float(body["time_s"]), 3),
+                    "tick": int(body["tick"]), "difficulty": str(body.get("difficulty", "expert"))[:10],
+                    "note": str(body.get("note", "")).strip()[:500],
+                    "excerpt": [[int(x) for x in n[:4]] for n in (body.get("excerpt") or [])[:200]]}
+        except (KeyError, TypeError, ValueError) as e:
+            raise HTTPException(400, f"bad report: {e}")
+        items = _reports(folder) + [item]
+        _save_reports(folder, items)
+        return item
+
+    @app.delete("/api/songs/{song_id}/reports/{rid}")
+    def remove_report(song_id: str, rid: str):
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        items = [r for r in _reports(folder) if r.get("id") != rid]
+        _save_reports(folder, items)
+        return items
+
+    @app.get("/api/reports")
+    def reports_summary():
+        n = {s["id"]: len(_reports(lib.folder(s["id"]))) for s in lib.list()}
+        return {"songs": sum(1 for v in n.values() if v), "spots": sum(n.values())}
+
+    @app.get("/api/reports/export")
+    def export_reports():
+        """Every flagged spot in one JSON file to share with the developer: the song's names and length, the
+        app and model versions, and per spot its time, difficulty, your note and the notes around it.
+        No audio and no file paths."""
+        from ..paths import load_config as _lc
+        songs_out = []
+        for s in lib.list():
+            items = _reports(lib.folder(s["id"]))
+            if not items:
+                continue
+            ini = _ini(lib.folder(s["id"]))
+            songs_out.append({"title": ini.get("name", s["id"]), "artist": ini.get("artist", ""),
+                              "length_s": s.get("length_s"), "charter": ini.get("charter", ""),
+                              "notes": s.get("notes"), "spots": items})
+        if not songs_out:
+            raise HTTPException(404, "no reported spots yet: press F in the editor where a chart goes wrong")
+        prod = _lc(project_path("configs/product.yaml"))
+        data = {"riffchart": __version__, "model": "/".join(Path(str(prod.get("chart_ckpt", ""))).parts[-2:]),
+                "made": time.strftime("%Y-%m-%d %H:%M"), "songs": songs_out}
+        out = Path(cfg.get("cache", cfg["workspace"].parent / "cache")) / "riffchart-feedback.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(data, ensure_ascii=False, indent=1), encoding="utf-8")
+        return FileResponse(out, filename="riffchart-feedback.json", media_type="application/json")
 
     @app.post("/api/batch")
     def batch(body: dict = Body(...)):

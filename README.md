@@ -44,6 +44,9 @@ minutes later. A graphics card is optional.
   re-charting them.
 - **Pitched vocals for YARG:** a song's lyrics can become sung notes at the pitch the singer hits, so YARG can
   score your singing.
+- **Report a spot:** press F in the editor where a chart goes wrong and type what's wrong; the library's
+  Feedback file gathers them into one small file (no audio) you can attach to an issue, so the model can learn
+  from it.
 - **Batch actions:** select several songs (or all) to export, re-chart, bring up to date, or give them a
   highway or an animated background in one go.
 - **Share or hand-edit:** download any song as a single `.sng` file (Clone Hero and YARG read these), or open

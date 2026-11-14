@@ -346,6 +346,23 @@ def test_batch_actions(env):
     assert c.post("/api/batch", json={"ids": ["Band - Two"], "action": "delete"}).status_code == 400
 
 
+def test_reported_spots_and_feedback_file(env):
+    c, folder = env.client, _charted(env)
+    assert c.get("/api/reports/export").status_code == 404
+    r = c.post("/api/songs/Muse - Uprising/reports",
+               json={"time_s": 12.3456, "tick": 768, "difficulty": "hard", "note": "notes off the beat",
+                     "excerpt": [[768, 1, 0, 0], [864, 2, 0, 1]]})
+    assert r.status_code == 200 and r.json()["time_s"] == 12.346
+    assert c.get("/api/songs/Muse - Uprising").json()["reports"] == 1
+    data = c.get("/api/reports/export").json()
+    spot = data["songs"][0]["spots"][0]
+    assert data["songs"][0]["title"] == "Uprising" and spot["note"] == "notes off the beat" and len(spot["excerpt"]) == 2
+    assert str(env.tmp).replace("\\", "/") not in json.dumps(data).replace("\\", "/")     # no paths
+    c.delete(f"/api/songs/Muse - Uprising/reports/{spot['id']}")
+    assert c.get("/api/songs/Muse - Uprising/reports").json() == []
+    assert c.post("/api/songs/Muse - Uprising/reports", json={"note": "x"}).status_code == 400
+
+
 def test_save_refuses_bad_or_empty_and_moves_mid_aside(env):
     c, folder = env.client, _charted(env)
     d = c.get("/api/songs/Muse - Uprising/chart").json()

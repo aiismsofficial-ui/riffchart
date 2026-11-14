@@ -1,6 +1,7 @@
 """Songs in the app's workspace: listing, export to the Clone Hero folder, path safety."""
 from __future__ import annotations
 
+import json
 import shutil
 import time
 from pathlib import Path
@@ -171,6 +172,10 @@ class Library:
         d["lyrics"] = _lyr.summary(p)
         from ..product import vocals as _voc
         d["vocals"] = _voc.summary(p)
+        try:                                       # spots flagged in the editor (F), for the feedback file
+            d["reports"] = len(json.loads((p / ".riffchart" / "reports.json").read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            d["reports"] = 0
         try:
             from ..product.update import needs
             d["updates"] = needs(p)

@@ -55,6 +55,7 @@
   <button id="lowerbtn" class="ghost small" title="Make Hard, Medium and Easy again from the Expert you see now, the way a fresh chart makes them (one Undo step; nothing is saved until you Save)">&#8681; Easier from Expert</button>
   <button id="secbtn" class="ghost small" title="Name the song's parts (Intro, Verse 1, Chorus 1, Guitar Solo…) from the audio and lyrics. Replaces the sections; one Undo step, nothing saved until you Save">&#9776; Auto sections</button>
   <button id="tempobtn" class="ghost small" title="BPM and time-signature markers: edit them, tap a tempo, or drag beat lines on the waveform to line the chart up with the audio">&#9833; Tempo map</button>
+  <button id="rptbtn" class="ghost small" title="Flag a place where the chart goes wrong (F), with a short note, for the feedback file">&#9873; Report a spot</button>
   <button id="histbtn" class="ghost small" title="Earlier versions of this chart: look at one, then Save to restore it">History</button>
   <button id="issuesbtn" class="ghost small issuesbtn" title="Playability problems in this difficulty (. and , jump to the next / previous)">Checking…</button>
   <span class="muted" id="info"></span>
@@ -124,6 +125,14 @@
       <button class="ghost small" id="ttapuse" disabled title="Set this tempo at the beat nearest the playhead">Use</button></div>
     <ol id="tlist"></ol>
   </aside>
+  <aside id="reports" class="issues histpanel" hidden aria-label="Reported spots">
+    <div class="ihead"><b>Reported spots</b>
+      <button class="ghost small" id="rclose2" aria-label="Close">✕</button></div>
+    <p class="muted hnote">Places where the chart goes wrong, with your note. The library's <b>Feedback file</b> puts
+      them all in one small file (song names, times, notes; no audio) you can send to the developer.</p>
+    <div class="trow" style="padding:6px 12px"><button class="small" id="rhere">⚑ Report the playhead (F)</button></div>
+    <ol id="rlist"></ol>
+  </aside>
   <div id="loading" class="loading">Loading chart and audio…</div>
 </div>
 
@@ -137,7 +146,8 @@
         <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty · <kbd>I</kbd> song details</p>
         <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p>
         <p><kbd>Shift</kbd>+<kbd>[</kbd><kbd>]</kbd> sync: whole chart 5 ms earlier / later</p>
-        <p><b>Tempo map</b>: drag beat lines on the waveform · <kbd>B</kbd> tap tempo</p></div>
+        <p><b>Tempo map</b>: drag beat lines on the waveform · <kbd>B</kbd> tap tempo</p>
+        <p><kbd>F</kbd> report a spot where the chart goes wrong</p></div>
       <div><h4>Notes</h4>
         <p><b>Click</b> empty lane: add (snaps to the grid) · <b>right-click</b> a gem: delete it</p>
         <p><kbd>1</kbd>–<kbd>5</kbd> toggle G R Y B O on the selection, or add at the playhead · <kbd>0</kbd> open</p>
@@ -165,5 +175,6 @@
 <script src="rechart.js"></script>
 <script src="history.js"></script>
 <script src="tempo.js"></script>
+<script src="reports.js"></script>
 </body>
 </html>

@@ -215,7 +215,7 @@ $("#taddts").addEventListener("click", addTsHere);
 $("#ttap").addEventListener("click", tap);
 $("#ttapuse").addEventListener("click", () => { const b = tapBpm(); if (b) addBpmHere(Math.round(b * 100) / 100); });
 window.addEventListener("keydown", (e) => {
-  if (!TP.open || e.ctrlKey || e.metaKey || e.altKey || e.target.matches("input, select, textarea")) return;
+  if (!TP.open || e.ctrlKey || e.metaKey || e.altKey || (e.target.matches && e.target.matches("input, select, textarea"))) return;
   if (e.key === "b" || e.key === "B") { e.preventDefault(); e.stopImmediatePropagation(); tap(); }
 }, true);
 // after Undo / Redo the list may be out of date

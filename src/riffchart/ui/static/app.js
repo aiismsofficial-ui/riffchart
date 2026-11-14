@@ -221,6 +221,9 @@ function renderSongs() {
   $("#upall").hidden = !old;
   $("#upall").textContent = `Bring ${old} song${old === 1 ? "" : "s"} up to date…`;
   $("#nosongs").hidden = songs.length > 0;
+  const spots = songs.reduce((n, x) => n + (x.reports || 0), 0);
+  $("#feedback").hidden = !spots;
+  $("#feedback").textContent = `Feedback file (${spots} spot${spots === 1 ? "" : "s"})`;
   const chExe = status && status.clone_hero && status.clone_hero.exe;
   const busy = new Map(jobs.filter((j) => (j.target || j.kind === "update") && (j.status === "running" || j.status === "queued"))
     .map((j) => [j.kind === "update" ? j.source.split(/[\\/]/).pop() : j.target, j]));
