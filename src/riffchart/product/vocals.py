@@ -114,11 +114,27 @@ def sync_mid(folder: Path) -> str:
             pitch = {k: z[k] for k in z.files}
         if mid.exists() and not mark.exists():                 # someone else's notes.mid: keep a copy
             mid.replace(folder / "notes.mid.bak")
-        write_midi(song, mid, ini, name=ini.get("name", ""), vocals=vocal_notes(song, pitch))
+        try:
+            write_midi(song, mid, ini, name=ini.get("name", ""), vocals=vocal_notes(song, pitch))
+        except ValueError:                                     # can't be a .mid (offset, very slow tempo):
+            remove_mid(folder)                                 # never leave an older notes.mid to be played
+            raise
         mark.parent.mkdir(parents=True, exist_ok=True)
         mark.write_text(json.dumps({"written": time.time()}), encoding="utf-8")
         return "written"
     return remove_mid(folder)
+
+
+def refresh(folder: Path) -> str:
+    """sync_mid when notes.chart changed after RiffChart last wrote notes.mid (an edit in Moonscraper, say), so
+    the game, which reads notes.mid first, never gets a stale chart. Returns what sync_mid did, or ""."""
+    folder = Path(folder)
+    if not ours(folder):
+        return ""
+    mid = folder / "notes.mid"
+    if mid.exists() and mid.stat().st_mtime >= (folder / "notes.chart").stat().st_mtime:
+        return ""
+    return sync_mid(folder)
 
 
 def remove_mid(folder: Path) -> str:

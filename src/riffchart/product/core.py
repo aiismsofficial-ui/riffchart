@@ -363,11 +363,22 @@ class RiffCharter:
                 keep = folder / ".riffchart" / "song-before-update.ogg"
                 keep.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(song_ogg, keep)
-                for file, a in parts.items():
-                    rest -= a[:k]
-                    write_ogg(folder / f"{file}.ogg", a[:k], OUT_SR, q)
-                    out["instruments"].append(f"{file}.ogg")
-                write_ogg(folder / "song.ogg", rest, OUT_SR, q)
+                tmp = {f"{file}.ogg": folder / f".{file}.update.ogg" for file in parts}
+                tmp["song.ogg"] = folder / ".song.update.ogg"
+                try:                                        # all written first, then swapped in together: a
+                    for file, a in parts.items():           # full disk never leaves bass.ogg beside a song.ogg
+                        rest -= a[:k]                       # that still has the bass in it
+                        write_ogg(tmp[f"{file}.ogg"], a[:k], OUT_SR, q)
+                    write_ogg(tmp["song.ogg"], rest, OUT_SR, q)
+                except BaseException:
+                    for t in tmp.values():
+                        t.unlink(missing_ok=True)
+                        t.with_suffix(".tmp.ogg").unlink(missing_ok=True)
+                    raise
+                for name, t in tmp.items():
+                    t.replace(folder / name)
+                    if name != "song.ogg":
+                        out["instruments"].append(name)
             else:
                 notes.append("no instrument loud enough for its own track")
         if want_lyrics:

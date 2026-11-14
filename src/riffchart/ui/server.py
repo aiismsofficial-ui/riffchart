@@ -341,11 +341,17 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         tmp.write_text(text, encoding="utf-8")
         tmp.replace(folder / "notes.chart")
         from ..product import vocals as voc
+        warning = None
         if voc.ours(folder):                        # pitched vocals: notes.mid is made again from the new chart
-            voc.sync_mid(folder)
+            try:
+                voc.sync_mid(folder)
+            except ValueError as e:                 # the chart can no longer be a notes.mid: vocals off
+                voc.disable(folder)
+                warning = f"Pitched vocals were turned off: {e}"
         elif (folder / "notes.mid").exists():       # CH prefers notes.mid: move it aside (copy is in history)
             (folder / "notes.mid").replace(folder / "notes.mid.bak")
-        return {"saved": stamp, "notes": {d: len(t) for d, t in song.tracks.items()}, "history": str(hist)}
+        return {"saved": stamp, "notes": {d: len(t) for d, t in song.tracks.items()}, "history": str(hist),
+                "warning": warning}
 
     @app.post("/api/songs/{song_id}/lower")
     def regenerate_lower(song_id: str, body: dict = Body(...)):
@@ -1315,7 +1321,9 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
     def download_sng(song_id: str):
         """The song as one .sng file (Clone Hero v1.1+ and YARG read these: copy it into a songs folder)."""
         from ..product.sng import write_sng
+        from ..product.vocals import refresh
         folder = song_folder(song_id)
+        refresh(folder)
         out = Path(cfg.get("cache", cfg["workspace"].parent / "cache")) / "sng" / f"{song_id}.sng"
         try:
             write_sng(folder, out, _ini(folder))

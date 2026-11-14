@@ -165,3 +165,55 @@ def test_clean_strips_artist_from_titles():
     assert clean(SongMeta("soil-halo", "SOiL")).title == "Halo"                 # file-name slug
     m = clean(SongMeta("SOiL Halo", "SOiL"), loose=True)
     assert clean(m, loose=True) == m
+
+
+def _updater(tmp_path, sep):
+    from riffchart.product.core import RiffCharter
+    cfgp = tmp_path / "product.yaml"
+    cfgp.write_text("lyrics: off\n", encoding="utf-8")
+    r = RiffCharter.__new__(RiffCharter)
+    r.cfg, r.sep, r.config_path, r.device = {"audio": {"split_instruments": True, "vorbis_quality": 0.5}}, sep, str(cfgp), "cpu"
+    return r
+
+
+def _song_folder(tmp_path):
+    import numpy as np
+    from riffchart.product.core import write_ogg
+    f = tmp_path / "song"
+    f.mkdir()
+    t = np.arange(44100 * 2) / 44100
+    write_ogg(f / "song.ogg", np.stack([np.sin(2 * np.pi * 110 * t)] * 2, 1).astype(np.float32) * 0.5, 44100, 0.5)
+    return f
+
+
+class _Sep:
+    sr = 44100
+
+    def __call__(self, mix):
+        return {"bass": mix * 0.5, "drums": mix * 0.3, "vocals": mix * 0.0}
+
+
+def test_update_splits_instruments_and_keeps_the_mix(tmp_path):
+    f = _song_folder(tmp_path)
+    out = _updater(tmp_path, _Sep()).update_song(f)
+    assert sorted(out["instruments"]) == ["bass.ogg", "drums.ogg"]          # silent vocals get no track
+    assert (f / ".riffchart" / "song-before-update.ogg").exists()
+    assert not list(f.glob(".*.update*.ogg"))
+
+
+def test_update_failing_mid_write_leaves_the_song_as_it_was(tmp_path, monkeypatch):
+    from riffchart.product import core
+    f = _song_folder(tmp_path)
+    before = (f / "song.ogg").read_bytes()
+    real, calls = core.write_ogg, []
+
+    def flaky(path, *a, **k):
+        calls.append(path)
+        if len(calls) == 2:
+            raise OSError("disk full")
+        return real(path, *a, **k)
+    monkeypatch.setattr(core, "write_ogg", flaky)
+    with pytest.raises(OSError):
+        _updater(tmp_path, _Sep()).update_song(f)
+    assert (f / "song.ogg").read_bytes() == before
+    assert sorted(p.name for p in f.iterdir() if p.is_file()) == ["song.ogg"]

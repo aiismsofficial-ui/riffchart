@@ -139,7 +139,7 @@ async function save() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     E.clean = sent; E.dirty = contentSnap() !== sent; E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    toast("Saved notes.chart (the previous version is kept: History lists it)");
+    toast(j.warning ? `Saved notes.chart. ${j.warning}` : "Saved notes.chart (the previous version is kept: History lists it)", !!j.warning);
     if (typeof historyChanged === "function") historyChanged(true);
   } catch (e) { toast("Save failed: " + e.message, true); }
   E.saving = false; updateButtons();

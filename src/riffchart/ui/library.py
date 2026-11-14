@@ -210,9 +210,11 @@ class Library:
     def export(self, song_id: str, overwrite: bool = False) -> Path:
         """Copy a song folder into the export (Clone Hero) folder. Existing exports are replaced only with
         overwrite; the replaced copy is kept as <name>.old until the new copy is complete."""
+        from ..product.vocals import refresh
         src = self.folder(song_id)
         dest = self.export_dir / song_id
         check_writable(dest, self.protected)
+        refresh(src)                                     # notes.mid after an outside edit of notes.chart
         if dest.exists() and not overwrite:
             raise FileExistsError(f"{dest} already exists")
         self.export_dir.mkdir(parents=True, exist_ok=True)

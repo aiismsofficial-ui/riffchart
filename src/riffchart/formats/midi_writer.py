@@ -116,6 +116,9 @@ def write_midi(song: Song, path: str | Path, ini: dict | None = None, name: str 
     """Write `song` (and vocals = (notes, phrases) from product/vocals.py) as a type-1 notes.mid."""
     if abs(song.chart_offset_s) > 1e-6:
         raise ValueError("this chart starts with an audio offset, which notes.mid can't carry")
+    slow = [float(b) for b in song.tempo.bpm if 60_000_000 / float(b) > 0xFFFFFF]
+    if slow:                                 # a set_tempo holds at most 16777215 us per beat (3.58 BPM)
+        raise ValueError(f"this chart has a {min(slow):g} BPM tempo marker; notes.mid can't go below 3.6 BPM")
     mid = mido.MidiFile(type=1, ticks_per_beat=int(song.resolution))
     tm = song.tempo
     tempo_ev = []

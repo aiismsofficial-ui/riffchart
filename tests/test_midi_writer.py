@@ -114,6 +114,11 @@ def test_sync_mid_follows_chart_and_loader_reads_the_chart(tmp_path):
     assert vocals.summary(f) == {"notes": 3, "pitched": 3}
     song, _, path = load_song(f)
     assert path.name == "notes.chart" and song.lyrics                 # the chart stays the source
+    assert vocals.refresh(f) == ""                                    # notes.mid is current
+    import os
+    t = (f / "notes.mid").stat().st_mtime
+    os.utime(f / "notes.chart", (t + 5, t + 5))                       # edited elsewhere (Moonscraper)
+    assert vocals.refresh(f) == "written"
     vocals.disable(f)
     assert not (f / "notes.mid").exists() and not (f / vocals.MARK).exists()
     assert load_song(f)[2].name == "notes.chart"
@@ -123,4 +128,11 @@ def test_offset_charts_are_refused(tmp_path):
     s = _song()
     s.chart_offset_s = 0.5
     with pytest.raises(ValueError):
+        write_midi(s, tmp_path / "x.mid")
+
+
+def test_tempo_too_slow_for_midi_is_refused(tmp_path):
+    s = _song()
+    s.tempo.bpm[-1] = 1.0                                             # a charter's 1 BPM "pause" marker
+    with pytest.raises(ValueError, match="BPM"):
         write_midi(s, tmp_path / "x.mid")

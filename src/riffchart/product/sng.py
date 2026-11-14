@@ -25,10 +25,19 @@ KEEP_EXT = {".chart", ".mid", ".ogg", ".opus", ".mp3", ".wav", ".png", ".jpg", "
 _BAD_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
+_CHUNK = 1 << 22                                     # 4 MB, a multiple of the key's 256-byte period
+
+
+def _key(mask: bytes) -> np.ndarray:
+    """The xor key for bytes 0..255 of a file; mask[i % 16] ^ (i & 0xFF) repeats every 256 bytes."""
+    i = np.arange(256)
+    return np.frombuffer(mask, np.uint8)[i % 16] ^ i.astype(np.uint8)
+
+
 def _mask(data: bytes, mask: bytes) -> bytes:
+    """data masked from a file's start (or from any 256-byte boundary in it, as _CHUNK is)."""
     a = np.frombuffer(data, np.uint8)
-    i = np.arange(len(a), dtype=np.uint64)
-    key = np.frombuffer(mask, np.uint8)[(i % 16).astype(np.int64)] ^ (i & 0xFF).astype(np.uint8)
+    key = np.resize(_key(mask), len(a))
     return (a ^ key).tobytes()
 
 
@@ -73,8 +82,10 @@ def write_sng(folder: Path, out: Path, ini: dict[str, str] | None = None) -> Pat
         w.write(meta_sec)
         w.write(struct.pack("<QQ", index_len, len(files)) + index)
         w.write(struct.pack("<Q", sum(sizes)))
-        for f in files:
-            w.write(_mask(f.read_bytes(), mask))
+        for f in files:                              # in chunks, so a big video needn't fit in memory
+            with open(f, "rb") as r:
+                while chunk := r.read(_CHUNK):
+                    w.write(_mask(chunk, mask))
     tmp.replace(out)
     return out
 
