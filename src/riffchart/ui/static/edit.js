@@ -114,7 +114,7 @@ function markDirty() { E.dirty = contentSnap() !== E.clean; updateButtons(); }  
 function updateButtons() {
   $("#save").disabled = !E.dirty || E.saving; $("#undo").disabled = !E.undo.length; $("#redo").disabled = !E.redo.length;
   $("#savestate").textContent = E.saving ? "Saving…" : E.dirty ? "Unsaved changes" : E.savedAt ? `Saved ${E.savedAt}` : "";
-  document.title = `${E.dirty ? "• " : ""}${S.chart ? S.chart.title : ""} · RiffChart editor`;
+  document.title = `${E.dirty ? "• " : ""}${S.chart ? S.chart.title : ""}${PART === "bass" ? " (bass)" : ""} · RiffChart editor`;
 }
 window.addEventListener("beforeunload", (e) => { if (E.dirty) { e.preventDefault(); e.returnValue = ""; } });
 
@@ -141,12 +141,14 @@ async function save() {
   const body = chartPayload();
   const lyr = JSON.stringify(S.lyrics || []);
   if (lyr !== E.lyricsClean) body.lyrics = S.lyrics;          // only when edited: lyrics.json is rewritten
+  body.part = PART;
   try {
     const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/chart`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     E.clean = sent; E.lyricsClean = lyr; E.dirty = contentSnap() !== sent; E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    toast(j.warning ? `Saved notes.chart. ${j.warning}` : "Saved notes.chart (the previous version is kept: History lists it)", !!j.warning);
+    const what = PART === "bass" ? "the bass part in notes.chart" : "notes.chart";
+    toast(j.warning ? `Saved ${what}. ${j.warning}` : `Saved ${what} (the previous version is kept: History lists it)`, !!j.warning);
     if (typeof historyChanged === "function") historyChanged(true);
   } catch (e) { toast("Save failed: " + e.message, true); }
   E.saving = false; updateButtons();

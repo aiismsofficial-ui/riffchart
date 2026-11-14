@@ -291,10 +291,27 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         order = {"song": 0, "guitar": 1}
         return sorted(fs, key=lambda f: (order.get(f.stem.lower(), 2), f.name.lower()))
 
+    EDIT_PARTS = ("guitar", "bass")                 # the 5-fret parts the editor can open
+
+    def _part(part: str) -> str:
+        if part not in EDIT_PARTS:
+            raise HTTPException(400, f"part must be one of {', '.join(EDIT_PARTS)}")
+        return part
+
+    def _load_part(folder: Path, part: str):
+        """load_song for one part; 404 when the chart has no such part."""
+        try:
+            song, ini, path = load_song(folder, part, parts=True)
+        except ValueError as e:                          # a .mid without that track
+            raise HTTPException(404, f"this chart has no {part} part ({e})")
+        if part != "guitar" and not any(len(t) for t in song.tracks.values()):
+            raise HTTPException(404, f"this chart has no {part} part")
+        return song, ini, path
+
     @app.get("/api/songs/{song_id}/chart")
-    def chart(song_id: str):
+    def chart(song_id: str, part: str = "guitar"):
         folder = song_folder(song_id)
-        song, ini, chart_path = load_song(folder)
+        song, ini, chart_path = _load_part(folder, _part(part))
         stems = audio_files(folder)
         audio_s = None
         for f in stems:
@@ -305,7 +322,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         d = song_to_json(song, ini, audio_s)
         d.update(id=song_id, file=chart_path.name, stems=[f.name for f in stems],
                  title=ini.get("name", song_id), artist=ini.get("artist", ""), warnings=song.warnings[:20],
-                 lyrics=_lyrics_json(folder, song, d["offset_s"]))
+                 lyrics=_lyrics_json(folder, song, d["offset_s"]), part=part,
+                 parts=[p for p in EDIT_PARTS if p == part or any(len(t) for t in song.parts.get(p, {}).values())])
         return d
 
     def _lyrics_json(folder: Path, song, offset_s: float) -> dict:
@@ -324,16 +342,18 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
     def save_chart(song_id: str, body: dict = Body(...)):
         folder = song_folder(song_id)
         check_writable(folder, lib.protected)
+        part = _part(str(body.get("part") or "guitar"))
         try:
             song = json_to_song(body)
         except (KeyError, TypeError, ValueError) as e:
             raise HTTPException(400, f"bad chart data: {e}")
+        song.instrument = part
         if not any(len(t) for t in song.tracks.values()):
             raise HTTPException(400, "refusing to save a chart with no notes in any difficulty")
         ini = _ini(folder)
         old = None
         try:                                       # keep the chart's own [Song] Offset: the page sends ticks
-            old = load_song(folder, parts=True)[0]                         # relative to it
+            old = load_song(folder, part, parts=True)[0]                   # relative to it
             song.chart_offset_s = old.chart_offset_s
             # the other parts (bass, drums...) the editor doesn't show, at the saved chart's resolution
             song.parts, song.raw_sections = rescale_parts(old, song.resolution)
@@ -453,11 +473,11 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         h = folder / ".riffchart" / "history"
         return sorted(h.glob("*-notes.*"), reverse=True) if h.is_dir() else []
 
-    def history_song(folder: Path, f: Path):
+    def history_song(folder: Path, f: Path, part: str = "guitar"):
         from ..formats.chart_parser import parse_chart
         from ..formats.midi_parser import parse_midi
         ini = _ini(folder)
-        return (parse_midi(f, ini) if f.suffix.lower() in (".mid", ".midi") else parse_chart(f, ini)), ini
+        return (parse_midi(f, ini, part) if f.suffix.lower() in (".mid", ".midi") else parse_chart(f, ini, part)), ini
 
     @app.get("/api/songs/{song_id}/history")
     def history(song_id: str):
@@ -466,7 +486,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         folder = song_folder(song_id)
         out = []
         for f in history_files(folder):
-            m = re.match(r"(\d{8}-\d{6})-(?:(rechart)-)?notes\.", f.name)
+            m = re.match(r"(\d{8}-\d{6})-(?:([a-z]+)-)?notes\.", f.name)    # save / rechart / lyrics / bass ...
             if not m:
                 continue
             st = f.stat()
@@ -483,16 +503,20 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         return out
 
     @app.get("/api/songs/{song_id}/history/{name}")
-    def history_version(song_id: str, name: str):
-        """One old version as editor JSON (to look at it and, by saving, restore it)."""
+    def history_version(song_id: str, name: str, part: str = "guitar"):
+        """One old version (of `part`) as editor JSON (to look at it and, by saving, restore it)."""
         folder = song_folder(song_id)
         f = next((x for x in history_files(folder) if x.name == name), None)
         if f is None:
             raise HTTPException(404, f"no history version {name!r}")
         try:
-            song, ini = history_song(folder, f)
+            song, ini = history_song(folder, f, _part(part))
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(422, f"that version can't be read: {e}")
+        if not any(len(t) for t in song.tracks.values()):
+            raise HTTPException(404, f"that version has no {part} part")
         return song_to_json(song, ini)
 
     @app.post("/api/check")

@@ -299,6 +299,7 @@
     if (!B) return;
     const lvl = ["expert", "hard", "medium", "easy"].filter((d) => B[d]).map((d) => `${d[0].toUpperCase() + d.slice(1)} ${B[d]}`).join(", ");
     el.innerHTML = `Bass chart: ${lvl} notes (Clone Hero and YARG offer it as the bass part). ` +
+      `<a class="link" href="editor.html?song=${enc(cur.id)}&amp;part=bass">Edit</a> · ` +
       `<button type="button" class="linkbtn" data-k="bassrm">Remove</button>`;
     el.querySelector("[data-k=bassrm]").addEventListener("click", async () => {
       if (!confirm("Remove the bass part from this chart? (The chart before is kept in its history.)")) return;

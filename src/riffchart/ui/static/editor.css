@@ -132,3 +132,4 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .lyrpanel li .ttl { cursor: pointer; font-variant-numeric: tabular-nums; }
 .lyrpanel li input { grid-column: 1 / span 2; width: 100%; box-sizing: border-box; }
 .lyrpanel #lsrc { font-size: 12px; font-weight: 400; }
+.tabs.parts button:disabled { opacity: 0.4; cursor: default; }

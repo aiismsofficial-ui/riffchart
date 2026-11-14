@@ -12,7 +12,7 @@ import copy
 
 import numpy as np
 
-from ..formats.song import GuitarTrack, Song, popcount
+from ..formats.song import GuitarTrack, NoteType, Song, popcount
 
 MIN_LEVEL = 0.02          # the bass track's RMS against the whole song's: below this it isn't charted (follow.py)
 SECTION = "ExpertDoubleBass"
@@ -33,9 +33,23 @@ def singles(tracks: dict[str, GuitarTrack]) -> dict[str, GuitarTrack]:
     """Every chord made one note (its lowest fret): bass parts are nearly all single notes."""
     out = copy.deepcopy(tracks)
     for tr in out.values():
-        m = tr.mask.astype(np.int64)
-        tr.mask = np.where(popcount(tr.mask) > 1, m & -m, m).astype(tr.mask.dtype)
+        fix_same_fret_hopos(tr, single=True)
     return out
+
+
+def fix_same_fret_hopos(tr: GuitarTrack, single: bool = False) -> int:
+    """(single: chords to their lowest fret, then) a HOPO on the same fret as the note before can't be played
+    as one (nothing to hammer on): make it a strum. Returns how many were changed."""
+    m = tr.mask.astype(np.int64)
+    if single:
+        m = np.where(popcount(tr.mask) > 1, m & -m, m)
+        tr.mask = m.astype(tr.mask.dtype)
+    nt = np.asarray(tr.ntype).copy()
+    bad = np.zeros(len(m), bool)
+    bad[1:] = (m[1:] == m[:-1]) & (nt[1:] == NoteType.HOPO)
+    nt[bad] = NoteType.STRUM
+    tr.ntype = nt.astype(np.asarray(tr.ntype).dtype)
+    return int(bad.sum())
 
 
 def retime(tracks: dict[str, GuitarTrack], src: Song, dst: Song, shift_s: float = 0.0) -> dict[str, GuitarTrack]:

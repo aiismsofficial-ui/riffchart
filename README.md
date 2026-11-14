@@ -45,7 +45,8 @@ minutes later. A graphics card is optional.
 - **Bass charts:** every song also gets a 5-fret bass part (all four difficulties), charted from the bass
   track by the same model. Against human bass charts on songs it never saw, its notes land on the beat about
   as well as the guitar charts do (76-79% matched on Expert/Hard, vs 75% for copying the guitar part); which
-  fret each note gets is rougher. A dedicated bass model is planned.
+  fret each note gets is rougher, so the editor has a **Bass** tab to fix it with the same tools. A dedicated
+  bass model is planned.
 - **Pitched vocals for YARG:** a song's lyrics can become sung notes at the pitch the singer hits, so YARG can
   score your singing.
 - **Report a spot:** press F in the editor where a chart goes wrong and type what's wrong; the library's

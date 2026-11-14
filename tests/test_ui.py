@@ -377,10 +377,24 @@ def test_bass_offered_shown_and_removed(env):
     d = c.get("/api/songs/Muse - Uprising/chart").json()                 # an editor save keeps the bass part
     assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
     assert "[ExpertDoubleBass]" in (folder / "notes.chart").read_text(encoding="utf-8")
+    # the editor opens the bass part on its own; saving it keeps the guitar part, and the other way round
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["parts"] == ["guitar", "bass"]
+    b = c.get("/api/songs/Muse - Uprising/chart?part=bass").json()
+    assert b["part"] == "bass" and [n[0] for n in b["tracks"]["expert"]["notes"]] == [0, 192]
+    guitar_before = c.get("/api/songs/Muse - Uprising/chart").json()["tracks"]
+    b["tracks"]["expert"]["notes"].append([384, 4, 0, 0])
+    assert c.post("/api/songs/Muse - Uprising/chart", json=dict(b, part="bass")).status_code == 200
+    assert [n[0] for n in c.get("/api/songs/Muse - Uprising/chart?part=bass").json()["tracks"]["expert"]["notes"]] == [0, 192, 384]
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["tracks"] == guitar_before
+    hist = c.get("/api/songs/Muse - Uprising/history").json()
+    assert hist and c.get(f"/api/songs/Muse - Uprising/history/{hist[0]['name']}?part=bass").status_code == 200
+    assert c.get("/api/songs/Muse - Uprising/chart?part=drums").status_code == 400
     r = c.delete("/api/songs/Muse - Uprising/bass")
     assert r.status_code == 200 and "[ExpertDoubleBass]" not in (folder / "notes.chart").read_text(encoding="utf-8")
     assert c.get("/api/songs/Muse - Uprising").json()["bass"] is None
     assert c.delete("/api/songs/Muse - Uprising/bass").status_code == 404
+    assert c.get("/api/songs/Muse - Uprising/chart?part=bass").status_code == 404
+    assert c.get("/api/songs/Muse - Uprising/chart").json()["parts"] == ["guitar"]
 
 
 def test_batch_actions(env):

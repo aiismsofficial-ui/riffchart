@@ -217,3 +217,14 @@ def test_update_failing_mid_write_leaves_the_song_as_it_was(tmp_path, monkeypatc
         _updater(tmp_path, _Sep()).update_song(f)
     assert (f / "song.ogg").read_bytes() == before
     assert sorted(p.name for p in f.iterdir() if p.is_file()) == ["song.ogg"]
+
+
+def test_bass_singles_never_leave_a_same_fret_hopo():
+    from riffchart.formats.song import GuitarTrack, NoteType
+    from riffchart.product.bass import singles
+    z = np.zeros(4, bool)
+    # G, then chord G+Y (HOPO) -> G again: must become a strum; then R (HOPO, a real pull-off) stays
+    tr = GuitarTrack("expert", np.array([0, 48, 96, 144]), np.array([1, 5, 2, 1], np.uint8), np.zeros(4, np.int64),
+                     np.array([0, 1, 1, 1], np.uint8), z, z)
+    out = singles({"expert": tr})["expert"]
+    assert list(out.mask) == [1, 1, 2, 1] and list(out.ntype) == [0, NoteType.STRUM, NoteType.HOPO, NoteType.HOPO]

@@ -7,6 +7,8 @@ const FRET_COLORS = ["#22c55e", "#ef4444", "#eab308", "#3b82f6", "#f97316"];
 const OPEN_COLOR = "#a855f7", SP_COLOR = "#67e8f9";
 const TYPE_NAMES = ["strum", "HOPO", "tap"];
 const songId = new URLSearchParams(location.search).get("song");
+// which part of the chart is open: guitar, or bass (its own notes; bass.ogg is the featured track)
+const PART = new URLSearchParams(location.search).get("part") === "bass" ? "bass" : "guitar";
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 let toastTimer;
@@ -192,7 +194,7 @@ function drawWave(L, now, t0, t1) {
   const x = L.waveX, w = L.wave - 8, cx = x + w / 2;
   ctx.fillStyle = colors.panel; ctx.fillRect(x, 0, w, H);
   const layers = [{ p: S.peaks.find((p) => p.name === "song"), c: colors.muted, a: 0.55 },
-    { p: S.peaks.find((p) => p.name === "guitar"), c: colors.accent, a: 0.85 }];
+    { p: S.peaks.find((p) => p.name === PART), c: colors.accent, a: 0.85 }];
   for (const { p, c, a } of layers) {
     if (!p || !p.bytes) continue;
     ctx.fillStyle = c; ctx.globalAlpha = a;
@@ -444,7 +446,7 @@ $("#delay").addEventListener("change", (e) => {
 ["clap", "metro"].forEach((id) => $("#" + id).addEventListener("change", () => { ensureAudioCtx(); savePrefs(); }));
 function applyVolumes() {
   if (!S.player) return;
-  S.player.names.forEach((name, i) => S.player.setVolume(i, parseFloat(name.toLowerCase().startsWith("guitar") ? $("#vguitar").value : $("#vsong").value)));
+  S.player.names.forEach((name, i) => S.player.setVolume(i, parseFloat(name.toLowerCase().startsWith(PART) ? $("#vguitar").value : $("#vsong").value)));
   savePrefs();
 }
 
@@ -545,9 +547,12 @@ async function load() {
   loadPrefs();
   try {
     const base = `/api/songs/${encodeURIComponent(songId)}`;
-    const [chart, peaks] = await Promise.all([fetch(base + "/chart").then((r) => { if (!r.ok) throw new Error(r.status === 404 ? "song not found" : r.statusText); return r.json(); }),
+    const [chart, peaks] = await Promise.all([fetch(`${base}/chart?part=${PART}`).then(async (r) => {
+        if (!r.ok) throw new Error(r.status === 404 ? ((await r.json().catch(() => ({}))).detail || "song not found") : r.statusText);
+        return r.json(); }),
       fetch(base + "/peaks").then((r) => (r.ok ? r.json() : []))]);
     S.chart = chart;
+    showParts(chart.parts || ["guitar"]);
     S.tempo = new Tempo(chart.resolution, chart.tempo, chart.ts);
     initEdit(chart);                                    // edit.js: editable copy + prepared tracks
     S.peaks = peaks.filter((p) => p.data).map((p) => ({ ...p, bytes: Uint8Array.from(atob(p.data), (c) => c.charCodeAt(0)) }));
@@ -618,3 +623,26 @@ function showDetails() {
   } });
 }
 $("#details").addEventListener("click", showDetails);
+
+// ---------------------------------------------------------------- guitar / bass
+// The chart's parts open one at a time (each its own undo and Save); switching reloads the page, which asks
+// first when there are unsaved changes.
+function showParts(parts) {
+  const box = $("#parts");
+  box.hidden = parts.length < 2 && PART === "guitar";
+  box.querySelectorAll("button").forEach((b) => {
+    b.classList.toggle("on", b.dataset.part === PART);
+    b.disabled = !parts.includes(b.dataset.part);
+    b.onclick = () => {
+      if (b.dataset.part === PART) return;
+      const q = new URLSearchParams(location.search);
+      if (b.dataset.part === "guitar") q.delete("part"); else q.set("part", b.dataset.part);
+      location.search = q.toString();
+    };
+  });
+  $("#vguitarlbl").firstChild.textContent = PART === "bass" ? "Bass " : "Guitar ";
+  if (PART === "bass") {
+    const rc = $("#rcbtn");
+    rc.disabled = true; rc.title = "Re-charting a section works on the guitar part";
+  }
+}

@@ -28,15 +28,18 @@ function renderHistory() {
     return;
   }
   ol.innerHTML = "";
+  const REASONS = { save: "a save", rechart: "a re-chart", lyrics: "adding lyrics", bass: "adding the bass",
+    nobass: "removing the bass", update: "an update" };
   const seen = new Map();                                   // same minute twice: show seconds
   for (const v of HI.list) seen.set(fmtWhen(v.made), (seen.get(fmtWhen(v.made)) || 0) + 1);
   for (const v of HI.list) {
     const when = fmtWhen(v.made, seen.get(fmtWhen(v.made)) > 1);
     const li = document.createElement("li");
     li.classList.toggle("cur", HI.open === v.name);
-    li.title = `Replaced by ${v.reason === "rechart" ? "a re-chart" : "a save"} ${fmtWhen(v.replaced)}`;
+    const why = REASONS[v.reason] || REASONS.save;
+    li.title = `Replaced by ${why} ${fmtWhen(v.replaced)}`;
     li.innerHTML = `<span class="ttl">${when}</span>
-      <span class="when">${v.reason === "rechart" ? "before a re-chart" : "before a save"}</span>
+      <span class="when">before ${esc(why)}</span>
       <span class="hcount">${countsHtml(v.notes)}</span>`;
     if (!v.notes.error) li.addEventListener("click", () => openVersion(v));
     ol.appendChild(li);
@@ -52,7 +55,7 @@ async function refreshHistory() {
 async function openVersion(v) {
   if (HI.open === v.name) return;
   try {
-    const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/history/${encodeURIComponent(v.name)}`);
+    const r = await fetch(`/api/songs/${encodeURIComponent(songId)}/history/${encodeURIComponent(v.name)}?part=${PART}`);
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     edit(`open the version from ${fmtWhen(v.made)}`, () => {
