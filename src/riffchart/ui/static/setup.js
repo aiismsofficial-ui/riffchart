@@ -49,6 +49,7 @@ function render() {
   $("#lyrstate").textContent = S.can_transcribe ? "" :
     "Writing lyrics down from the singing needs the optional 'transcribe' part of RiffChart (see the README); without it only online lyrics are added.";
   $("#bgq").value = S.background_quality || "screen";
+  $("#basschart").checked = S.bass_chart !== false;
   const box = $("#opts");
   box.innerHTML = "";
   for (const [k, label] of Object.entries(ch.labels)) {
@@ -90,7 +91,7 @@ $("#save").addEventListener("click", async () => {
     moonscraper_exe: $("#msexe").value.trim().replace(/^"|"$/g, "") || null,
     protected: prot.filter((p) => p.on).map((p) => p.path),
     register: !$("#regrow").hidden && $("#register").checked, options,
-    lyrics: $("#lyrics").value, background_quality: $("#bgq").value };
+    lyrics: $("#lyrics").value, background_quality: $("#bgq").value, bass_chart: $("#basschart").checked };
   if (!body.export_dir) { toast("Choose a folder for your finished songs", true); $("#export").focus(); return; }
   if (prot.some((p) => p.on && norm(body.export_dir).startsWith(norm(p.path) + "\\"))) {
     toast("The songs folder can't be inside a folder RiffChart never changes", true); return;

@@ -95,11 +95,17 @@ def parse_chart_text(text: str, ini: dict[str, str] | None = None, instrument: s
 
     threshold = chart_hopo_threshold(resolution, ini)
     cutoff = _sustain_cutoff(ini)
-    tracks = {}
-    for diff, sec_name in track_names(instrument).items():
-        if sec_name in secs:
-            tracks[diff] = _parse_track(diff, secs[sec_name], threshold, cutoff, warnings)
-    return Song(resolution, tempo, tracks, sections, meta, offset, "chart", warnings, lyrics)
+    parts: dict[str, dict] = {}
+    for inst in INSTRUMENT_SECTIONS:
+        got = {diff: _parse_track(diff, secs[sec_name], threshold, cutoff, warnings if inst == instrument else [])
+               for diff, sec_name in track_names(inst).items() if sec_name in secs}
+        if got or inst == instrument:
+            parts[inst] = got
+    tracks = parts.pop(instrument)
+    known = {"Song", "SyncTrack", "Events"} | {n for i in INSTRUMENT_SECTIONS for n in track_names(i).values()}
+    raw = {k: v for k, v in secs.items() if k not in known}
+    return Song(resolution, tempo, tracks, sections, meta, offset, "chart", warnings, lyrics, instrument,
+                {k: v for k, v in parts.items() if any(len(t) for t in v.values())}, raw)
 
 
 def _sustain_cutoff(ini: dict[str, str] | None) -> int:

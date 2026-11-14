@@ -144,7 +144,7 @@ def estimate_diff(n_expert: int, first_s: float, last_s: float, cuts: list[float
     return int(np.searchsorted(cuts, nps))
 
 
-def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int) -> str:
+def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int, diff_bass: int | None = None) -> str:
     lines = ["[song]", f"name = {meta.title}", f"artist = {meta.artist}"]
     if meta.album:
         lines.append(f"album = {meta.album}")
@@ -153,9 +153,20 @@ def song_ini(meta: SongMeta, audio_s: float, preview_s: float, diff: int) -> str
     if meta.year:
         lines.append(f"year = {meta.year}")
     lines += ["charter = RiffChart", f"song_length = {int(audio_s * 1000)}",
-              f"preview_start_time = {int(preview_s * 1000)}", f"diff_guitar = {diff}", "delay = 0",
+              f"preview_start_time = {int(preview_s * 1000)}", f"diff_guitar = {diff}"]
+    if diff_bass is not None:
+        lines.append(f"diff_bass = {diff_bass}")
+    lines += ["delay = 0",
               "loading_phrase = Charted automatically by RiffChart"]
     return "\n".join(lines) + "\n"
+
+
+def _set_ini(path: Path, key: str, value: str) -> None:
+    """Set one song.ini key, keeping every other line as it is."""
+    lines = path.read_text(encoding="utf-8", errors="replace").splitlines() if path.exists() else ["[song]"]
+    out = [ln for ln in lines if not ("=" in ln and ln.split("=", 1)[0].strip().lower() == key)]
+    out.insert(1 if out and out[0].strip().startswith("[") else 0, f"{key} = {value}")
+    path.write_text("\n".join(out) + "\n", encoding="utf-8")
 
 
 def _sync_mid(folder: Path) -> None:
@@ -243,6 +254,14 @@ class RiffCharter:
         stage("chart")
         song, play, _ = self.chart_analysis(an, difficulties, style)
         done("chart")
+        diff_bass = None
+        if "bass" in an["stems"]:
+            stage("bass")
+            bass = self.bass_tracks(an, an["stems"]["bass"], song)
+            if bass:
+                song.parts["bass"] = bass
+                diff_bass = self.guitar_difficulty(Song(song.resolution, song.tempo, bass))
+            done("bass")
         mix, audio_s, mono, downs = an["mix"], an["audio_s"], an["mono"], an["downs"]
 
         stage("write")
@@ -269,7 +288,7 @@ class RiffCharter:
             write_ogg(folder / "song.ogg", mix.astype(np.float32), OUT_SR, q)
         diff = self.guitar_difficulty(song)
         prev = preview_start(mono, OUT_SR, downs, audio_s)
-        ini = song_ini(meta, audio_s, prev, diff)
+        ini = song_ini(meta, audio_s, prev, diff, diff_bass)
         old_ini = parse_ini(folder / "song.ini") if (folder / "song.ini").exists() else {}
         video = None
         if self.cfg.get("keep_video", True) and Path(path).suffix.lower() in FFMPEG_EXT:
@@ -381,6 +400,20 @@ class RiffCharter:
                         out["instruments"].append(name)
             else:
                 notes.append("no instrument loud enough for its own track")
+        from . import bass as bass_mod
+        if (bass_mod.enabled(self.config_path) and (folder / "notes.chart").exists()
+                and bass_mod.ours(ini) and not bass_mod.in_chart(folder)):
+            if (folder / "bass.ogg").exists():
+                stage("bass")
+                try:
+                    out["bass"] = self._update_bass(folder, ini, stems)
+                    if not out["bass"]:
+                        notes.append("the bass is too quiet to chart")
+                except Exception as e:                      # the rest of the update still counts
+                    log.warning("bass chart skipped for %s: %s", folder.name, e)
+                    notes.append(f"bass chart skipped ({type(e).__name__})")
+            else:
+                notes.append("no bass track to chart")
         if want_lyrics:
             stage("lyrics")
             try:
@@ -483,7 +516,57 @@ class RiffCharter:
         style = style or Style()
         follow = style.follow or self.cfg.get("follow", "guitar")
         play = playable_part(an["stems"], self.sep.sr, follow)
-        g22 = soxr.resample(play.model_in.mean(1), self.sep.sr, MEL_SR).astype(np.float32)
+        song, feats = self.chart_part(an, play.model_in, difficulties, style)
+        return song, play, feats
+
+    def _update_bass(self, folder: Path, ini: dict, stems: dict | None) -> int:
+        """A bass chart for a charted song from its bass.ogg, on the chart's own tempo map (the beats aren't
+        tracked again); written into notes.chart (old one in history). Returns Expert's note count, 0 = none."""
+        from ..audio.io import load_mix
+        from ..formats.loader import load_song
+        from ..formats.textio import song_delay_s
+        song, _, chart_path = load_song(folder)
+        files = [f for f in sorted(folder.iterdir()) if f.suffix.lower() in (".ogg", ".opus", ".mp3", ".wav")
+                 and f.stem.lower() in {"song", "guitar"} | set(INSTRUMENT_FILES.values())]
+        mix = load_mix(files, OUT_SR, mono=False)                   # the whole song: every track summed
+        if stems is not None and "bass" in stems:
+            bass = stems["bass"]
+        else:
+            bass, _ = load_audio(folder / "bass.ogg", self.sep.sr, mono=False)
+        shift = song.chart_offset_s + song_delay_s(ini)             # audio time = chart time + shift
+        audio_s = len(mix) / OUT_SR
+        an = {"mix": mix, "audio_s": audio_s, "m22": soxr.resample(mix.mean(1), OUT_SR, MEL_SR).astype(np.float32),
+              "beats": song.tempo.beat_times(audio_s + 2) + shift, "downs": song.tempo.downbeat_times(audio_s + 2) + shift}
+        tracks = self.bass_tracks(an, bass, song, shift_s=shift)
+        if not tracks or not len(tracks.get("expert", [])):
+            return 0
+        song.parts["bass"] = tracks
+        hist = folder / ".riffchart" / "history"
+        hist.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-bass-notes.chart"))
+        chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
+                                              charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
+        _set_ini(folder / "song.ini", "diff_bass", str(self.guitar_difficulty(Song(song.resolution, song.tempo, tracks))))
+        _sync_mid(folder)
+        return len(tracks["expert"])
+
+    def bass_tracks(self, an: dict, bass: np.ndarray, onto: Song, shift_s: float = 0.0) -> dict | None:
+        """A bass chart from the bass track (product/bass.py), on `onto`'s tempo map; None when the setting is
+        off or the bass is too quiet to chart."""
+        from . import bass as bs
+        c = self.cfg.get("bass", {})
+        if not bs.enabled(self.config_path) or not bs.loud_enough(bass, an["mix"]):
+            return None
+        song, _ = self.chart_part(an, bass, style=Style(density=float(c.get("density", 0.0))))
+        tracks = bs.singles(song.tracks) if c.get("singles", False) else song.tracks
+        return bs.retime(tracks, song, onto, shift_s)
+
+    def chart_part(self, an: dict, part: np.ndarray, difficulties=DIFFICULTIES, style: Style | None = None,
+                   post_cfg: dict | None = None, lower: list[str] | None = None):
+        """The chart model on `part` (audio at the separator's rate: the guitar, or the bass track for a bass
+        chart) with the full mix as its second input -> (post-processed Song, model features)."""
+        style = style or Style()
+        g22 = soxr.resample(part.mean(1) if part.ndim == 2 else part, self.sep.sr, MEL_SR).astype(np.float32)
         m22 = an["m22"]
         n = min(len(m22), len(g22))
         feats = np.stack([self.mel(g22[:n]), self.mel(m22[:n])], 1).astype(np.float16)
@@ -499,6 +582,6 @@ class RiffCharter:
                                 pos_bias={"expert": DENSER_BIAS * max(style.density, 0.0)},
                                 min_gap_s=self.min_gap if d["min_gap"] == "auto" else None, pitch=pitch)
         song = events_to_song(ev, beats, downs)
-        song = postprocess(song, self.post_cfg, audio_s=audio_s, mel=feats, beats=beats, downbeats=downs,
-                           density=style.density)
-        return song, play, feats
+        song = postprocess(song, post_cfg or self.post_cfg, audio_s=audio_s, mel=feats, beats=beats,
+                           downbeats=downs, density=style.density, lower=lower)
+        return song, feats

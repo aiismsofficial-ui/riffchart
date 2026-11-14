@@ -20,9 +20,9 @@ from ..paths import PROJECT
 
 STAGE_LABEL = {"load": "loading audio", "separate": "separating guitar", "beats": "tracking beats",
                "chart": "charting", "post": "polishing", "write": "writing files",
-               "lyrics": "finding lyrics", "visuals": "making backgrounds"}
+               "lyrics": "finding lyrics", "visuals": "making backgrounds", "bass": "charting the bass"}
 # "bring up to date" jobs (no charting): splitting the instruments is nearly all of the time
-UPDATE_WEIGHTS = {"load": 0.03, "separate": 0.77, "write": 0.06, "lyrics": 0.06, "visuals": 0.08}
+UPDATE_WEIGHTS = {"load": 0.03, "separate": 0.65, "write": 0.05, "bass": 0.15, "lyrics": 0.05, "visuals": 0.07}
 
 
 @dataclass
@@ -320,6 +320,8 @@ def update_message(r: dict) -> str:
     did = []
     if r.get("instruments"):
         did.append("own tracks for " + ", ".join(f[:-4] for f in r["instruments"]))
+    if r.get("bass"):
+        did.append(f"a bass chart ({r['bass']} notes on Expert)")
     if r.get("lyrics"):
         did.append(f"lyrics ({r['lyrics']} words)")
     if r.get("background"):

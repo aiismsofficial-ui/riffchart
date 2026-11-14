@@ -269,3 +269,50 @@ def test_smooth_tempo_map_steady_and_ts_lattice():
     db = tm.downbeat_times(beats[-1])
     assert np.allclose(db[db >= 1.0 - 1e-6][:14], d2[:14], atol=1e-3)
     assert 3 in list(tm.ts_num)
+
+
+MULTI = """[Song]
+{
+  Resolution = 192
+}
+[SyncTrack]
+{
+  0 = TS 4
+  0 = B 120000
+}
+[ExpertSingle]
+{
+  0 = N 0 0
+  192 = N 1 0
+}
+[ExpertDoubleBass]
+{
+  0 = N 0 96
+  384 = N 2 0
+  384 = S 2 192
+}
+[ExpertDrums]
+{
+  0 = N 0 0
+  96 = N 1 0
+}
+"""
+
+
+def test_other_parts_survive_a_rewrite():
+    from riffchart.formats.song import rescale_parts
+    s = parse_chart_text(MULTI)
+    assert s.instrument == "guitar" and list(s.tracks) == ["expert"]
+    assert list(s.parts) == ["bass"] and list(s.parts["bass"]["expert"].tick) == [0, 384]
+    assert s.raw_sections == {"ExpertDrums": ["0 = N 0 0", "96 = N 1 0"]}
+    s2 = parse_chart_text(write_chart_text(s))
+    b = s2.parts["bass"]["expert"]
+    assert list(b.tick) == [0, 384] and list(b.sustain) == [96, 0] and b.star_power == [(384, 192)]
+    assert s2.raw_sections == s.raw_sections and list(s2.tracks["expert"].tick) == [0, 192]
+    bass = parse_chart_text(MULTI, instrument="bass")      # reading the bass part: guitar becomes a part
+    assert list(bass.tracks["expert"].tick) == [0, 384] and "guitar" in bass.parts
+    text = write_chart_text(bass)
+    assert "[ExpertSingle]" in text and "[ExpertDoubleBass]" in text
+    parts, raw = rescale_parts(s, 480)
+    assert list(parts["bass"]["expert"].tick) == [0, 960] and list(parts["bass"]["expert"].sustain) == [240, 0]
+    assert raw["ExpertDrums"] == ["0 = N 0 0", "240 = N 1 0"]

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .chart_parser import TRACK_NAMES
+from .chart_parser import INSTRUMENT_SECTIONS, track_names
 from .hopo import chart_hopo_threshold, natural_hopo
 from .song import GuitarTrack, NoteType, Song
 
@@ -45,13 +45,17 @@ def write_chart_text(song: Song, *, name: str = "", artist: str = "", charter: s
     out.append("}")
 
     threshold = chart_hopo_threshold(res, ini)
-    for diff, sec in TRACK_NAMES.items():
-        tr = song.tracks.get(diff)
-        if tr is None or len(tr) == 0:
-            continue
-        out += [f"[{sec}]", "{"]
-        out += _track_lines(tr, threshold)
-        out.append("}")
+    parts = {**getattr(song, "parts", {}), getattr(song, "instrument", "guitar"): song.tracks}
+    for inst in INSTRUMENT_SECTIONS:                       # guitar, bass, rhythm, keys
+        for diff, sec in track_names(inst).items():
+            tr = parts.get(inst, {}).get(diff)
+            if tr is None or len(tr) == 0:
+                continue
+            out += [f"[{sec}]", "{"]
+            out += _track_lines(tr, threshold)
+            out.append("}")
+    for sec, lines in getattr(song, "raw_sections", {}).items():   # drums and the like, as they were
+        out += [f"[{sec}]", "{"] + [f"  {ln}" for ln in lines] + ["}"]
     return "\n".join(out) + "\n"
 
 

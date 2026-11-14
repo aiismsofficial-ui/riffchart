@@ -11,7 +11,7 @@ import json
 import time
 from pathlib import Path
 
-VERSION = 1                       # raise when update_song learns something new for old songs
+VERSION = 2                       # raise when update_song learns something new for old songs (2: bass charts)
 MARK = ".riffchart/update.json"
 STEMS = ("bass", "drums", "vocals", "keys")
 AUDIO = {".ogg", ".opus", ".mp3", ".wav"}
@@ -47,8 +47,16 @@ def settings() -> tuple[bool, bool]:
     return _cfg["v"]
 
 
+def _ours(folder: Path) -> bool:
+    """Charted by RiffChart (a human chart never gets an AI part added to it)."""
+    from ..formats.textio import parse_ini
+    ini = Path(folder) / "song.ini"
+    from .bass import ours
+    return ini.exists() and ours(parse_ini(ini))
+
+
 def needs(folder: Path, split: bool | None = None, lyrics_online: bool | None = None) -> list[str]:
-    """[] when nothing to do, else some of "instruments", "lyrics", "background"."""
+    """[] when nothing to do, else some of "instruments", "bass", "lyrics", "background"."""
     if split is None or lyrics_online is None:
         s, o = settings()
         split = s if split is None else split
@@ -64,6 +72,9 @@ def needs(folder: Path, split: bool | None = None, lyrics_online: bool | None = 
     if split and "song" in audio and set(audio) <= {"song", "guitar"}:
         out.append("instruments")
     chart = folder / "notes.chart"
+    from . import bass
+    if chart.exists() and bass.enabled() and ("bass" in audio or "instruments" in out) and not bass.in_chart(folder) and _ours(folder):
+        out.append("bass")
     if lyrics_online and chart.exists() and lyrics.load(folder) is None:
         out.append("lyrics")
     if bg_anim(folder):

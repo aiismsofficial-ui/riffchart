@@ -436,7 +436,7 @@ setInterval(() => {
 }, 1000);
 
 // ---------- bring library songs up to date (no re-charting): own instrument tracks, lyrics, sharp backgrounds
-const UPDATE_WORDS = { instruments: "own tracks for bass, drums, vocals and keys", lyrics: "lyrics", background: "sharper backgrounds" };
+const UPDATE_WORDS = { instruments: "own tracks for bass, drums, vocals and keys", bass: "a bass chart", lyrics: "lyrics", background: "sharper backgrounds" };
 $("#upall").addEventListener("click", async () => {
   const old = songs.filter((x) => x.updates && x.updates.length);
   if (!old.length) { toast("Every song is up to date"); return; }

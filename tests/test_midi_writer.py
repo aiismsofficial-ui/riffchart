@@ -136,3 +136,13 @@ def test_tempo_too_slow_for_midi_is_refused(tmp_path):
     s.tempo.bpm[-1] = 1.0                                             # a charter's 1 BPM "pause" marker
     with pytest.raises(ValueError, match="BPM"):
         write_midi(s, tmp_path / "x.mid")
+
+
+def test_bass_part_is_written_as_part_bass(tmp_path):
+    s = _song()
+    bass = parse_chart_text(CHART, {})
+    s.parts["bass"] = bass.tracks
+    write_midi(s, tmp_path / "notes.mid")
+    b = parse_midi(tmp_path / "notes.mid", instrument="bass")
+    for d, x in bass.tracks.items():
+        assert list(b.tracks[d].tick) == list(x.tick) and list(b.tracks[d].mask) == list(x.mask), d

@@ -120,6 +120,11 @@ class Song:
     source_format: str = "chart"
     warnings: list[str] = field(default_factory=list)
     lyrics: list[tuple[int, str]] = field(default_factory=list)   # .chart events: phrase_start / lyric x / phrase_end
+    instrument: str = "guitar"            # what `tracks` is (guitar, bass, rhythm, keys)
+    # the chart's other 5-fret parts {instrument: {difficulty: track}} and, from a .chart, the sections nothing
+    # here reads (drums, 6-fret...) as their lines: kept so that writing the chart again never drops them
+    parts: dict[str, dict[str, "GuitarTrack"]] = field(default_factory=dict)
+    raw_sections: dict[str, list[str]] = field(default_factory=dict)
 
     def times(self, track: GuitarTrack) -> tuple[np.ndarray, np.ndarray]:
         """(onset seconds, sustain seconds) in chart time (no audio offset applied)."""
@@ -135,3 +140,32 @@ class Song:
 def popcount(mask: np.ndarray) -> np.ndarray:
     m = np.asarray(mask, np.uint8)
     return np.unpackbits(m[:, None], axis=1).sum(1) if len(m) else np.zeros(0, np.int64)
+
+
+def rescale_parts(song: "Song", resolution: int) -> tuple[dict, dict]:
+    """song.parts and song.raw_sections with every tick moved to `resolution` (the same beats)."""
+    import copy
+    import re
+    if resolution == song.resolution:
+        return song.parts, song.raw_sections
+    f = resolution / song.resolution
+    r = lambda x: np.round(np.asarray(x) * f).astype(np.int64)
+    parts = copy.deepcopy(song.parts)
+    for tracks in parts.values():
+        for tr in tracks.values():
+            tr.tick, tr.sustain = r(tr.tick), r(tr.sustain)
+            tr.star_power = [(int(round(a * f)), int(round(b * f))) for a, b in tr.star_power]
+            tr.solos = [(int(round(a * f)), int(round(b * f))) for a, b in tr.solos]
+    line = re.compile(r"^(\d+)(\s*=\s*\w+\s+)(\d+)(\s+)(\d+)$")      # "t = N fret len" / "t = S 2 len"
+    raw = {}
+    for name, lines in song.raw_sections.items():
+        out = []
+        for ln in lines:
+            m = line.match(ln)
+            if m:
+                out.append(f"{round(int(m.group(1)) * f)}{m.group(2)}{m.group(3)}{m.group(4)}{round(int(m.group(5)) * f)}")
+            else:
+                head, _, rest = ln.partition("=")
+                out.append(f"{round(int(head) * f)} ={rest}" if head.strip().isdigit() else ln)
+        raw[name] = out
+    return parts, raw

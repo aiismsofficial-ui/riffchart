@@ -18,6 +18,10 @@ audio:
   vorbis_quality: 0.6
 highway: riffchart         # each song's highway.png (Clone Hero: Song Highways setting): riffchart | cover | none
 keep_video: true           # charting a music video (mp4 / webm / mkv) keeps its picture as video.mp4 / .webm
+bass_chart: true           # also chart the bass (from the bass track; about doubles the charting time). Settings
+bass:                      # tuning (product/bass.py, scripts/eval_bass.py)
+  density: 0.0             # the chart model's sparser (-1) / denser (+1) control for bass
+  singles: true            # chords made single notes (human bass parts: 2% chords; exact frets 16% -> 26%)
 sections: auto             # auto = name the parts (Intro, Verse 1, Chorus 1, ...) from the audio; off = none
 lyrics: online             # online = find lyrics on lrclib.net (sends artist, title, length) and time them to the singing; off = none
 background_quality: screen  # animated song backgrounds: screen (your screen's resolution, ~100 MB a song) | 1440 | 1080 (smallest)

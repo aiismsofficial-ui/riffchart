@@ -148,6 +148,7 @@ class Library:
                  "charter": ini.get("charter", ""), "diff_guitar": ini.get("diff_guitar", ""),
                  "length_s": round(float(ini.get("song_length", 0) or 0) / 1000, 1),
                  "notes": {dd: len(song.tracks[dd]) for dd in DIFFICULTIES if dd in song.tracks},
+                 "bass": {dd: len(t) for dd, t in song.parts.get("bass", {}).items() if len(t)} or None,
                  "charted": mtime}
             self._cache[song_id] = (key, d)
             d = dict(d)

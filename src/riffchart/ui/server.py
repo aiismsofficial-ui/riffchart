@@ -29,6 +29,7 @@ from ..paths import load_config as _paths_load
 from ..product import clonehero
 from ..product.cli import AUDIO_EXT, display_name, find_audio
 from ..formats.loader import load_song
+from ..formats.song import rescale_parts
 from ..formats.textio import parse_ini
 from ..formats.chart_writer import write_chart_text
 from .chartjson import json_to_song, peaks, song_to_json
@@ -129,6 +130,7 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                 "default_export": str(Path.home() / "Documents" / "RiffChart songs"),
                 "protected": [str(p) for p in lib.protected], "workspace": str(lib.workspace),
                 "lyrics": str(_paths_load(product_cfg).get("lyrics", "online")),
+                "bass_chart": bool(_paths_load(product_cfg).get("bass_chart", True)),
                 "can_transcribe": _can_transcribe(),
                 "background_quality": str(_paths_load(product_cfg).get("background_quality", "screen")),
                 "moonscraper": _moonscraper(),
@@ -200,6 +202,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         lib.export_dir, lib.protected = export, prot
         if body.get("lyrics") in ("online", "local", "off"):
             setup.write_local(product_cfg, {"lyrics": body["lyrics"]})
+        if isinstance(body.get("bass_chart"), bool):
+            setup.write_local(product_cfg, {"bass_chart": body["bass_chart"]})
         if body.get("background_quality") in ("screen", "1440", "1080"):
             setup.write_local(product_cfg, {"background_quality": body["background_quality"]})
         done = {"registered": False, "options_changed": False}
@@ -329,8 +333,10 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         ini = _ini(folder)
         old = None
         try:                                       # keep the chart's own [Song] Offset: the page sends ticks
-            old = load_song(folder)[0]                                     # relative to it
+            old = load_song(folder, parts=True)[0]                         # relative to it
             song.chart_offset_s = old.chart_offset_s
+            # the other parts (bass, drums...) the editor doesn't show, at the saved chart's resolution
+            song.parts, song.raw_sections = rescale_parts(old, song.resolution)
         except Exception:
             pass
         from ..product import lyrics as lyr      # timed in seconds, so tempo edits never move them
@@ -776,6 +782,25 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
         lyr.remove(folder)
         _rewrite_chart(folder)
         return {"lyrics": None}
+
+    @app.delete("/api/songs/{song_id}/bass")
+    def remove_bass(song_id: str):
+        """Take the bass part out of the chart (the old chart goes to history)."""
+        folder = song_folder(song_id)
+        check_writable(folder, lib.protected)
+        song, ini, chart_path = load_song(folder)
+        if chart_path.suffix.lower() != ".chart" or not song.parts.pop("bass", None):
+            raise HTTPException(404, "this chart has no bass part RiffChart can remove")
+        hist = folder / ".riffchart" / "history"
+        hist.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(chart_path, hist / time.strftime("%Y%m%d-%H%M%S-nobass-notes.chart"))
+        chart_path.write_text(write_chart_text(song, name=ini.get("name", ""), artist=ini.get("artist", ""),
+                                              charter=ini.get("charter", "RiffChart"), ini=ini), encoding="utf-8")
+        from .library import write_ini_fields
+        write_ini_fields(folder / "song.ini", {"diff_bass": ""})
+        from ..product import vocals as voc
+        voc.sync_mid(folder)
+        return {"bass": None, "export_stale": lib.export_stale(song_id)}
 
     @app.post("/api/songs/{song_id}/vocals")
     def add_vocals(song_id: str):

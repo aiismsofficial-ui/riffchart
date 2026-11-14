@@ -66,6 +66,7 @@
           <div class="dt-anim muted"><label title="A video as long as the song, shown when Clone Hero's Song Videos is on. It replaces your everyday background on this song.">Animated background <select data-k="anim"><option value="">None</option></select></label>
             <span class="dt-animbtns"></span></div>
           <div class="dt-lyrics muted"></div>
+          <div class="dt-bass muted" hidden></div>
           <div class="dt-update muted" hidden></div>
         </div>
         <div class="dt-hwprev" title="This song's highway (it scrolls down the screen in Clone Hero)"><img alt="" hidden><span></span></div>
@@ -292,11 +293,27 @@
       } catch (err) { toast(err.message, true); }
     });
   }
+  function showBass() {
+    const el = q(".dt-bass"), B = cur.bass;
+    el.hidden = !B;
+    if (!B) return;
+    const lvl = ["expert", "hard", "medium", "easy"].filter((d) => B[d]).map((d) => `${d[0].toUpperCase() + d.slice(1)} ${B[d]}`).join(", ");
+    el.innerHTML = `Bass chart: ${lvl} notes (Clone Hero and YARG offer it as the bass part). ` +
+      `<button type="button" class="linkbtn" data-k="bassrm">Remove</button>`;
+    el.querySelector("[data-k=bassrm]").addEventListener("click", async () => {
+      if (!confirm("Remove the bass part from this chart? (The chart before is kept in its history.)")) return;
+      try {
+        const r = await call(`/api/songs/${enc(cur.id)}/bass`, { method: "DELETE" });
+        cur.bass = null; showBass();
+        toast("Bass part removed." + (r.export_stale ? " Save & update in Clone Hero to copy the change there." : ""));
+      } catch (err) { toast(err.message, true); }
+    });
+  }
   function showUpdate() {
     const el = q(".dt-update"), u = cur.updates || [];
     el.hidden = !u.length;
     if (!u.length) return;
-    const words = { instruments: "own tracks for bass, drums, vocals and keys", lyrics: "lyrics", background: "sharper backgrounds" };
+    const words = { instruments: "own tracks for bass, drums, vocals and keys", bass: "a bass chart", lyrics: "lyrics", background: "sharper backgrounds" };
     el.innerHTML = `Newer RiffChart can add: ${u.map((k) => words[k] || k).join(", ")}. ` +
       `<button type="button" class="linkbtn" data-k="upgo" title="Notes and your edits stay as they are. About a minute, in the queue.">Bring up to date</button>`;
     el.querySelector("[data-k=upgo]").addEventListener("click", async () => {
@@ -442,7 +459,7 @@
     hideAnimPreview();
     showAnim();
     showLyrics();
-    showUpdate();
+    showUpdate(); showBass();
     q('[data-k="export"]').textContent = info.exported ? "Save & update in Clone Hero" : "Save & export to Clone Hero";
     q(".dt-state").textContent = !info.exported ? "Not in your Clone Hero folder yet."
       : info.export_stale ? "● The copy in Clone Hero is older than this song: saving with “update” refreshes it."

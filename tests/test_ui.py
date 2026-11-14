@@ -365,6 +365,24 @@ def test_bring_songs_up_to_date(env):
     assert c.post("/api/library/update").json()["queued"] == 0
 
 
+def test_bass_offered_shown_and_removed(env):
+    c, folder = env.client, _charted(env)
+    (folder / "bass.ogg").write_bytes((folder / "song.ogg").read_bytes())
+    assert "bass" in c.get("/api/songs/Muse - Uprising").json()["updates"]    # RiffChart's chart, a bass track
+    assert c.get("/api/songs/Muse - Uprising").json()["bass"] is None
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    (folder / "notes.chart").write_text(text + "[ExpertDoubleBass]\n{\n  0 = N 0 0\n  192 = N 1 0\n}\n", encoding="utf-8")
+    info = c.get("/api/songs/Muse - Uprising").json()
+    assert info["bass"] == {"expert": 2} and "bass" not in info["updates"]
+    d = c.get("/api/songs/Muse - Uprising/chart").json()                 # an editor save keeps the bass part
+    assert c.post("/api/songs/Muse - Uprising/chart", json=d).status_code == 200
+    assert "[ExpertDoubleBass]" in (folder / "notes.chart").read_text(encoding="utf-8")
+    r = c.delete("/api/songs/Muse - Uprising/bass")
+    assert r.status_code == 200 and "[ExpertDoubleBass]" not in (folder / "notes.chart").read_text(encoding="utf-8")
+    assert c.get("/api/songs/Muse - Uprising").json()["bass"] is None
+    assert c.delete("/api/songs/Muse - Uprising/bass").status_code == 404
+
+
 def test_batch_actions(env):
     c = env.client
     _charted(env)

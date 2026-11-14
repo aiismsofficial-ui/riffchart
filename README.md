@@ -40,8 +40,12 @@ minutes later. A graphics card is optional.
   details.
 - **Separate audio per instrument:** guitar, bass, drums, vocals and keys each get their own track, so you
   can turn instruments up or down in Clone Hero and YARG. Songs charted with an older version can be
-  **brought up to date** from the library (own instrument tracks, lyrics, sharper backgrounds) without
-  re-charting them.
+  **brought up to date** from the library (own instrument tracks, a bass chart, lyrics, sharper backgrounds)
+  without re-charting them.
+- **Bass charts:** every song also gets a 5-fret bass part (all four difficulties), charted from the bass
+  track by the same model. Against human bass charts on songs it never saw, its notes land on the beat about
+  as well as the guitar charts do (76-79% matched on Expert/Hard, vs 75% for copying the guitar part); which
+  fret each note gets is rougher. A dedicated bass model is planned.
 - **Pitched vocals for YARG:** a song's lyrics can become sung notes at the pitch the singer hits, so YARG can
   score your singing.
 - **Report a spot:** press F in the editor where a chart goes wrong and type what's wrong; the library's
@@ -175,7 +179,7 @@ See [DESIGN.md](DESIGN.md) for the pipeline, the model and the post-processing.
 
 RiffChart is free and made by one person in their spare time. If it saves you hours of charting, you can
 [tip the dev on Ko-fi](https://ko-fi.com/aiismsofficial) &#9829;. Tips help keep it going
-(bass and drums are next on the list). Bug reports, song requests and charts that came out wrong are just as welcome:
+(a dedicated bass model and drums are next on the list). Bug reports, song requests and charts that came out wrong are just as welcome:
 open an issue.
 
 ## Licence

@@ -20,7 +20,9 @@ def find_chart_file(folder: Path) -> Path | None:
     return None
 
 
-def load_song(folder: str | Path, instrument: str = "guitar") -> tuple[Song, dict[str, str], Path]:
+def load_song(folder: str | Path, instrument: str = "guitar", parts: bool = False) -> tuple[Song, dict[str, str], Path]:
+    """parts: from a .mid also read the other 5-fret parts into song.parts (a .chart always has them; a .mid
+    takes another pass per instrument, so only when the chart will be written out again)."""
     folder = Path(folder)
     chart = find_chart_file(folder)
     if (folder / ".riffchart" / "mid.json").exists() and (folder / "notes.chart").exists():
@@ -29,6 +31,18 @@ def load_song(folder: str | Path, instrument: str = "guitar") -> tuple[Song, dic
         raise FileNotFoundError(f"no notes.mid/notes.chart in {folder}")
     ini_path = next((p for p in folder.iterdir() if p.name.lower() == "song.ini"), None)
     ini = parse_ini(ini_path) if ini_path else {}
-    song = (parse_midi(chart, ini, instrument) if chart.suffix.lower() in (".mid", ".midi")
-            else parse_chart(chart, ini, instrument))
+    if chart.suffix.lower() in (".mid", ".midi"):
+        song = parse_midi(chart, ini, instrument)
+        song.instrument = instrument
+        for inst in ("guitar", "bass", "rhythm", "keys") if parts else ():
+            if inst == instrument:
+                continue
+            try:
+                got = parse_midi(chart, ini, inst).tracks
+            except ValueError:                         # no such part
+                continue
+            if got:
+                song.parts[inst] = got
+    else:
+        song = parse_chart(chart, ini, instrument)
     return song, ini, chart

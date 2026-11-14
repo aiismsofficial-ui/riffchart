@@ -51,15 +51,17 @@ def _note(events, key: int, start: int, end: int, vel: int = 100):
     events.append((max(end, start + 1), 0, mido.Message("note_off", note=key, velocity=0)))
 
 
-def _guitar(song: Song, ini: dict | None) -> list:
+def _guitar(song: Song, ini: dict | None, tracks: dict | None = None) -> list:
+    """One 5-fret part (song.tracks, or `tracks`: another part of the song such as the bass)."""
     ev: list = []
     res = song.resolution
     thr = midi_hopo_threshold(res, ini)
-    opens = any(len(tr) and (np.asarray(tr.mask) & 0x20).any() for tr in song.tracks.values())
+    tracks = song.tracks if tracks is None else tracks
+    opens = any(len(tr) and (np.asarray(tr.mask) & 0x20).any() for tr in tracks.values())
     if opens:
         ev.append((0, 1, mido.MetaMessage("text", text="[ENHANCED_OPENS]")))
     first = None
-    for diff, tr in song.tracks.items():
+    for diff, tr in tracks.items():
         if diff not in DIFF_BASE or not len(tr):
             continue
         first = first or tr
@@ -87,7 +89,7 @@ def _guitar(song: Song, ini: dict | None) -> list:
                 _note(ev, base + 5, t, t + 1)
             elif ntype[i] == 0 and nat[i]:
                 _note(ev, base + 6, t, t + 1)
-    src = song.tracks.get("expert") or first
+    src = tracks.get("expert") or first
     if src is not None:
         for t, ln in src.star_power:
             _note(ev, SP_NOTE, int(t), int(t) + max(int(ln), 1))
@@ -130,7 +132,11 @@ def write_midi(song: Song, path: str | Path, ini: dict | None = None, name: str 
     events = [(int(t), 1, mido.MetaMessage("text", text=_t(f"[section {n.replace('[', '').replace(']', '')}]")))
               for t, n in song.sections]
     mid.tracks.append(_track("EVENTS", events))
-    mid.tracks.append(_track("PART GUITAR", _guitar(song, ini)))
+    parts = {**song.parts, song.instrument: song.tracks}
+    for inst, name in (("guitar", "PART GUITAR"), ("bass", "PART BASS"), ("rhythm", "PART RHYTHM"),
+                       ("keys", "PART KEYS")):
+        if any(len(t) for t in parts.get(inst, {}).values()) or inst == "guitar":
+            mid.tracks.append(_track(name, _guitar(song, ini, parts.get(inst, {}))))
     if vocals and vocals[0]:
         mid.tracks.append(_track("PART VOCALS", _vocals(*vocals)))
     path = Path(path)
