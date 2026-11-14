@@ -1,7 +1,7 @@
 # RiffChart: free AI charts for Clone Hero and YARG
 
-Want to play your own songs in **Clone Hero** or **YARG**, the free PC rhythm games where you play along on
-a guitar controller as notes scroll down a highway? Every song needs a *chart*, the notes you play, and
+Want to play your own songs in **Clone Hero** or **YARG**, the popular free rhythm games where you play along
+on a guitar controller as notes scroll down a highway? Every song needs a *chart*, the notes you play, and
 making one by hand takes hours.
 RiffChart makes it for you: drop in any song (an mp3, a YouTube download, a music video) and a minute or
 two later it's a playable custom song with **guitar and bass** on **Easy, Medium, Hard and Expert**, plus
@@ -16,7 +16,7 @@ minutes later. A graphics card is optional. Community, help and showcases: **r/R
 ## New to this?
 
 - **Clone Hero** ([clonehero.net](https://clonehero.net)) and **YARG** ([yarg.in](https://yarg.in)) are free
-  rhythm games for PC. You play along with a guitar controller (or the keyboard) as notes scroll down a
+  rhythm games for PC, the most popular way to play guitar rhythm games today. You play along with a guitar controller (or the keyboard) as notes scroll down a
   highway. They come with no songs of their own: you add songs ("custom songs" or "charts"), each a folder
   with the music and a chart file.
 - **Charting** a song by hand, in an editor such as Moonscraper, means placing every note in time with
