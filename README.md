@@ -1,13 +1,34 @@
-# RiffChart
+# RiffChart: free AI charts for Clone Hero and YARG
 
-AI autocharter for **Clone Hero** and **YARG**: give it a song, get a playable 5-fret guitar chart in
-all four difficulties (Expert, Hard, Medium, Easy), with star power, HOPOs, taps and sustains. It comes
-with a local web app to manage your songs and a chart editor to review and fix the result.
+Want to play your own songs in **Clone Hero** or **YARG**, the free PC rhythm games where you play along on
+a guitar controller as notes scroll down a highway? Every song needs a *chart*, the notes you play, and
+making one by hand takes hours.
+RiffChart makes it for you: drop in any song (an mp3, a YouTube download, a music video) and a minute or
+two later it's a playable custom song with **guitar and bass** on **Easy, Medium, Hard and Expert**, plus
+lyrics, its own highway and background. No charting experience needed.
 
 Everything runs on your own PC. Your songs and charts are never uploaded anywhere.
 
-**Version 1.1** for Windows 10 / 11. Run **RiffChart-Setup.exe** (or unzip the ZIP and double-click
-`install.bat`), and chart your first song a few minutes later. A graphics card is optional.
+**[Download RiffChart 1.1](https://github.com/aiismsofficial-ui/riffchart/releases/latest)** for Windows 10 / 11:
+run **RiffChart-Setup.exe** (or unzip the ZIP and double-click `install.bat`), and play your first song a few
+minutes later. A graphics card is optional. Community, help and showcases: **r/RiffChart** on Reddit.
+
+## New to this?
+
+- **Clone Hero** ([clonehero.net](https://clonehero.net)) and **YARG** ([yarg.in](https://yarg.in)) are free
+  rhythm games for PC. You play along with a guitar controller (or the keyboard) as notes scroll down a
+  highway. They come with no songs of their own: you add songs ("custom songs" or "charts"), each a folder
+  with the music and a chart file.
+- **Charting** a song by hand, in an editor such as Moonscraper, means placing every note in time with
+  the music. RiffChart's AI listens to the song and does it in a minute or two: guitar, bass, star power,
+  the tempo, section names and lyrics.
+- **Where the songs go:** RiffChart finds Clone Hero on your PC and copies finished songs straight into
+  its songs folder; in the game, Settings > Scan Songs. For YARG, add the same folder in its song settings.
+- **How good is it?** A good hand-made chart still beats it, and if a song already has one, play that.
+  RiffChart is for the songs nobody has charted yet, and as a first draft you can fix in its built-in editor.
+
+RiffChart is an independent project, not affiliated with Clone Hero or YARG. It doesn't download music:
+you chart songs you have.
 
 ## What it does
 
