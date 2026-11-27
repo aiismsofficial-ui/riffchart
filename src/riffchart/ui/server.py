@@ -108,7 +108,8 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
                                                         for p in folders if p),
                                "running": clonehero.is_running()},
                 "audio_ext": sorted(AUDIO_EXT), "setup_done": setup_done(), "tip_url": tip_url(),
-                "version": __version__, "issues_url": str(cfg.get("issues_url") or "")}
+                "version": __version__, "issues_url": str(cfg.get("issues_url") or ""),
+                "bass_chart": bool(_paths_load(product_cfg).get("bass_chart", True))}   # the library's default
 
     _latest: dict = {}
 

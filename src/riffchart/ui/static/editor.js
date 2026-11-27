@@ -83,8 +83,13 @@ class Tempo {
 // ---------------------------------------------------------------- state
 const S = {
   chart: null, tempo: null, player: null, peaks: [], diff: "expert", view: "single",
-  pps: 260, division: 16, hover: null, lastT: 0, tracks: {}, lines: [], sections: [],
+  ns: 7, division: 16, hover: null, lastT: 0, tracks: {}, lines: [], sections: [],
 };
+// Zoom is Clone Hero's Note Speed: the editor shows as many seconds above the strike line as Clone Hero does at
+// that speed. Measured in game (bot recordings, 2026-11-27): seconds visible = 7.2 / note speed at Highway Length 100%.
+const NS_DEFAULT = 7, NS_MIN = 1, NS_MAX = 20, NS_SECS = 7.2, STRIKE_F = 0.82;
+const nsSeconds = (ns) => NS_SECS / ns;
+Object.defineProperty(S, "pps", { get: () => (H || 800) * STRIKE_F / nsSeconds(S.ns) });   // pixels per second
 const hw = $("#hw"), ov = $("#ov"), ctx = hw.getContext("2d"), octx = ov.getContext("2d");
 let W = 0, H = 0, OW = 0, OH = 0, dpr = 1, colors = {};
 
@@ -129,7 +134,7 @@ function layout() {
   const total = diffs.length * hwW + (diffs.length - 1) * 16;
   let x = gutter + wave + 12 + Math.max(0, (avail - total) / 2);
   const hws = diffs.map((d) => { const h = { diff: d, x, w: hwW, lane: hwW / 5 }; x += hwW + 16; return h; });
-  return { gutter, wave, waveX: gutter + 4, hws, strikeY: H * 0.82, rightX: x };
+  return { gutter, wave, waveX: gutter + 4, hws, strikeY: H * STRIKE_F, rightX: x };
 }
 const yOf = (t, now, L) => L.strikeY - (t - now) * S.pps;
 const tOf = (y, now, L) => now + (L.strikeY - y) / S.pps;
@@ -423,7 +428,19 @@ function barStep(dir) {
   const target = dir > 0 ? bars.find((l) => l.tick > tick + 1) : bars.filter((l) => l.tick < tick - 1).pop();
   if (target) S.player.seek(S.tempo.tickToSec(target.tick) + off);
 }
-function setZoom(pps) { S.pps = Math.max(80, Math.min(1600, pps)); $("#zoom").value = S.pps; savePrefs(); }
+function setZoom(ns) {
+  S.ns = Math.round(Math.max(NS_MIN, Math.min(NS_MAX, ns)) * 10) / 10;
+  showZoom(); savePrefs();
+}
+function showZoom() {
+  const ns = S.ns, secs = nsSeconds(ns);
+  $("#zoom").value = ns;
+  $("#nsval").textContent = Number.isInteger(ns) ? String(ns) : ns.toFixed(1);
+  $("#nsreset").disabled = ns === NS_DEFAULT;
+  $("#zoomlbl").title = `Note speed, in Clone Hero's Note Speed: what you see in Clone Hero at Note Speed ${$("#nsval").textContent} ` +
+    `(Highway Length 100%), ${secs.toFixed(2)} s of notes before the strike line. Clone Hero's default is ${NS_DEFAULT}. ` +
+    `Lower shows more of the song. Ctrl + wheel, + and -`;
+}
 function setDiff(d) {
   if (d === "all") S.view = "all"; else { S.view = "single"; S.diff = d; }
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.diff === (S.view === "all" ? "all" : S.diff)));
@@ -437,6 +454,7 @@ $("#tabs").addEventListener("click", (e) => { const b = e.target.closest("button
 $("#speed").addEventListener("change", (e) => setSpeed(parseFloat(e.target.value)));
 $("#grid").addEventListener("change", (e) => { S.division = parseInt(e.target.value, 10); savePrefs(); });
 $("#zoom").addEventListener("input", (e) => setZoom(parseFloat(e.target.value)));
+$("#nsreset").addEventListener("click", () => { setZoom(NS_DEFAULT); toast(`Note speed ${NS_DEFAULT}, Clone Hero's default`); });
 $("#vsong").addEventListener("input", applyVolumes);
 $("#vguitar").addEventListener("input", applyVolumes);
 $("#delay").addEventListener("change", (e) => {
@@ -458,7 +476,7 @@ document.addEventListener("pointerup", (e) => {
 
 hw.addEventListener("wheel", (e) => {
   e.preventDefault();
-  if (e.ctrlKey || e.metaKey) { setZoom(S.pps * Math.exp(-e.deltaY * 0.0015)); return; }
+  if (e.ctrlKey || e.metaKey) { setZoom(S.ns * Math.exp(-e.deltaY * 0.0015)); return; }
   const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaY;
   seekBy(-dy / S.pps);
 }, { passive: false });
@@ -474,8 +492,8 @@ window.addEventListener("keydown", (e) => {
   else if (k === "PageDown") { e.preventDefault(); barStep(-1); }
   else if (k === "Home") { e.preventDefault(); S.player.seek(0); }
   else if (k === "End") { e.preventDefault(); S.player.seek(S.chart.audio_s - 1); }
-  else if (k === "+" || k === "=") setZoom(S.pps * 1.2);
-  else if (k === "-" || k === "_") setZoom(S.pps / 1.2);
+  else if (k === "+" || k === "=") setZoom(Math.floor(S.ns) + 1);       // zoom in = a higher Note Speed
+  else if (k === "-" || k === "_") setZoom(Math.ceil(S.ns) - 1);
   else if (k === "[" || k === "]") {
     const opts = [...$("#speed").options].map((o) => parseFloat(o.value));
     const i = opts.indexOf(S.player.rate), j = Math.max(0, Math.min(opts.length - 1, (i < 0 ? opts.length - 1 : i) + (k === "]" ? 1 : -1)));
@@ -528,14 +546,18 @@ hw.addEventListener("pointerleave", () => { S.hover = null; $("#tip").hidden = t
 // ---------------------------------------------------------------- prefs
 const PREF_KEY = "riffchart.editor", OLD_PREF_KEY = "autochart.editor";   // old name: read once
 function savePrefs() {
-  try { localStorage.setItem(PREF_KEY, JSON.stringify({ pps: S.pps, division: S.division, diff: S.diff, view: S.view,
+  try { localStorage.setItem(PREF_KEY, JSON.stringify({ ns: S.ns, division: S.division, diff: S.diff, view: S.view,
     vsong: $("#vsong").value, vguitar: $("#vguitar").value, delay: $("#delay").value, clap: $("#clap").checked, metro: $("#metro").checked })); } catch { /* ignore */ }
 }
 function loadPrefs() {
+  showZoom();
   let p; try { p = JSON.parse(localStorage.getItem(PREF_KEY) || localStorage.getItem(OLD_PREF_KEY) || "null"); } catch { p = null; }
   if (!p) return;
-  S.pps = p.pps || S.pps; S.division = p.division || S.division; S.diff = p.diff || S.diff; S.view = p.view || S.view;
-  $("#zoom").value = S.pps; $("#grid").value = String(S.division);
+  // before note speeds the zoom was pixels per second (default 260): an untouched default becomes Clone Hero's
+  if (p.ns) S.ns = p.ns;
+  else if (p.pps && p.pps !== 260) S.ns = Math.max(NS_MIN, Math.min(NS_MAX, Math.round(p.pps * NS_SECS / ((H || 800) * STRIKE_F) * 2) / 2));
+  S.division = p.division || S.division; S.diff = p.diff || S.diff; S.view = p.view || S.view;
+  showZoom(); $("#grid").value = String(S.division);
   if (p.vsong) $("#vsong").value = p.vsong; if (p.vguitar) $("#vguitar").value = p.vguitar;
   if (p.delay) $("#delay").value = p.delay;
   $("#clap").checked = !!p.clap; $("#metro").checked = !!p.metro;

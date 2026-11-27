@@ -217,9 +217,11 @@ class RiffCharter:
 
     def chart_file(self, path: str | Path, out_root: str | Path, difficulties=DIFFICULTIES,
                    style: Style | None = None, write_stems: bool | None = None, overwrite: bool = False,
-                   on_stage=None, meta: SongMeta | None = None, folder_name: str | None = None) -> Result | None:
+                   on_stage=None, meta: SongMeta | None = None, folder_name: str | None = None,
+                   parts: dict[str, bool] | None = None) -> Result | None:
         """Returns None when the output folder already exists and overwrite is False.
-        meta / folder_name override the names read from the file (re-charting a song in place)."""
+        meta / folder_name override the names read from the file (re-charting a song in place).
+        parts: {"bass": bool, "keys": bool} for this song only; a part left out follows its Settings switch."""
         path, style = Path(path), style or Style()
         stems = self.cfg["audio"]["write_stems"] if write_stems is None else write_stems
         meta = meta or read_meta(path)
@@ -264,8 +266,11 @@ class RiffCharter:
             audio = own.get(spec["file"][:-4]) if split else an["stems"].get(spec["stem"])
             if audio is None:
                 continue
+            on = (parts or {}).get(part)
+            if on is False:                                # switched off for this song: no time spent on it
+                continue
             stage(part)
-            tracks = self.part_tracks(part, an, audio, song)
+            tracks = self.part_tracks(part, an, audio, song, on=on)
             if tracks:
                 song.parts[part] = tracks
                 part_diffs[spec["ini"]] = self.guitar_difficulty(Song(song.resolution, song.tempo, tracks))
@@ -618,12 +623,15 @@ class RiffCharter:
             _sync_mid(folder)
         return len(tracks["expert"])
 
-    def part_tracks(self, part: str, an: dict, audio: np.ndarray, onto: Song, shift_s: float = 0.0) -> dict | None:
+    def part_tracks(self, part: str, an: dict, audio: np.ndarray, onto: Song, shift_s: float = 0.0,
+                    on: bool | None = None) -> dict | None:
         """A bass / keys chart from that part's track (product/bass.py), on `onto`'s tempo map; None when the
-        setting is off or the part is too quiet to chart."""
+        part is off (`on`, else the Settings switch) or too quiet to chart."""
         from . import bass as bs
         c = self.cfg.get(part, {})
-        if not bs.enabled(self.config_path, part) or not bs.loud_enough(audio, an["mix"]):
+        if on is None:
+            on = bs.enabled(self.config_path, part)
+        if not on or not bs.loud_enough(audio, an["mix"]):
             return None
         song, _ = self.chart_part(an, audio, style=Style(density=float(c.get("density", 0.0))))
         if c.get("singles", False):

@@ -113,6 +113,13 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .sync b { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
 .pvw { display: inline-flex; align-items: center; gap: 4px; }
 .pvw b { color: #2dd4bf; min-width: 34px; text-align: center; font-variant-numeric: tabular-nums; }
+.nspeed { display: inline-flex; align-items: center; gap: 4px; }
+.nspeed b { min-width: 26px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 600; }
+.nspeed button:disabled { opacity: .45; cursor: default; }
+.nsrange { position: relative; display: inline-flex; }
+.toolbar .nsrange input[type=range] { width: 120px; margin: 0; }
+/* Clone Hero's default, 7 on the 1-20 scale (thumb about 16 px wide) */
+.nstick { position: absolute; left: calc(8px + (100% - 16px) * 6 / 19 - 1px); bottom: -5px; width: 2px; height: 5px; border-radius: 1px; background: var(--muted); }
 .histpanel .hnote { margin: 0; padding: 8px 12px 4px; font-size: 12px; }
 .histpanel li { grid-template-columns: 1fr auto; }
 .histpanel li.cur { outline: 1px solid var(--accent); }

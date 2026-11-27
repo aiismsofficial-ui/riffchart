@@ -27,8 +27,9 @@ class FakeCharter:
         self.calls = []
 
     def chart_file(self, path, out_root, difficulties, style, write_stems=True, overwrite=False, on_stage=None,
-                   meta=None, folder_name=None):
+                   meta=None, folder_name=None, parts=None):
         self.calls.append((Path(path), list(difficulties), style))
+        self.parts = parts
         m = meta or read_meta(path)
         folder = Path(out_root) / (folder_name or safe_name(f"{m.artist} - {m.title}"))
         if (folder / "notes.chart").exists() and not overwrite:
@@ -367,7 +368,9 @@ def test_bring_songs_up_to_date(env):
     assert c.post("/api/library/update").json()["queued"] == 0
 
 
-def test_bass_offered_shown_and_removed(env):
+def test_bass_offered_shown_and_removed(env, monkeypatch):
+    from riffchart.product import bass as bass_mod
+    monkeypatch.setattr(bass_mod, "enabled", lambda config=None, part="bass": part == "bass")   # not this PC's Settings
     c, folder = env.client, _charted(env)
     (folder / "bass.ogg").write_bytes((folder / "song.ogg").read_bytes())
     assert "bass" in c.get("/api/songs/Muse - Uprising").json()["updates"]    # RiffChart's chart, a bass track
@@ -1017,3 +1020,16 @@ def test_clone_hero_highway_and_background_switch_separately(env, monkeypatch):
     assert c.post("/api/clonehero/display", json={}).status_code == 400
     monkeypatch.setattr(clonehero, "is_running", lambda: True)
     assert c.post("/api/clonehero/display", json={"song_highway": True}).status_code == 409
+
+
+def test_bass_can_be_switched_off_per_batch(env):
+    """The library's "Chart the bass too" box: off for these songs only; left out, the Settings switch decides."""
+    c = env.client
+    c.post("/api/jobs/upload", files=[("files", ("A - One.mp3", b"ID3", "audio/mpeg"))],
+           data={"options": json.dumps({"bass": False})})
+    wait_idle(c)
+    assert env.fake.parts == {"bass": False}
+    c.post("/api/jobs/upload", files=[("files", ("A - Two.mp3", b"ID3", "audio/mpeg"))])
+    wait_idle(c)
+    assert env.fake.parts is None
+    assert isinstance(c.get("/api/status").json()["bass_chart"], bool)

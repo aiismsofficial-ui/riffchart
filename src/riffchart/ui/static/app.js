@@ -27,9 +27,12 @@ function options() {
   return {
     difficulties: [...document.querySelectorAll("input[name=diff]:checked")].map((x) => x.value),
     density: parseFloat($("#density").value), chords: $("#chords").value, follow: $("#follow").value,
-    stems: $("#stems").checked, overwrite: $("#overwrite").checked,
+    stems: $("#stems").checked, overwrite: $("#overwrite").checked, bass: $("#bass").checked,
   };
 }
+// "Chart the bass too" starts from the Settings switch (not remembered here: Settings is where the default lives)
+let bassTouched = false;
+$("#bass").addEventListener("change", () => { bassTouched = true; });
 function densLabel(v) {   // matches post/density.py: -1 keeps 50% of notes, +1 adds up to 60% below Expert
   v = parseFloat(v);
   if (Math.abs(v) < 0.05) return "normal";
@@ -53,6 +56,7 @@ function updateSetSum() {
   $("#setsum").textContent = [all ? "all difficulties" : o.difficulties.map((d) => d[0].toUpperCase() + d.slice(1)).join(", ") || "no difficulty!",
     densLabel(o.density) === "normal" ? "normal density" : densLabel(o.density).split(":")[0], chords,
     { auto: "guitar + other instruments where it's quiet", guitar: "guitar only", all: "whole song" }[o.follow],
+    o.bass ? "guitar + bass" : "guitar only (no bass)",
     o.stems ? "separate guitar track" : "one audio track"].concat(o.overwrite ? ["re-chart existing"] : []).join(" · ");
 }
 
@@ -403,6 +407,9 @@ async function refreshStatus() {
     const had = status && status.clone_hero.exe;
     status = await api("/api/status");
     if (status.setup_done === false) { location.href = "setup.html"; return; }   // first run
+    if (!bassTouched && typeof status.bass_chart === "boolean" && $("#bass").checked !== status.bass_chart) {
+      $("#bass").checked = status.bass_chart; updateSetSum();
+    }
     renderStatus();
     if (!!had !== !!status.clone_hero.exe) renderSongs();
   } catch { /* server restarting */ }

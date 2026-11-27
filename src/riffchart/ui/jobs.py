@@ -35,6 +35,7 @@ class Options:
     stems: bool = True
     overwrite: bool = False
     follow: str = "auto"         # guitar | auto | all (product/follow.py)
+    bass: bool | None = None     # chart the bass for these songs; None: the Settings switch decides
 
     @staticmethod
     def parse(d: dict | None) -> "Options":
@@ -43,7 +44,8 @@ class Options:
             difficulties=[x for x in DIFFICULTIES if x in d.get("difficulties", DIFFICULTIES)],
             density=float(d.get("density", 0.0)), chords=str(d.get("chords", "auto")),
             stems=bool(d.get("stems", True)), overwrite=bool(d.get("overwrite", False)),
-            follow=str(d.get("follow", "auto")))
+            follow=str(d.get("follow", "auto")),
+            bass=d["bass"] if isinstance(d.get("bass"), bool) else None)
         from ..product.core import CHORD_BIN
         from ..product.follow import MODES
         if not o.difficulties:
@@ -271,7 +273,8 @@ class JobQueue:
                 with self.gpu:
                     r = self.charter.chart_file(j.source, self.workspace, o.difficulties,
                                                 Style(o.density, o.chords, o.follow), write_stems=o.stems,
-                                                overwrite=o.overwrite or bool(j.target), on_stage=on_stage, **kw)
+                                                overwrite=o.overwrite or bool(j.target), on_stage=on_stage,
+                                                parts=None if o.bass is None else {"bass": o.bass}, **kw)
             finally:
                 progress.set_hook(None)                  # nothing reports into a finished job
             if r is None:
