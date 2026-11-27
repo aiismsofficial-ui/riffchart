@@ -215,15 +215,7 @@ function gameFlash(g, x, y, r, age, col) {
   g.fillStyle = gr; g.globalAlpha = 1;
   g.beginPath(); g.ellipse(x, y - r * 0.15, rad, rad * 0.75, 0, 0, Math.PI * 2); g.fill();
 }
-function shade(hex, f) {
-  const n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  const m = c.map((v) => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f));
-  return `rgb(${m[0]},${m[1]},${m[2]})`;
-}
-function hexA(hex, a) {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-}
+// shade() and hexA() are in editor.js
 
 $("#gamebtn").addEventListener("click", () => setGame(!S.game));
 window.addEventListener("keydown", (e) => {

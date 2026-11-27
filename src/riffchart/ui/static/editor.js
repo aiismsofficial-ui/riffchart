@@ -272,16 +272,18 @@ function drawHighway(h, L, now, t0, t1, lines) {
   for (let i = i0; i < i1; i++) {                 // sustains first, gems on top
     if (tr.off[i] <= tr.on[i] + 1e-6 || tr.off[i] < t0) continue;
     const m = tr.notes[i][1], ya = yOf(tr.on[i], now, L), yb = yOf(tr.off[i], now, L);
-    const sw = Math.max(4, r * 0.42);
+    const sw = Math.max(5, r * 0.5);
     if (m & 32) {                              // open sustain: faint band with solid edges
       const c = tr.inSp[i] ? SP_COLOR : OPEN_COLOR;
       ctx.fillStyle = c; ctx.globalAlpha = 0.16; ctx.fillRect(h.x + 6, yb, h.w - 12, ya - yb);
       ctx.globalAlpha = 0.8; ctx.fillRect(h.x + 6, yb, 3, ya - yb); ctx.fillRect(h.x + h.w - 9, yb, 3, ya - yb);
       ctx.globalAlpha = 1; continue;
     }
-    for (let f = 0; f < 5; f++) if (m & (1 << f)) {
-      ctx.fillStyle = tr.inSp[i] ? SP_COLOR : FRET_COLORS[f]; ctx.globalAlpha = 0.85;
-      ctx.fillRect(h.x + (f + 0.5) * h.lane - sw / 2, yb, sw, ya - yb);
+    for (let f = 0; f < 5; f++) if (m & (1 << f)) {                                     // tail: dark edge, bright core
+      const col = tr.inSp[i] ? SP_COLOR : FRET_COLORS[f], cx = h.x + (f + 0.5) * h.lane;
+      ctx.globalAlpha = 0.9; ctx.fillStyle = shade(col, -0.4); ctx.fillRect(cx - sw / 2, yb, sw, ya - yb);
+      ctx.fillStyle = col; ctx.fillRect(cx - sw * 0.32, yb, sw * 0.64, ya - yb);
+      ctx.fillStyle = "rgba(255,255,255,.45)"; ctx.fillRect(cx - sw * 0.08, yb, sw * 0.16, ya - yb);
     }
     ctx.globalAlpha = 1;
   }
@@ -305,26 +307,41 @@ function drawHighway(h, L, now, t0, t1, lines) {
   }
 }
 
+// gems in the game's 5-fret look, seen from above (the Game view draws the same pucks tilted): strum = colour
+// with a small white cap, HOPO = smaller with a big white top, tap = dark top in a colour ring, open = purple bar,
+// star power = cyan with a soft glow. Our own drawing, not Clone Hero's art.
 function drawGem(cx, cy, r, f, nt, sp, hover) {
   const col = sp ? SP_COLOR : FRET_COLORS[f];
-  const rr = nt === 1 ? r * 0.82 : r;
+  const rr = nt === 1 ? r * 0.84 : r;
+  if (sp) { ctx.save(); ctx.shadowColor = SP_COLOR; ctx.shadowBlur = rr * 0.9; }
   ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2);
-  if (nt === 2) {                               // tap: dark centre, coloured ring
-    ctx.fillStyle = "#111"; ctx.fill(); ctx.lineWidth = rr * 0.42; ctx.strokeStyle = col;
-    ctx.beginPath(); ctx.arc(cx, cy, rr * 0.78, 0, Math.PI * 2); ctx.stroke();
-  } else {
-    ctx.fillStyle = col; ctx.fill();
-    ctx.lineWidth = nt === 1 ? 3 : 2; ctx.strokeStyle = nt === 1 ? "#ffffff" : "rgba(0,0,0,.55)"; ctx.stroke();
-    if (nt === 0) { ctx.beginPath(); ctx.arc(cx, cy, rr * 0.42, 0, Math.PI * 2); ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fill(); }
-  }
+  ctx.fillStyle = shade(col, -0.45); ctx.fill();                                      // rim (the puck's side)
+  if (sp) ctx.restore();
+  ctx.beginPath(); ctx.arc(cx, cy, rr * 0.84, 0, Math.PI * 2);
+  ctx.fillStyle = nt === 2 ? "#15171c" : col; ctx.fill();                              // top
+  if (nt === 2) { ctx.lineWidth = rr * 0.16; ctx.strokeStyle = col; ctx.stroke(); }
+  const cr = nt === 1 ? 0.6 : nt === 2 ? 0.3 : 0.36;                                   // cap
+  ctx.beginPath(); ctx.arc(cx, cy, rr * cr, 0, Math.PI * 2);
+  ctx.fillStyle = nt === 2 ? shade(col, 0.2) : "#ffffff"; ctx.fill();
   if (hover) { ctx.lineWidth = 2; ctx.strokeStyle = colors.text; ctx.beginPath(); ctx.arc(cx, cy, rr + 4, 0, Math.PI * 2); ctx.stroke(); }
 }
 function drawOpen(h, y, r, nt, sp, hover) {
-  const hh = Math.max(6, r * 0.55);
-  ctx.fillStyle = sp ? SP_COLOR : OPEN_COLOR;
-  roundRect(h.x + 4, y - hh / 2, h.w - 8, hh, hh / 2); ctx.fill();
-  if (nt === 1) { ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke(); }
+  const hh = Math.max(7, r * 0.6), col = sp ? SP_COLOR : OPEN_COLOR;
+  if (sp) { ctx.save(); ctx.shadowColor = SP_COLOR; ctx.shadowBlur = hh; }
+  ctx.fillStyle = shade(col, -0.4); roundRect(h.x + 4, y - hh / 2, h.w - 8, hh, hh / 2); ctx.fill();
+  if (sp) ctx.restore();
+  ctx.fillStyle = col; roundRect(h.x + 5, y - hh / 2 + 1, h.w - 10, hh - 3, (hh - 3) / 2); ctx.fill();
+  if (nt === 1) { ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillRect(h.x + hh, y - hh * 0.14, h.w - hh * 2, hh * 0.28); }
   if (hover) { ctx.lineWidth = 2; ctx.strokeStyle = colors.text; roundRect(h.x + 1, y - hh / 2 - 3, h.w - 2, hh + 6, hh); ctx.stroke(); }
+}
+function shade(hex, f) {                       // darker (f < 0) or lighter (f > 0) version of a #rrggbb colour
+  const n = parseInt(hex.slice(1), 16), c = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const m = c.map((v) => Math.round(f < 0 ? v * (1 + f) : v + (255 - v) * f));
+  return `rgb(${m[0]},${m[1]},${m[2]})`;
+}
+function hexA(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 function roundRect(x, y, w, h, r) { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 
