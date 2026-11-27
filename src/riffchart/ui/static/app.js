@@ -158,7 +158,7 @@ function renderJobs() {
     const acts = j.status === "queued" ? `<button class="ghost small" data-cancel="${j.id}">Cancel</button>`
       : j.status === "running" ? ""
       : (j.status === "failed" ? `<button class="ghost small" data-retry="${j.id}">Retry</button>` : "") +
-        (ready ? `<a class="btn small" href="${editorUrl(j.song)}">Open in editor</a>` : "") +
+        (ready ? `<a class="btn ghost small" href="${editorUrl(j.song)}">Open in editor</a>` : "") +
         `<button class="ghost small icon" data-cancel="${j.id}" title="Remove from this list" aria-label="Remove from this list">✕</button>`;
     const label = j.target ? `Re-charting ${j.name}` : j.name;
     return `<li class="job ${j.status}"><div class="name">${esc(label)}<span class="tag ${j.status}">${j.status}</span></div>
@@ -218,8 +218,10 @@ const DLABEL = { expert: "Expert", hard: "Hard", medium: "Medium", easy: "Easy" 
 
 function renderSongs() {
   if (document.querySelector(".menulist:not([hidden])")) return;       // don't yank an open menu away
-  const q = $("#filter").value.trim().toLowerCase();
+  const q = $("#filter").value.trim().toLowerCase(), sort = $("#sort").value;
+  const key = (s) => sort === "artist" ? `${s.artist} ${s.title}` : s.title;
   const list = songs.filter((s) => !q || `${s.title} ${s.artist}`.toLowerCase().includes(q));
+  if (sort !== "new") list.sort((a, b) => key(a).localeCompare(key(b), undefined, { sensitivity: "base" }));
   $("#songcount").textContent = songs.length ? `${songs.length}` : "";
   const old = songs.filter((x) => x.updates && x.updates.length).length;
   $("#upall").hidden = !old;
@@ -231,6 +233,7 @@ function renderSongs() {
   const chExe = status && status.clone_hero && status.clone_hero.exe;
   const busy = new Map(jobs.filter((j) => (j.target || j.kind === "update") && (j.status === "running" || j.status === "queued"))
     .map((j) => [j.kind === "update" ? j.source.split(/[\\/]/).pop() : j.target, j]));
+  const cards = [];
   $("#songs").innerHTML = list.map((s) => {
     const notes = DIFFS.map((d) => `<span title="${DLABEL[d]}">${s.notes[d] ?? "–"}</span>`).join(" / ");
     const exp = s.exported ? `<span class="badge ${s.export_stale ? "stale" : ""}" title="${s.export_stale ? "Changed since the last export: export again to update Clone Hero" : "In your Clone Hero folder"}">${s.export_stale ? "● changed since export" : "✓ in Clone Hero"}</span>` : "";
@@ -238,27 +241,52 @@ function renderSongs() {
     const verb = j && j.kind === "update" ? "updating" : "re-charting";
     const state = j ? `<span class="tag running">${j.status === "running" ? `${verb} ${Math.round(j.progress * 100)}%` : j.kind === "update" ? "update queued" : "re-chart queued"}</span>` : "";
     const id = esc(s.id);
+    const art = s.art ? `/api/songs/${encodeURIComponent(s.id)}/file/${s.art}` : "";
+    const testBtn = (cls, label) => `<button class="${cls}" data-test="${id}" data-diff="expert" ${chExe ? 'title="Open in Clone Hero on Expert (the bot plays it)"' : 'disabled title="Clone Hero.exe not found (configs/preview.yaml)"'}${label ? "" : ` aria-label="Play ${esc(s.title)} in Clone Hero"`}>${label || PLAY_SVG}</button>`;
+    const menu = (cls) => `<div class="menu"><button class="${cls}" data-menu="${id}" aria-label="More actions for ${esc(s.title)}" aria-haspopup="true">⋯</button>
+          <div class="menulist" hidden>
+            ${cls.includes("card") ? `<button data-export="${id}" data-again="${s.exported ? 1 : ""}">${s.exported ? "Export again" : "Export to Clone Hero"}</button>` : ""}
+            <button data-rechart="${id}" ${j ? "disabled" : ""}>Re-chart with other settings…</button>
+            <button data-details="${id}">Song details &amp; cover…</button>
+            ${DIFFS.slice(1).map((d) => `<button data-test="${id}" data-diff="${d}" ${chExe ? "" : "disabled"}>Test in Clone Hero on ${DLABEL[d]}</button>`).join("")}
+            <button data-reveal="${id}">Open song folder</button>
+            <button data-remove="${id}" class="danger" ${j ? "disabled" : ""}>Remove from library…</button>
+          </div></div>`;
+    cards.push(`<article class="scard${picked.has(s.id) ? " picked" : ""}" data-id="${id}">
+      <a class="scover" href="${editorUrl(s.id)}" title="Open in the editor">${art ? `<img src="${art}" alt="" loading="lazy">` : `<span class="noart" aria-hidden="true">${esc((s.title || "?").slice(0, 1).toUpperCase())}</span>`}</a>
+      <label class="pick" title="Select for a batch action"><input type="checkbox" data-pick="${id}" aria-label="Select ${esc(s.title)}" ${picked.has(s.id) ? "checked" : ""}></label>
+      ${s.diff_guitar != null && s.diff_guitar !== "" ? `<span class="sdiff" title="Estimated guitar difficulty (0-6)">Diff ${esc(s.diff_guitar)}</span>` : ""}
+      <div class="sinfo"><a class="st" href="${editorUrl(s.id)}">${esc(s.title)}</a><span class="sa">${esc(s.artist)}</span>
+        <span class="sm">${fmtLen(s.length_s)} · Expert ${s.notes.expert ?? "–"} notes · ${when(s.charted)}</span>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</div>
+      <div class="sacts"><a class="btn small" href="${editorUrl(s.id)}">Edit</a>${testBtn("ghost small icon card", "")}${menu("quiet small icon card")}</div>
+    </article>`);
     return `<tr data-id="${id}" class="${picked.has(s.id) ? "picked" : ""}">
       <td><div class="songcell"><label class="pick" title="Select for a batch action"><input type="checkbox" data-pick="${id}" ${picked.has(s.id) ? "checked" : ""}></label><div><a class="songlink" href="${editorUrl(s.id)}" title="Open in the editor">${s.art ? `<img class="thumb" src="/api/songs/${encodeURIComponent(s.id)}/file/${s.art}" alt="">` : `<span class="thumb none"></span>`}<span class="t">${esc(s.title)}</span><span class="a">${esc(s.artist)}</span></a>${exp}${state}${s.error ? `<div class="err">${esc(s.error)}</div>` : ""}</div></div></td>
       <td class="num">${notes}</td><td class="num">${fmtLen(s.length_s)}</td><td class="num">${esc(s.diff_guitar ?? "")}</td>
       <td class="when">${when(s.charted)}</td>
       <td><div class="acts">
         <a class="btn small" href="${editorUrl(s.id)}">Edit</a>
-        <button class="ghost small" data-test="${id}" data-diff="expert" ${chExe ? 'title="Open in Clone Hero on Expert (the bot plays it)"' : 'disabled title="Clone Hero.exe not found (configs/preview.yaml)"'}>▶ Clone Hero</button>
+        ${testBtn("ghost small", "▶ Clone Hero")}
         <button class="ghost small" data-export="${id}" data-again="${s.exported ? 1 : ""}" title="Copy to your Clone Hero songs folder">${s.exported ? "Export again" : "Export"}</button>
-        <div class="menu"><button class="ghost small icon" data-menu="${id}" aria-label="More actions" aria-haspopup="true">⋯</button>
-          <div class="menulist" hidden>
-            <button data-rechart="${id}" ${j ? "disabled" : ""}>Re-chart with other settings…</button>
-            <button data-details="${id}">Song details &amp; cover…</button>
-            ${DIFFS.slice(1).map((d) => `<button data-test="${id}" data-diff="${d}" ${chExe ? "" : "disabled"}>Test in Clone Hero on ${DLABEL[d]}</button>`).join("")}
-            <button data-reveal="${id}">Open song folder</button>
-            <button data-remove="${id}" class="danger" ${j ? "disabled" : ""}>Remove from library…</button>
-          </div></div>
+        ${menu("ghost small icon")}
       </div></td></tr>`;
   }).join("");
+  $("#grid").innerHTML = cards.join("");
   showBatch(list);
 }
+const PLAY_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4l13 8-13 8z" fill="currentColor"/></svg>';
 $("#filter").addEventListener("input", renderSongs);
+// covers or list, and the sort order: remembered per browser
+const VIEW_KEY = "riffchart.libview";
+function setView(v) {
+  v = v === "list" ? "list" : "grid";
+  $("#songsbox").className = "view-" + v;
+  document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+  try { localStorage.setItem(VIEW_KEY, JSON.stringify({ view: v, sort: $("#sort").value })); } catch { /* ignore */ }
+}
+document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+$("#sort").addEventListener("change", () => { setView($("#songsbox").className.slice(5)); renderSongs(); });
+try { const v = JSON.parse(localStorage.getItem(VIEW_KEY) || "null"); if (v && v.sort) $("#sort").value = v.sort; setView(v && v.view); } catch { setView("grid"); }
 
 function closeMenus() {
   const open = document.querySelector(".menulist:not([hidden])");
@@ -270,7 +298,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenus
 window.addEventListener("scroll", closeMenus, { passive: true });
 window.addEventListener("resize", closeMenus);
 
-$("#songs").addEventListener("click", async (e) => {
+$("#songsbox").addEventListener("click", async (e) => {
   const b = e.target.closest("button"); if (!b || b.disabled) return;
   if (b.dataset.menu) {
     const m = b.nextElementSibling, open = m.hidden;
@@ -491,10 +519,11 @@ function showBatch(list) {
     <button class="ghost small" data-batch="clear">Clear selection</button>`;
   if (!batchOpts) batchOptions().then(() => { bar.dataset.n = ""; showBatch(songs.filter((s) => shownIds.includes(s.id))); });
 }
-$("#songs").addEventListener("change", (e) => {
+$("#songsbox").addEventListener("change", (e) => {
   const c = e.target.closest("input[data-pick]"); if (!c) return;
   if (c.checked) picked.add(c.dataset.pick); else picked.delete(c.dataset.pick);
-  c.closest("tr").classList.toggle("picked", c.checked);
+  document.querySelectorAll(`[data-id="${CSS.escape(c.dataset.pick)}"]`).forEach((el) => el.classList.toggle("picked", c.checked));
+  document.querySelectorAll(`input[data-pick="${CSS.escape(c.dataset.pick)}"]`).forEach((el) => { el.checked = c.checked; });
   showBatch(songs.filter((s) => shownIds.includes(s.id)));
 });
 $("#pickall").addEventListener("change", (e) => {

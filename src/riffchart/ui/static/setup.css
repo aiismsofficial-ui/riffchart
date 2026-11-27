@@ -20,3 +20,20 @@
 .su-opt { font-weight: 400; }
 .su-about { text-align: right; font-size: 12px; margin: 4px 0 0; }
 .su-about a { color: var(--accent); }
+
+/* ---- refresh (2026-11-27): section menu, cards, a Save bar that stays in view */
+.su-main { max-width: 1120px; }
+.su-title { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.3px; }
+.su-layout { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.su-nav { flex: 1 1 190px; max-width: 220px; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 84px; }
+.su-nav a { padding: 9px 12px; border-radius: var(--r-ctl); color: var(--muted); text-decoration: none; }
+.su-nav a:hover, .su-nav a.on { background: var(--raised); color: var(--text); }
+.su-nav a.on { font-weight: 600; }
+.su-cards { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.su-cards > .card { scroll-margin-top: 84px; padding: 20px 22px; }
+.su-n { width: 22px; height: 22px; background: var(--raised); color: var(--muted); font-size: 11px; }
+.su-actions { position: sticky; bottom: 16px; z-index: 4; padding: 12px 16px; border-radius: 12px; background: #232836;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5); justify-content: space-between; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .su-actions { background: #ffffff; } }
+.su-actions #savestate { font-size: 13px; }
+@media (max-width: 760px) { .su-nav { position: static; max-width: none; flex-direction: row; flex-wrap: wrap; } }

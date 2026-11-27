@@ -125,3 +125,14 @@ $("#save").addEventListener("click", async () => {
     render();
   } catch (e) { toast(e.message, true); }
 })();
+
+// section menu: mark the section in view
+(() => {
+  const links = [...document.querySelectorAll(".su-nav a")];
+  const mark = () => {
+    let cur = links[0];
+    for (const a of links) { const el = document.querySelector(a.getAttribute("href")); if (el && el.getBoundingClientRect().top < 160) cur = a; }
+    links.forEach((a) => a.classList.toggle("on", a === cur));
+  };
+  window.addEventListener("scroll", mark, { passive: true }); mark();
+})();

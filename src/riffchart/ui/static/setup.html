@@ -10,14 +10,19 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand"><a href="./" class="back" id="back" title="Back to your songs">←</a><span class="dots"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span><span id="heading">Settings</span></div>
+  <div class="brand"><a class="home" href="./" title="Your songs"><span class="dots" aria-hidden="true"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span>RiffChart</a></div>
+  <nav class="topnav" aria-label="Main" id="back"><a href="./" title="Your songs: add, chart, edit and export">Library</a><a href="highways.html" title="Design your own highways (still or animated) and animated backgrounds">Highways &amp; backgrounds</a><a href="setup.html" aria-current="page" title="Songs folder, protected folders, Clone Hero options">Settings</a></nav>
 </header>
 
 <main class="su-main">
+  <h1 class="su-title" id="heading">Settings</h1>
   <p class="su-intro" id="intro" hidden>Welcome to RiffChart. Check these four things and you're ready to chart. You can change all of
     this later under <b>Settings</b>.</p>
 
-  <section class="card">
+  <div class="su-layout">
+  <nav class="su-nav" aria-label="Settings sections"><a href="#su-ch">Clone Hero</a><a href="#su-songs">Songs folder</a><a href="#su-protect">Protected folders</a><a href="#su-play">While you play</a><a href="#su-charting">Lyrics, bass and keys</a><a href="#su-bg">Animated backgrounds</a><a href="#su-updates">Updates</a></nav>
+  <div class="su-cards">
+  <section class="card" id="su-ch">
     <h2><span class="su-n">1</span> Clone Hero</h2>
     <label class="su-field">Clone Hero's settings file
       <input type="text" id="settings" autocomplete="off" spellcheck="false"></label>
@@ -30,7 +35,7 @@
     <p class="muted su-state" id="msstate"></p>
   </section>
 
-  <section class="card">
+  <section class="card" id="su-songs">
     <h2><span class="su-n">2</span> Where finished songs go</h2>
     <p class="muted">Export copies each finished song here. Clone Hero plays them from this folder.</p>
     <label class="su-field">Songs folder
@@ -39,7 +44,7 @@
     <p class="muted su-state" id="regstate"></p>
   </section>
 
-  <section class="card">
+  <section class="card" id="su-protect">
     <h2><span class="su-n">3</span> Folders RiffChart never changes</h2>
     <p class="muted">Your own chart collections. RiffChart can open charts from them but will never save, export or delete
       anything inside them.</p>
@@ -48,7 +53,7 @@
       <button class="ghost small">Add</button></form>
   </section>
 
-  <section class="card">
+  <section class="card" id="su-play">
     <h2><span class="su-n">4</span> What Clone Hero shows while you play</h2>
     <p class="muted">RiffChart gives each song a background, a highway and (for music videos) a video. Clone Hero only shows
       them when these options are on.</p>
@@ -57,7 +62,7 @@
       Its settings file is backed up first.</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="su-charting">
     <h2><span class="su-n">5</span> Lyrics, bass and keys</h2>
     <label>Lyrics for new charts <select id="lyrics">
       <option value="online">Look them up online, else write them down from the singing on this PC</option>
@@ -82,7 +87,7 @@
       Bring up to date converts the videos of songs charted before.</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="su-bg">
     <h2><span class="su-n">6</span> Animated backgrounds</h2>
     <label>Sharpness <select id="bgq">
       <option value="screen">Your screen's resolution (sharpest, about 100 MB a song)</option>
@@ -92,15 +97,17 @@
       whole song. Backgrounds and themes installed in Clone Hero loop, so they're always full sharpness and small.</p>
   </section>
 
-  <section class="card">
+  <section class="card" id="su-updates">
     <h2><span class="su-n">7</span> Updates</h2>
     <label class="su-check"><input type="checkbox" id="updcheck"> Tell me when a newer RiffChart is out</label>
     <p class="muted">The library shows a note with what's new. To know, RiffChart asks GitHub for its latest release
       (at most every 6 hours); nothing about you or your songs is sent.</p>
   </section>
 
-  <div class="su-actions"><span class="muted" id="savestate"></span><button id="save">Save</button></div>
+  <div class="su-actions"><span class="muted" id="savestate">Clone Hero's own options change only while it is closed.</span><button id="save">Save</button></div>
   <p class="muted su-about" id="about"></p>
+  </div>
+  </div>
 </main>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script src="setup.js"></script>

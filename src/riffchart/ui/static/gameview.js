@@ -47,7 +47,7 @@ function setGame(on) {
   if (!GV.canvas) gameInit();
   S.game = !!on;
   GV.canvas.hidden = !S.game; hw.style.visibility = S.game ? "hidden" : "";
-  $("#gamebtn").classList.toggle("on", S.game);
+  $("#gamebtn").setAttribute("aria-pressed", String(S.game)); $("#editviewbtn").setAttribute("aria-pressed", String(!S.game));
   $("#tip").hidden = true;
   if (S.game) { gameImages(); toast("Game view: what Clone Hero shows at this note speed. Read-only; G to edit again"); }
 }
@@ -217,7 +217,8 @@ function gameFlash(g, x, y, r, age, col) {
 }
 // shade() and hexA() are in editor.js
 
-$("#gamebtn").addEventListener("click", () => setGame(!S.game));
+$("#gamebtn").addEventListener("click", () => setGame(true));
+$("#editviewbtn").addEventListener("click", () => setGame(false));
 window.addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey || !S.chart) return;
   if (e.key === "g" || e.key === "G") { e.preventDefault(); setGame(!S.game); }

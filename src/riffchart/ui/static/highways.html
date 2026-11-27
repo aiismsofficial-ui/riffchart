@@ -10,13 +10,22 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand"><a href="./" class="back" title="Back to your songs">←</a><span class="dots"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span>Highways &amp; backgrounds</div>
+  <div class="brand"><a class="home" href="./" title="Your songs"><span class="dots" aria-hidden="true"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span>RiffChart</a></div>
+  <nav class="topnav" aria-label="Main"><a href="./" title="Your songs: add, chart, edit and export">Library</a><a href="highways.html" aria-current="page" title="Design your own highways (still or animated) and animated backgrounds">Highways &amp; backgrounds</a><a href="setup.html" title="Songs folder, protected folders, Clone Hero options">Settings</a></nav>
+</header>
+<div class="hw-top">
+<section class="hw-bar" aria-label="What Clone Hero shows">
+  <div class="hw-bartext"><b>What Clone Hero shows on your songs</b>
+    <span id="chstate" class="muted">Checking Clone Hero…</span></div>
+  <div class="hw-chrows" id="chrows" hidden>
+    <div><span class="muted">Highway:</span> <span id="chhw"></span> <button id="chhwbtn" class="ghost small"></button></div>
+    <div><span class="muted">Background:</span> <span id="chbg"></span> <button id="chbgbtn" class="ghost small"></button></div>
+  </div>
   <label class="hw-default" title="The highway newly charted songs get">New songs get
     <select id="libdefault"></select></label>
-</header>
-
-<section class="card hw-how">
-  <h2>How Clone Hero uses these</h2>
+</section>
+<details class="hw-how">
+  <summary>How Clone Hero uses these</summary>
   <div class="hw-howgrid">
     <div>
       <h3>On one song <span class="muted">(Song details)</span></h3>
@@ -39,12 +48,8 @@
       </ul>
     </div>
   </div>
-  <div class="hw-chstate"><span id="chstate" class="muted">Checking Clone Hero…</span></div>
-  <div class="hw-chstate" id="chrows" hidden>
-    <div><b>Highway:</b> <span id="chhw"></span> <button id="chhwbtn" class="ghost small"></button></div>
-    <div><b>Background:</b> <span id="chbg"></span> <button id="chbgbtn" class="ghost small"></button></div>
-  </div>
-</section>
+  </details>
+</div>
 
 <main class="hw-main">
   <aside class="card hw-list">

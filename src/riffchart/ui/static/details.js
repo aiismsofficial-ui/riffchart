@@ -27,19 +27,20 @@
     dlg = document.createElement("dialog");
     dlg.className = "dialog details";
     dlg.innerHTML = `
-      <h3>Song details</h3>
-      <p class="muted">What Clone Hero and YARG show for this song. Fix anything the app got wrong.</p>
+      <div class="dt-head"><h3>Song details</h3><span class="muted">What Clone Hero and YARG show for this song. Fix anything the app got wrong.</span>
+        <button type="button" class="quiet icon dt-x" data-k="close" aria-label="Close" title="Close (Esc)"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+      <div class="dt-scroll">
       <div class="dt-body">
         <div class="dt-art">
           <div class="dt-cover" tabindex="0" title="Drop an image here, or click to choose one"><img alt="" hidden><span>No cover</span></div>
-          <div class="dt-artbtns"><label class="link">Choose image…<input type="file" accept="image/png,image/jpeg" hidden></label>
+          <div class="dt-artbtns"><label class="btn ghost small">Choose image<input type="file" accept="image/png,image/jpeg" hidden></label>
+            <button type="button" class="ghost small dt-find" data-k="find">Find online</button>
             <button type="button" class="linkbtn" data-k="rmart">Remove</button></div>
-          <button type="button" class="ghost small dt-find" data-k="find">Find cover online…</button>
         </div>
         <div class="dt-fields">
           <label class="wide">Song title<input type="text" data-f="title" maxlength="200" required></label>
-          <label class="wide">Artist<input type="text" data-f="artist" maxlength="200"></label>
-          <label class="wide">Album<input type="text" data-f="album" maxlength="200"></label>
+          <label>Artist<input type="text" data-f="artist" maxlength="200"></label>
+          <label>Album<input type="text" data-f="album" maxlength="200"></label>
           <label>Genre<input type="text" data-f="genre" maxlength="100" list="dt-genres"></label>
           <label>Year<input type="text" data-f="year" maxlength="4" inputmode="numeric" pattern="[0-9]{0,4}"></label>
           <label class="wide" title="The difficulty Clone Hero shows in the song list. Estimated from the Expert chart.">
@@ -52,33 +53,46 @@
           <button type="button" class="linkbtn" data-k="closefind">Close</button></div>
         <div class="dt-grid"></div>
       </div>
+      <h4 class="dt-sec">In the game</h4>
       <div class="dt-visual">
-        <div class="dt-bgprev" title="Shown behind the highway in Clone Hero and YARG"><img alt="" hidden><span>No background</span></div>
-        <div class="dt-bgopts">
+        <div class="dt-tile">
+          <div class="dt-bgprev" title="Shown behind the highway in Clone Hero and YARG"><img alt="" hidden><span>No background</span></div>
           <label>Background <select data-k="bgmode">
             <option value="auto">Made from the cover</option><option value="own">My own image…</option><option value="none">None</option>
           </select></label>
           <input type="file" data-k="bgfile" accept="image/png,image/jpeg" hidden>
-          <label title="A still picture on this song (Clone Hero can't animate a song's own highway). Shown when Clone Hero's Song Highways is on, instead of your everyday highway.">Highway (still) <select data-k="hwmode"></select></label>
-          <a class="link dt-hwdesign" href="highways.html" target="_blank" rel="noopener">Design your own highway…</a>
-          <input type="file" data-k="hwfile" accept="image/png,image/jpeg" hidden>
           <div class="dt-video muted"></div>
+        </div>
+        <div class="dt-tile dt-hwtile">
+          <div class="dt-hwprev" title="This song's highway (it scrolls down the screen in Clone Hero)"><img alt="" hidden><span></span></div>
+          <div class="dt-hwside">
+            <label title="A still picture on this song (Clone Hero can't animate a song's own highway). Shown when Clone Hero's Song Highways is on, instead of your everyday highway.">Highway (still) <select data-k="hwmode"></select></label>
+            <a class="link dt-hwdesign" href="highways.html" target="_blank" rel="noopener">Design your own highway…</a>
+            <input type="file" data-k="hwfile" accept="image/png,image/jpeg" hidden>
+          </div>
+        </div>
+        <div class="dt-tile">
           <div class="dt-anim muted"><label title="A video as long as the song, shown when Clone Hero's Song Videos is on. It replaces your everyday background on this song.">Animated background <select data-k="anim"><option value="">None</option></select></label>
             <span class="dt-animbtns"></span></div>
-          <div class="dt-lyrics muted"></div>
-          <div class="dt-bass muted" hidden></div>
-          <div class="dt-keys muted" hidden></div>
-          <div class="dt-update muted" hidden></div>
         </div>
-        <div class="dt-hwprev" title="This song's highway (it scrolls down the screen in Clone Hero)"><img alt="" hidden><span></span></div>
+      </div>
+      <h4 class="dt-sec">Parts</h4>
+      <div class="dt-parts">
+        <div class="dt-lyrics muted"></div>
+        <div class="dt-bass muted" hidden></div>
+        <div class="dt-keys muted" hidden></div>
+        <div class="dt-update muted" hidden></div>
       </div>
       <datalist id="dt-genres">${["Rock", "Metal", "Alternative", "Punk", "Pop", "Pop Punk", "Emo", "Post-Hardcore",
         "Metalcore", "Hard Rock", "Indie", "Electronic", "Classical", "Video Game", "Country", "Blues", "Jazz", "Funk",
         "Hip Hop", "R&B", "Soundtrack", "Other"].map((g) => `<option value="${g}">`).join("")}</datalist>
       <p class="dt-state muted"></p>
-      <p class="dt-more muted"><button type="button" class="linkbtn" data-k="sng" title="The whole song in one file, the way Clone Hero (v1.1 and later) and YARG can read it: copy it into a songs folder on another PC. It contains the song's audio, so only share it where you're allowed to share that music. Saved changes only.">Download as .sng</button> ·
-        <button type="button" class="linkbtn" data-k="moon" title="Open this song's chart in Moonscraper Chart Editor (set where it is in Settings). Save there, then reopen the song here to see the changes.">Open in Moonscraper</button></p>
-      <div class="dlgbtns"><button type="button" class="ghost" data-k="cancel">Cancel</button>
+      </div>
+      <div class="dlgbtns dt-foot">
+        <button type="button" class="ghost" data-k="sng" title="The whole song in one file, the way Clone Hero (v1.1 and later) and YARG can read it: copy it into a songs folder on another PC. It contains the song's audio, so only share it where you're allowed to share that music. Saved changes only.">Download as .sng</button>
+        <button type="button" class="ghost" data-k="moon" title="Open this song's chart in Moonscraper Chart Editor (set where it is in Settings). Save there, then reopen the song here to see the changes.">Open in Moonscraper</button>
+        <span class="dt-gap"></span>
+        <button type="button" class="quiet" data-k="cancel">Cancel</button>
         <button type="button" class="ghost" data-k="save">Save</button>
         <button type="button" data-k="export">Save &amp; update in Clone Hero</button></div>`;
     document.body.appendChild(dlg);
@@ -88,6 +102,7 @@
       if (e.key === "Enter" && e.target.matches("input[type=text]")) { e.preventDefault(); save(false); }
     });
     q('[data-k="cancel"]').addEventListener("click", () => dlg.close());
+    q('[data-k="close"]').addEventListener("click", () => dlg.close());
     q('[data-k="sng"]').addEventListener("click", () => { location.href = `/api/songs/${enc(cur.id)}/sng`; });
     q('[data-k="moon"]').addEventListener("click", async () => {
       try {

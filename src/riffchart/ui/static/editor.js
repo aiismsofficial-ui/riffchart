@@ -486,6 +486,20 @@ function applyVolumes() {
   savePrefs();
 }
 
+// toolbar pop-ups (Sound & sync, More tools): open on click, close on a click outside or Esc
+document.querySelectorAll(".popwrap > button[aria-controls]").forEach((b) => b.addEventListener("click", (e) => {
+  e.stopPropagation();
+  const pop = $("#" + b.getAttribute("aria-controls")), open = pop.hidden;
+  closePops(); pop.hidden = !open; b.setAttribute("aria-expanded", String(open));
+}));
+function closePops() {
+  document.querySelectorAll(".popwrap > .pop").forEach((p) => { p.hidden = true; });
+  document.querySelectorAll(".popwrap > button[aria-controls]").forEach((b) => b.setAttribute("aria-expanded", "false"));
+}
+document.addEventListener("pointerdown", (e) => { if (!e.target.closest(".popwrap")) closePops(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePops(); });
+$("#morepop").addEventListener("click", (e) => { if (e.target.closest("button")) closePops(); });
+
 // toolbar controls must not keep keyboard focus: Space would press them again instead of playing
 document.addEventListener("pointerup", (e) => {
   const el = e.target.closest("button, a, input[type=checkbox], input[type=range]");

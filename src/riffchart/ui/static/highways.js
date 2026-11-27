@@ -380,7 +380,7 @@ async function chState() {
     const r = await api("/api/clonehero/display");
     if (!r.found) { $("#chstate").textContent = "Clone Hero's settings weren't found (see Settings)."; return; }
     CH = r;
-    $("#chstate").textContent = "What your Clone Hero shows on each song (change it with Clone Hero closed):";
+    $("#chstate").textContent = "Each song's own highway and background replace your everyday ones while these are on. Change them with Clone Hero closed.";
     $("#chrows").hidden = false;
     $("#chhw").innerHTML = r.song_highway
       ? "each song's own still highway (your installed animated highway only shows on songs without one)."

@@ -9,8 +9,8 @@
 </head>
 <body>
 <header class="top">
-  <div class="brand"><span class="dots"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span>RiffChart</div>
-  <nav class="topnav"><a href="highways.html" title="Design your own highways (still or animated) and animated backgrounds">Highways &amp; backgrounds</a><a href="setup.html" title="Songs folder, protected folders, Clone Hero options">Settings</a></nav>
+  <div class="brand"><a class="home" href="./" title="Your songs"><span class="dots" aria-hidden="true"><i class="g"></i><i class="r"></i><i class="y"></i><i class="b"></i><i class="o"></i></span>RiffChart</a></div>
+  <nav class="topnav" aria-label="Main"><a href="./" aria-current="page" title="Your songs: add, chart, edit and export">Library</a><a href="highways.html" title="Design your own highways (still or animated) and animated backgrounds">Highways &amp; backgrounds</a><a href="setup.html" title="Songs folder, protected folders, Clone Hero options">Settings</a></nav>
   <div class="topright"><div class="status" id="status"></div>
     <a id="tiplink" class="tiplink" hidden target="_blank" rel="noopener" title="RiffChart is free and made by one person: tips keep it going">&#9829; Tip the dev</a></div>
 </header>
@@ -20,13 +20,15 @@
   <section class="card add">
     <div class="addrow">
       <div id="drop" class="drop" tabindex="0">
-        <div class="drop-big">＋ Add songs: drop audio files or folders here</div>
-        <div class="drop-small">mp3, m4a, ogg, opus, webm, flac, wav or mp4 &middot; <label class="link">browse files<input id="pick" type="file" multiple accept=".mp3,.m4a,.aac,.ogg,.opus,.webm,.flac,.wav,.mp4,.mkv,.mka,.wma" hidden></label>
-          &middot; each song takes about 1-2 minutes with a graphics card</div>
+        <span class="drop-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg></span>
+        <div class="drop-text"><div class="drop-big">Drop songs here to chart them</div>
+          <div class="drop-small">mp3, m4a, ogg, opus, webm, flac, wav or a music video &middot; about 1-2 minutes a song with a graphics card</div></div>
+        <label class="btn ghost browse">Browse files<input id="pick" type="file" multiple accept=".mp3,.m4a,.aac,.ogg,.opus,.webm,.flac,.wav,.mp4,.mkv,.mka,.wma" hidden></label>
       </div>
       <form id="pathform" class="pathrow">
-        <input id="pathin" type="text" placeholder="…or paste a file or folder path, e.g. D:\Music\Album" autocomplete="off">
-        <button type="submit">Add</button>
+        <label class="pathlabel" for="pathin">Or paste a file or folder path</label>
+        <div class="pathline"><input id="pathin" type="text" placeholder="D:\Music\Album" autocomplete="off">
+        <button type="submit" class="ghost">Add</button></div>
       </form>
     </div>
     <details class="settings" id="settings">
@@ -85,12 +87,18 @@
         <a id="feedback" class="btn ghost small" href="/api/reports/export" hidden title="Every spot you reported in the editor (F), in one small file to send to the developer: song names, times, your notes and the notes around each spot. No audio.">Feedback file</a>
         <button id="upall" class="ghost small" hidden title="Without re-charting: own tracks for bass, drums, vocals and keys (Clone Hero and YARG fade the parts you miss), lyrics, and backgrounds at your sharpness setting. Notes and edits stay as they are.">Bring up to date</button>
         <button id="tidy" class="ghost small" hidden title="Fix names left by downloads and converter sites">Tidy names…</button>
-        <input id="filter" type="search" placeholder="Filter" autocomplete="off">
+        <input id="filter" type="search" placeholder="Filter" autocomplete="off" aria-label="Filter songs">
+        <label class="sortlbl">Sort <select id="sort"><option value="new">Newest first</option><option value="title">Title</option><option value="artist">Artist</option></select></label>
+        <div class="seg" role="group" aria-label="View">
+          <button type="button" class="seg-b" data-view="grid" aria-pressed="true" aria-label="Covers" title="Covers"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor"/></svg></button>
+          <button type="button" class="seg-b" data-view="list" aria-pressed="false" aria-label="List" title="List"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        </div>
       </div>
     </div>
     <div id="exportbar" class="exportbar"></div>
-    <div id="batchbar" class="batchbar" hidden></div>
-    <div class="tablewrap">
+    <div id="songsbox">
+    <div id="grid" class="songgrid"></div>
+    <div class="tablewrap" id="listwrap">
       <table class="songs">
         <thead><tr><th><label class="pick" title="Select all the songs shown"><input type="checkbox" id="pickall"></label>Song</th><th class="num" title="Notes per difficulty: Expert / Hard / Medium / Easy">Notes E / H / M / E</th><th class="num">Length</th><th class="num" title="Estimated guitar difficulty (0-6)">Diff</th><th>Charted</th><th></th></tr></thead>
         <tbody id="songs"></tbody>
@@ -109,6 +117,8 @@
           Found a spot it got wrong? Press <b>F</b> there in the editor; the <b>Feedback file</b> collects them for the developer.</p>
       </div>
     </div>
+    </div>
+    <div id="batchbar" class="batchbar" hidden></div>
   </section>
 </main>
 
