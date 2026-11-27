@@ -267,6 +267,19 @@ def test_chart_and_peaks_endpoints(env):
     assert c.get("/editor.html").status_code == 200
 
 
+def test_editor_note_speed_and_game_view(env):
+    """Zoom is Clone Hero's Note Speed (default 7) and the Game view (G) is on the page, read-only."""
+    c = env.client
+    html = c.get("/editor.html").text
+    assert 'id="zoom" type="range" min="1" max="20"' in html and 'value="7"' in html
+    assert 'id="nsreset"' in html and 'id="gamebtn"' in html and '<script src="gameview.js"></script>' in html
+    js = c.get("/editor.js").text
+    assert "NS_SECS = 7.2" in js and "if (S.game) { gameFrame(now)" in js
+    gv = c.get("/gameview.js")
+    assert gv.status_code == 200 and "function gameFrame(now)" in gv.text and "D: 0.69" in gv.text
+    assert "|| S.game) return;" in c.get("/edit.js").text               # no edit keys in the Game view
+
+
 # ---------------------------------------------------------------- saving (milestone 3)
 def _charted(env, name="Muse - Uprising"):
     env.client.post("/api/jobs/upload", files=[("files", (f"{name}.mp3", b"ID3", "audio/mpeg"))])

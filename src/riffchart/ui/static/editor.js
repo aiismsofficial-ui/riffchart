@@ -83,7 +83,7 @@ class Tempo {
 // ---------------------------------------------------------------- state
 const S = {
   chart: null, tempo: null, player: null, peaks: [], diff: "expert", view: "single",
-  ns: 7, division: 16, hover: null, lastT: 0, tracks: {}, lines: [], sections: [],
+  ns: 7, game: false, division: 16, hover: null, lastT: 0, tracks: {}, lines: [], sections: [],
 };
 // Zoom is Clone Hero's Note Speed: the editor shows as many seconds above the strike line as Clone Hero does at
 // that speed. Measured in game (bot recordings, 2026-11-27): seconds visible = 7.2 / note speed at Highway Length 100%.
@@ -149,6 +149,7 @@ function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = colors.bg; ctx.fillRect(0, 0, W, H);
   if (!S.chart) return requestAnimationFrame(draw);
+  if (S.game) { gameFrame(now); drawOverviewCursor(now, layout()); return requestAnimationFrame(draw); }   // gameview.js
   const L = layout();
   const t0 = tOf(H + 40, now, L), t1 = tOf(-40, now, L);
   const off = S.chart.offset_s;

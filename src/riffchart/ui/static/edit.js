@@ -472,7 +472,7 @@ hw.addEventListener("pointerleave", () => { E.ghost = null; });
 
 // ---------------------------------------------------------------- keyboard
 window.addEventListener("keydown", (e) => {
-  if (e.target.closest("input[type=text], select") || !S.edit) return;
+  if (e.target.closest("input[type=text], select") || !S.edit || S.game) return;   // Game view is read-only
   const k = e.key, ctrl = e.ctrlKey || e.metaKey, step = stepTicks();
   if (ctrl) {
     const lk = k.toLowerCase();

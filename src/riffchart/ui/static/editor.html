@@ -43,6 +43,7 @@
       <option value="48">1/48</option><option value="64">1/64</option></select></label>
   <span class="nspeed"><label id="zoomlbl" title="Note speed, in Clone Hero's Note Speed (Ctrl + wheel, + and -)">Note speed
     <span class="nsrange"><input id="zoom" type="range" min="1" max="20" step="0.5" value="7"><i class="nstick" title="Clone Hero's default (7)"></i></span><b id="nsval">7</b></label><button id="nsreset" class="ghost small" title="Back to Clone Hero's default Note Speed (7)">Game default</button></span>
+  <button id="gamebtn" class="ghost small" title="Game view (G): watch the chart on a tilted highway, the way Clone Hero shows it at this note speed, with the song's highway and background. Read-only; G or Esc to edit again">&#9654; Game view</button>
   <span class="sep"></span>
   <label title="Band volume">Band <input id="vsong" type="range" min="0" max="1" step="0.05" value="0.8"></label>
   <label title="Volume of the part you're editing" id="vguitarlbl">Guitar <input id="vguitar" type="range" min="0" max="1" step="0.05" value="1"></label>
@@ -159,7 +160,7 @@
     <summary><kbd>Space</kbd> play · <b>click</b> add note · <b>drag</b> move · <b>right-click</b> delete · <b>drag tail end</b> sustain · <kbd>Ctrl</kbd>+<kbd>S</kbd> save — all shortcuts</summary>
     <div class="keygrid">
       <div><h4>Navigate</h4>
-        <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> note speed (zoom) · <kbd>+</kbd><kbd>-</kbd> note speed</p>
+        <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> note speed (zoom) · <kbd>+</kbd><kbd>-</kbd> note speed · <kbd>G</kbd> game view</p>
         <p><kbd>&uarr;</kbd><kbd>&darr;</kbd> grid step · <kbd>PgUp</kbd><kbd>PgDn</kbd> bar · <kbd>Home</kbd><kbd>End</kbd></p>
         <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty · <kbd>I</kbd> song details</p>
         <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p>
@@ -196,5 +197,6 @@
 <script src="tempo.js"></script>
 <script src="reports.js"></script>
 <script src="lyrics.js"></script>
+<script src="gameview.js"></script>
 </body>
 </html>
