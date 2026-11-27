@@ -9,7 +9,7 @@ lyrics, its own highway and background. No charting experience needed.
 
 Everything runs on your own PC. Your songs and charts are never uploaded anywhere.
 
-**[Download RiffChart 1.1](https://github.com/aiismsofficial-ui/riffchart/releases/latest)** for Windows 10 / 11:
+**[Download RiffChart 1.2](https://github.com/aiismsofficial-ui/riffchart/releases/latest)** for Windows 10 / 11:
 run **RiffChart-Setup.exe** (or unzip the ZIP and double-click `install.bat`), and play your first song a few
 minutes later. A graphics card is optional. Community, help and showcases: **r/RiffChart** on Reddit.
 
@@ -82,19 +82,22 @@ you chart songs you have.
   its chart in Moonscraper Chart Editor.
 - **Backgrounds:** a background made from the cover (blurred and darkened) or your own image, and charting a
   music video file keeps the video to play behind the highway (converted to a format Clone Hero plays when
-  needed). Songs without a music video can get an **animated background**: 11 presets (embers, bokeh,
-  aurora, starfield, stage lights, plasma, rain, thunderstorm, synthwave sunset, smoke, equalizer) drawn over
+  needed). Songs without a music video can get an **animated background**: 16 presets (embers, bokeh,
+  aurora, starfield, stage lights, plasma, rain, thunderstorm, synthwave sunset, smoke, equalizer, nebula,
+  laser show, hyper tunnel, fireflies, soundwave) drawn over
   the song's own background, or installed in Clone Hero for every song.
 - **Highways:** every song gets a RiffChart highway, one coloured from its cover, or your own. The
   designer has colours, edge styles (neon tube, double, chrome) and glow, lane styles and fret-coloured lanes,
   centre glow, dark sides, a pattern image with blend modes and your own text, with a live 3D preview.
-  **Animated highways:** 11 looping effects (sparks, warp, rain, edge lightning, edge fire, synthwave grid,
-  plasma, aurora, pulse, colour cycle, sheen), installed in Clone Hero as your everyday video highway (Clone
+  **Animated highways:** 16 looping effects (sparks, warp, rain, edge lightning, edge fire, synthwave grid,
+  plasma, aurora, pulse, colour cycle, sheen, chevrons, digital rain, ripples, lava, lane chase), installed in Clone Hero as your everyday video highway (Clone
   Hero only animates its own highways; on a single song a design shows still). Use a design on one song, all
   songs or new songs, or install it in Clone Hero.
   Export to your Clone Hero songs folder, or open a song straight in Clone Hero.
 - **Editor:** vertical highway, one difficulty or all four side by side, synced playback (with speed
-  control, note clap and metronome), and full editing: add, move and delete notes, sustains, HOPO / tap,
+  control, note clap and metronome), zoom set in Clone Hero's own **Note Speed** (7 = what the game shows by
+  default), a **Game view** (G) that plays the chart on a tilted highway the way Clone Hero shows it, and full
+  editing: add, move and delete notes, sustains, HOPO / tap,
   star power, solos, sections, undo and redo. A sync nudge moves the whole chart earlier or later
   against the audio in 5 ms steps, the song-list preview can be set at the playhead, and every earlier
   version of a chart can be looked at and restored. Sections (Intro, Verse 1, Chorus 1, Guitar Solo…) are named automatically from the audio,
