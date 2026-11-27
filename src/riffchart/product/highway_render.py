@@ -35,6 +35,11 @@ EFFECTS = {
     "grid": "Synthwave grid rolling toward you",
     "fire": "Fire licking up the edges",
     "sheen": "Sheen: a band of light sweeping down",
+    "chevrons": "Chevrons: arrows rushing toward you",
+    "matrix": "Digital rain: falling blocks in the lanes",
+    "ripple": "Ripples: rings spreading across the highway",
+    "lava": "Lava: molten blobs drifting down",
+    "lanechase": "Lane chase: the lanes light up in turn (fret colours)",
 }
 
 
@@ -222,6 +227,27 @@ class Animator:
             self.pa = self.rng.uniform(0.4, 1.0, count)
         if d["anim"] == "lightning":
             self.bolts = [self._bolt_plan() for _ in range(self.n)]
+        r = self.rng
+        if d["anim"] == "matrix":
+            self.cell = H / 64                                    # 64 cells a tile: wraps exactly
+            self.ncol = max(3, int((W - 2 * rw) / (16 * W / 512)))
+            self.drops = [(c, r.uniform(0, H), int(r.integers(1, 3)) * self.k, r.uniform(0.18, 0.35))
+                          for c in range(self.ncol) for _ in range(2)]
+            self.cellph = r.uniform(0, 2 * np.pi, (64, self.ncol))
+        if d["anim"] == "ripple":
+            m = 9
+            self.rx = r.uniform(rw + 20 * W / 512, W - rw - 20 * W / 512, m)
+            self.ry = r.uniform(0, H, m)
+            self.rp = r.uniform(0, 1, m)
+            self.rr = r.uniform(0.35, 0.6, m) * (W - 2 * rw)
+        if d["anim"] == "lava":
+            m = 7
+            self.bx = r.uniform(0.25, 0.75, m)
+            self.bf = r.integers(1, 3, m)
+            self.bph = r.uniform(0, 2 * np.pi, m)
+            self.by = r.uniform(0, H, m)
+            self.bv = r.integers(1, 3, m) * self.k
+            self.br = r.uniform(0.09, 0.16, m) * (W - 2 * rw)
 
     def _bolt_plan(self):
         r = self.rng
@@ -342,6 +368,82 @@ class Animator:
             band = np.exp(-(dy / (H * 0.06)) ** 2) * (0.75 + 0.25 * np.cos((self.x - W / 2) / W * np.pi))
             return compose(L, band[..., None] * amp * 120 * (col / 255 * 0.5 + 0.5)[None, None],
                            glow_gain=1 + 0.8 * amp)
+        if e == "chevrons":
+            s = W / 512
+            gap = H / 6                                           # six arrows a tile
+            off = (k * t * gap) % gap
+            half = (W - 2 * self.L["rail_w"]) / 2
+            xn = np.abs(self.x - W / 2) / half                    # 0 in the middle, 1 at the edges
+            phase = ((self.y - off + xn * gap * 0.45) % gap) / gap   # a V pointing down: toward the player
+            dist = np.minimum(phase, 1 - phase) * gap
+            line = np.exp(-(dist / (5 * s)) ** 2) + 0.35 * np.exp(-(dist / (16 * s)) ** 2)
+            line = line * np.clip(1.15 - xn, 0, 1)
+            return compose(L, line[..., None] * amp * 170 * (col / 255)[None, None], glow_gain=1 + 0.4 * amp)
+        if e == "matrix":
+            rw = self.L["rail_w"]
+            colw = (W - 2 * rw) / self.ncol
+            cell = self.cell
+            ci = (np.arange(H) // cell).astype(int) % 64
+            yc = (ci + 0.5) * cell
+            buf = np.zeros((H, W), np.float32)
+            inside = (self.y[:, 0] % cell) < cell * 0.72
+            for c in range(self.ncol):
+                v = np.zeros(H, np.float32)
+                for cc, y0, sp, tail in self.drops:
+                    if cc != c:
+                        continue
+                    head = (y0 + sp * t * H) % H
+                    behind = (head - yc) % H                       # how far above the head (wraps)
+                    v = np.maximum(v, np.exp(-behind / (H * tail)) * (1 + 1.5 * (behind < cell)))
+                flick = 0.7 + 0.3 * np.sin(self.cellph[ci, c] + k * th * 3)
+                x0 = int(round(rw + c * colw + colw * 0.18))
+                x1 = int(round(rw + c * colw + colw * 0.82))
+                buf[:, x0:x1] = (v * flick * inside)[:, None]
+            c2 = col * 0.4 + 153
+            fx = np.minimum(buf, 1)[..., None] * (col / 255)[None, None] * 210 + \
+                 np.clip(buf - 1, 0, 1.5)[..., None] * (c2 / 255)[None, None] * 120
+            return compose(L, fx * amp)
+        if e == "ripple":
+            s = W / 512
+            fx = np.zeros((H, W), np.float32)
+            for x0, y0, p, R in zip(self.rx, self.ry, self.rp, self.rr):
+                f = (k * t + p) % 1.0
+                dy = np.abs(self.y - y0)
+                dy = np.minimum(dy, H - dy)                         # wrap top / bottom
+                dd = np.hypot(self.x - x0, dy)
+                r = f * R
+                fade = np.sin(np.pi * f) ** 1.5                     # 0 when a ring starts and ends: seamless
+                fx += (np.exp(-((dd - r) / (4 * s)) ** 2) + 0.4 * np.exp(-((dd - r) / (14 * s)) ** 2)
+                       + 0.5 * np.exp(-((dd - r * 0.8) / (2.5 * s)) ** 2)) * fade
+            fx = 1 - np.exp(-fx * 1.4)
+            return compose(L, fx[..., None] * amp * 330 * (col / 255 * 0.7 + 0.3)[None, None], glow_gain=1 + 0.3 * amp)
+        if e == "lava":
+            rw = self.L["rail_w"]
+            field = np.zeros((H, W), np.float32)
+            for bx, bf, ph, y0, v, R in zip(self.bx, self.bf, self.bph, self.by, self.bv, self.br):
+                cx = rw + (W - 2 * rw) * (bx + 0.12 * np.sin(bf * th + ph))
+                cy = (y0 + v * t * H) % H
+                dy = np.abs(self.y - cy)
+                dy = np.minimum(dy, H - dy)
+                field += R * R / ((self.x - cx) ** 2 + (dy * 0.8) ** 2 + 1)
+            blob = np.clip((field - 0.8) / 0.6, 0, 1)
+            rim = np.clip(1 - np.abs(field - 1.0) / 0.35, 0, 1) * (field < 1.6)
+            hot = np.array([1.0, 0.9, 0.55], np.float32)[None, None]
+            fx = blob[..., None] * (col / 255)[None, None] * 190 + (blob ** 3)[..., None] * hot * 90 + \
+                 rim[..., None] * (col / 255)[None, None] * 120
+            return compose(L, fx * amp)
+        if e == "lanechase":
+            rw = self.L["rail_w"]
+            lane = (W - 2 * rw) / 5
+            pos = (k * t * 5) % 5
+            fx = np.zeros((H, W, 3), np.float32)
+            for j in range(5):
+                dj = min(abs(pos - j), 5 - abs(pos - j))             # around the ring of lanes: seamless
+                g = np.exp(-dj * dj / 0.6)
+                cx = rw + (j + 0.5) * lane
+                prof = np.exp(-((self.x - cx) / (lane * 0.42)) ** 2) + 0.5 * np.exp(-((self.x - cx) / (lane * 0.12)) ** 2)
+                fx += (prof * g)[..., None] * np.array(FRET_RGB[j], np.float32)[None, None] / 255
+            return compose(L, np.broadcast_to(fx * amp * 300, (H, W, 3)), glow_gain=1 + 0.5 * amp)
         return compose(L)
 
 

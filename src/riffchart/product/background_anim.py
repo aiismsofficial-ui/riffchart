@@ -33,6 +33,11 @@ PRESETS = {
     "synthwave": {"name": "Synthwave sunset", "effect": "synthwave", "color": "#ff3ec8", "color2": "#ffb347"},
     "smoke":     {"name": "Smoke", "effect": "smoke", "color": "#b8c0d0", "color2": "#6a5acd"},
     "equalizer": {"name": "Equalizer", "effect": "equalizer", "color": "#22e4ff", "color2": "#ff3ec8"},
+    "nebula":    {"name": "Nebula", "effect": "nebula", "color": "#7b5cff", "color2": "#ff4fa3"},
+    "lasers":    {"name": "Laser show", "effect": "lasers", "color": "#39ff88", "color2": "#ff3ec8"},
+    "tunnel":    {"name": "Hyper tunnel", "effect": "tunnel", "color": "#22e4ff", "color2": "#7b5cff"},
+    "fireflies": {"name": "Fireflies", "effect": "fireflies", "color": "#d8ff6b", "color2": "#ffb347"},
+    "soundwave": {"name": "Soundwave", "effect": "soundwave", "color": "#22e4ff", "color2": "#ff3ec8"},
 }
 
 
@@ -137,12 +142,44 @@ class Animator:
                 for j, v in enumerate((1.0, 0.35, 0.8, 0.3, 0.12, 0.05)):
                     self.flash[(i + j) % self.n] = max(self.flash[(i + j) % self.n], v)
             self.bolt_seed = int(r.integers(0, 1 << 30))
+        elif e == "nebula":
+            self.clouds = [self._cloud(gw, r) for gw in (5, 9, 17)]   # soft tileable noise, coarse to fine
+            self.tint = self._cloud(4, r)
+            m = 260
+            self.px, self.py = r.uniform(0, W, m), r.uniform(0, H, m)
+            self.pa, self.pph = r.uniform(0.2, 1, m), r.uniform(0, 2 * np.pi, m)
+            self.pm = r.integers(1, 4, m)                          # twinkles per loop: whole numbers
+        elif e == "lasers":
+            self.lb = [(ox, j, r.uniform(-1.0, 1.0), int(r.integers(1, 3)), r.uniform(0, 2 * np.pi))
+                       for ox in (0.12, 0.5, 0.88) for j in range(4)]
+        elif e == "fireflies":
+            m = 90
+            self.cx, self.cy = r.uniform(0, W, m), r.uniform(H * 0.15, H, m)
+            self.ax, self.ay = r.uniform(20, 90, m) * self.s, r.uniform(15, 60, m) * self.s
+            self.fx, self.fy = r.integers(1, 3, m), r.integers(1, 3, m)
+            self.p1, self.p2, self.p3 = r.uniform(0, 2 * np.pi, (3, m))
+            self.fm = r.integers(1, 4, m)
+            self.pc = r.random(m)
+        elif e == "soundwave":
+            self.wf = r.integers(2, 6, 5)
+            self.wm = r.integers(1, 3, 5)
+            self.wph = r.uniform(0, 2 * np.pi, 5)
         elif e == "equalizer":
             self.bands = 48
             self.bf = r.integers(1, 5, (self.bands, 3))          # whole cycles per loop per partial
             self.bp = r.uniform(0, 2 * np.pi, (self.bands, 3))
 
     # ------------------------------------------------------------ helpers
+    def _cloud(self, gw: int, r) -> np.ndarray:
+        """Soft random clouds that tile in both directions (0..1, HxW): a coarse random grid, smoothly enlarged."""
+        from PIL import Image
+        W, H = self.W, self.H
+        gh = max(2, round(gw * H / W))
+        g = r.random((gh, gw)).astype(np.float32)
+        big = np.tile(g, (3, 3))                                       # wrap, enlarge, keep the middle tile
+        im = Image.fromarray(big).resize((W * 3, H * 3), Image.BICUBIC)
+        return np.clip(np.asarray(im, np.float32)[H:2 * H, W:2 * W], 0, 1)
+
     def _dots(self, buf, xs, ys, rs, amps):
         H, W = buf.shape
         for x, y, r, a in zip(xs, ys, rs, amps):
@@ -312,6 +349,70 @@ class Animator:
             img = img + (bars & seg)[..., None] * col * 255 * A
             refl = (self.y > H - height[None, :] - 4) & gap
             return np.clip(img + refl[..., None] * 0, 0, 255).astype(np.uint8)
+        if e == "nebula":
+            v = np.zeros((H, W), np.float32)
+            for j, (c, wgt) in enumerate(zip(self.clouds, (0.55, 0.3, 0.15))):
+                rad = (0.05 + 0.03 * j) * H                            # each layer drifts round a small circle
+                dx = int(round(rad * np.cos(th + j * 2.1))); dy = int(round(rad * np.sin(th + j * 2.1)))
+                v += wgt * np.roll(c, (dy, dx), axis=(0, 1))
+            cloud = np.clip((v - 0.42) / 0.38, 0, 1) ** 1.8
+            mix = np.roll(self.tint, (int(round(0.08 * H * np.sin(th))), int(round(0.08 * W * np.cos(th)))), axis=(0, 1))[..., None]
+            fx = cloud[..., None] * (c1 * (1 - mix) + c2 * mix) * 255 * 1.1
+            stars = np.zeros((H, W), np.float32)
+            tw = 0.55 + 0.45 * np.sin(self.pph + th * self.pm)
+            self._dots(stars, self.px, self.py, np.full(len(self.px), 1.1 * s), self.pa * tw)
+            fx = fx + stars[..., None] * 255 * 0.9
+            return self._mix(fx * A, "screen")
+        if e == "lasers":
+            b1, b2 = np.zeros((H, W), np.float32), np.zeros((H, W), np.float32)
+            angs = {ox: np.arctan2(self.x - W * ox, H + 10 * s - self.y).astype(np.float32) for ox in (0.12, 0.5, 0.88)}
+            for ox, j, base, m, ph in self.lb:
+                ang = base * 0.6 + 0.45 * np.sin(th * m + ph)          # radians from straight up
+                d = (angs[ox] - ang) / 0.03
+                g = np.exp(-d * d)                                     # soft glow
+                g2 = g * g; g4 = g2 * g2; g8 = g4 * g4
+                beam = g8 * g8 + 0.25 * g                              # g**16: the thin bright core
+                on = 0.5 + 0.5 * np.cos(th * 2 + j * 1.1)              # beams fade in and out in turn
+                (b1 if (j + int(ox * 10)) % 2 == 0 else b2).__iadd__(beam * on)
+            haze = np.clip(b1 + b2, 0, 3) * 0.05
+            fx = (b1[..., None] * c1 + b2[..., None] * c2) * 255 * 1.1 + haze[..., None] * 255 * (c1 + c2) / 2
+            return np.clip(self.base * 0.55 + fx * A, 0, 255).astype(np.uint8)
+        if e == "tunnel":
+            dx, dy = (self.x - W / 2) / H, (self.y - H / 2) / H
+            r = np.hypot(dx, dy) + 1e-3
+            ang = np.arctan2(dy, dx)
+            z = 0.35 / r                                              # depth
+            rings = np.clip(np.cos(2 * np.pi * (z - t * 2)), 0, 1) ** 10
+            spokes = np.clip(np.cos(12 * ang + th), 0, 1) ** 24 * 0.6
+            fade = np.clip((r - 0.03) / 0.25, 0, 1) * np.clip(1.4 - r, 0, 1)
+            mixc = (0.5 + 0.5 * np.cos(2 * np.pi * (z * 0.5 - t)))[..., None]
+            col = c1 * mixc + c2 * (1 - mixc)
+            core = np.exp(-(r / 0.05) ** 2)[..., None] * (c1 * 0.5 + 0.5)
+            fx = ((rings + spokes) * fade)[..., None] * col * 255 + core * 255 * 0.8
+            return np.clip(self.base * 0.45 + fx * A, 0, 255).astype(np.uint8)
+        if e == "fireflies":
+            b1, b2 = np.zeros((H, W), np.float32), np.zeros((H, W), np.float32)
+            xs = self.cx + self.ax * np.sin(self.fx * th + self.p1)
+            ys = self.cy + self.ay * np.sin(self.fy * th + self.p2)
+            blink = np.clip(np.sin(self.fm * th + self.p3), 0, 1) ** 2
+            warm = self.pc < 0.4
+            for buf, k in ((b1, ~warm), (b2, warm)):
+                self._dots(buf, xs[k], ys[k], np.full(k.sum(), 3.2 * s), blink[k] * 1.4)
+                self._dots(buf, xs[k], ys[k], np.full(k.sum(), 16 * s), blink[k] * 0.3)
+            fx = (b1[..., None] * c1 + b2[..., None] * c2) * 255 * 1.8
+            return np.clip(self.base * 0.75 + fx * A, 0, 255).astype(np.uint8)
+        if e == "soundwave":
+            out = np.zeros((H, W, 3), np.float32)
+            xn = self.x / W
+            env = np.sin(np.pi * xn) ** 1.5
+            colx = c1 * (1 - xn[..., None]) + c2 * xn[..., None]
+            for i in range(5):
+                amp = H * (0.10 + 0.05 * i) * (0.6 + 0.4 * np.sin(th * self.wm[i] + i))
+                yc = H * 0.5 + amp * env * np.sin(2 * np.pi * self.wf[i] * xn - th * self.wm[i] + self.wph[i])
+                d = np.abs(self.y - yc)
+                line = np.exp(-(d / (2.4 * s)) ** 2) + 0.4 * np.exp(-(d / (18 * s)) ** 2)
+                out += line[..., None] * colx * 255 * (1 - i * 0.12)
+            return self._mix(out * A, "screen")
         return self.base.astype(np.uint8)
 
 

@@ -33,6 +33,16 @@ const STARTERS = [
     fret_tint: 70, lane_style: "glow", anim: "sheen", anim_color: "#ffffff", anim_strength: 45 },
   { name: "Rainbow pulse", bg_preset: "plasma", top: "#101018", bottom: "#06060a", rail: "#ff3e3e", divider: "#2a2a36", glow: 90,
     rail_style: "neon", anim: "hue", anim_strength: 60, anim_seconds: 6 },
+  { name: "Arrow rush", bg_preset: "tunnel", top: "#0b1026", bottom: "#05060f", rail: "#22e4ff", divider: "#1d2a4a", glow: 80,
+    rail_style: "neon", anim: "chevrons", anim_color: "#7df3ff", anim_strength: 70, anim_speed: 2 },
+  { name: "Digital rain", bg_preset: "nebula", top: "#06120a", bottom: "#020604", rail: "#2eff7a", divider: "#123a1e", glow: 60,
+    anim: "matrix", anim_color: "#3dff8a", anim_strength: 80 },
+  { name: "Ripples", bg_preset: "soundwave", top: "#071a24", bottom: "#030a10", rail: "#5ad8ff", divider: "#14384a", glow: 55,
+    anim: "ripple", anim_color: "#9ae6ff", anim_strength: 75, anim_seconds: 6 },
+  { name: "Lava lamp", bg_preset: "fireflies", top: "#1a0804", bottom: "#0a0302", rail: "#ff7a1a", divider: "#3a160c", glow: 70,
+    anim: "lava", anim_color: "#ff5a14", anim_strength: 80, anim_seconds: 8 },
+  { name: "Lane chase", bg_preset: "lasers", top: "#121218", bottom: "#07070a", rail: "#e8e8e8", divider: "#2e2e38", glow: 40,
+    lane_style: "glow", anim: "lanechase", anim_strength: 70, anim_speed: 2 },
 ];
 
 let blank = {}, designs = [], libDefault = "riffchart", chOk = false;
