@@ -278,6 +278,9 @@ def test_editor_note_speed_and_game_view(env):
     gv = c.get("/gameview.js")
     assert gv.status_code == 200 and "function gameFrame(now)" in gv.text and "D: 0.69" in gv.text
     assert "|| S.game) return;" in c.get("/edit.js").text               # no edit keys in the Game view
+    assert '<script src="playalong.js"></script>' in html and 'id="playbtn"' in html
+    pa = c.get("/playalong.js").text
+    assert "function paMatches(mask, held)" in pa and "PA_WINDOW = 0.07" in pa
 
 
 # ---------------------------------------------------------------- saving (milestone 3)

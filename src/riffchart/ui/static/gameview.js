@@ -46,6 +46,7 @@ function gameImages() {
 function setGame(on) {
   if (!GV.canvas) gameInit();
   S.game = !!on;
+  if (!S.game && typeof paStop === "function") paStop();
   GV.canvas.hidden = !S.game; hw.style.visibility = S.game ? "hidden" : "";
   $("#gamebtn").setAttribute("aria-pressed", String(S.game)); $("#editviewbtn").setAttribute("aria-pressed", String(!S.game));
   $("#tip").hidden = true;
@@ -80,6 +81,7 @@ function gameFrame(now) {
   }
   if (!S.chart) return;
   const tr = S.tracks[S.diff] || S.tracks[DIFFS.find((d) => S.tracks[d])];
+  if (typeof paFrame === "function") paFrame(now);         // playalong.js: controller, misses
   const sOf = (t) => (t - now) / vis;
   const sFar = 1, yTop = gy(G, sFar);
 
@@ -133,7 +135,8 @@ function gameFrame(now) {
   const i0 = Math.max(0, bsearch(tr.on, now - 30)), i1 = bsearch(tr.on, now + vis + 0.05);
   for (let i = i0; i < i1; i++) {
     if (tr.off[i] <= tr.on[i] + 1e-6 || tr.off[i] < now) continue;
-    const m = tr.notes[i][1], sA = Math.max(sOf(tr.on[i]), tr.on[i] <= now ? 0 : -1), sB = Math.min(sFar, sOf(tr.off[i]));
+    const gone = tr.on[i] <= now && !(typeof PA !== "undefined" && PA.on && !PA.hit.has(i));   // missed: the tail goes past
+    const m = tr.notes[i][1], sA = Math.max(sOf(tr.on[i]), gone ? 0 : -1), sB = Math.min(sFar, sOf(tr.off[i]));
     if (sB <= sA) continue;
     const held = tr.on[i] <= now;
     const lanes = m & 32 ? [-1] : [0, 1, 2, 3, 4].filter((f) => m & (1 << f));
@@ -150,15 +153,18 @@ function gameFrame(now) {
   // gems, far to near; a gem is gone once it reaches the strike line (the "bot" hits it)
   for (let i = i1 - 1; i >= i0; i--) {
     const s = sOf(tr.on[i]);
-    if (s > sFar || tr.on[i] < now - 0.005) continue;
+    if (s > sFar) continue;
+    const playing = typeof PA !== "undefined" && PA.on;
+    if (playing ? (PA.hit.has(i) || s < GV.NEAR_S) : tr.on[i] < now - 0.005) continue;   // playing: hit ones go
     const [, m, , nt] = tr.notes[i], k = gk(s), y = gy(G, s), a = Math.min(1, (sFar - s) / 0.1);
-    g.globalAlpha = a;
+    g.globalAlpha = playing && PA.miss.has(i) ? a * 0.3 : a;
     if (m & 32) gameOpen(g, G, s, y, k, nt, tr.inSp[i]);
     else for (let f = 0; f < 5; f++) if (m & (1 << f)) gameGem(g, gx(G, s, laneU(f)), y, G.half * 0.4 * k * 0.44, f, nt, tr.inSp[i]);
   }
   g.globalAlpha = 1;
-  // hit flashes on the strike line
-  if (S.player.playing) {
+  // hit flashes on the strike line (playing along: only the notes you hit)
+  if (typeof PA !== "undefined" && PA.on) paFlashes(g, G, now, laneW);
+  else if (S.player.playing) {
     for (let i = Math.max(0, bsearch(tr.on, now - 0.15)); i < tr.on.length && tr.on[i] <= now; i++) {
       const m = tr.notes[i][1], age = (now - tr.on[i]) / 0.15;
       const lanes = m & 32 ? [0, 1, 2, 3, 4] : [0, 1, 2, 3, 4].filter((f) => m & (1 << f));
@@ -173,7 +179,10 @@ function gameFrame(now) {
   // corner label
   g.font = "600 12px system-ui, sans-serif"; g.textAlign = "left"; g.textBaseline = "alphabetic";
   g.fillStyle = "rgba(255,255,255,.7)";
-  g.fillText(`Game view · Note speed ${$("#nsval").textContent} · ${S.diff[0].toUpperCase()}${S.diff.slice(1)} · G to edit`, 12, h - 12);
+  const pa = typeof PA !== "undefined" && PA.on;
+  g.fillText(pa ? `Playing along · ${S.diff[0].toUpperCase()}${S.diff.slice(1)} · frets 1-5, strum Up / Down · Space pause · Esc stop`
+    : `Game view · Note speed ${$("#nsval").textContent} · ${S.diff[0].toUpperCase()}${S.diff.slice(1)} · G to edit · P to play along`, 12, h - 12);
+  if (pa) paHud(g, w, h);
 }
 
 // ---------------------------------------------------------------- pieces (our own 5-fret look)
@@ -222,5 +231,6 @@ $("#editviewbtn").addEventListener("click", () => setGame(false));
 window.addEventListener("keydown", (e) => {
   if (e.target.closest && e.target.closest("input, select, textarea") || e.ctrlKey || e.metaKey || e.altKey || !S.chart) return;
   if (e.key === "g" || e.key === "G") { e.preventDefault(); setGame(!S.game); }
+  else if ((e.key === "p" || e.key === "P") && S.game) { e.preventDefault(); paStart(); }
   else if (e.key === "Escape" && S.game) setGame(false);
 });

@@ -43,7 +43,7 @@
     <span class="nspeed"><label id="zoomlbl" title="Note speed, in Clone Hero's Note Speed (Ctrl + wheel, + and -)">Note speed
       <span class="nsrange"><input id="zoom" type="range" min="1" max="20" step="0.5" value="7"><i class="nstick" title="Clone Hero's default (7)"></i></span><b id="nsval">7</b></label><button id="nsreset" class="quiet small" title="Back to Clone Hero's default Note Speed (7)">Game default</button></span>
     <div class="seg" role="group" aria-label="View">
-      <button type="button" id="editviewbtn" class="seg-t" aria-pressed="true" title="Edit the chart (G)">Edit</button><button type="button" id="gamebtn" class="seg-t" aria-pressed="false" title="Game view (G): watch the chart on a tilted highway, the way Clone Hero shows it at this note speed, with the song's highway and background. Read-only; G or Esc to edit again">Game view</button>
+      <button type="button" id="editviewbtn" class="seg-t" aria-pressed="true" title="Edit the chart (G)">Edit</button><button type="button" id="gamebtn" class="seg-t" aria-pressed="false" title="Game view (G): watch the chart on a tilted highway, the way Clone Hero shows it at this note speed, with the song's highway and background. Read-only; G or Esc to edit again">Game view</button><button type="button" id="playbtn" class="seg-t" aria-pressed="false" title="Play along (P in the Game view): play the chart yourself with the keyboard (frets 1-5, strum Up / Down) or a guitar controller, with a score and streak like the game">Play along</button>
     </div>
   </div>
   <span class="sep"></span>
@@ -70,7 +70,6 @@
   </div>
   <div class="tgroup tools">
     <button id="rcbtn" class="ghost small" title="Re-chart a section: let the AI chart the section you pick again, try takes and keep the best (R)">Re-chart</button>
-    <button id="lowerbtn" class="quiet small" title="Make Hard, Medium and Easy again from the Expert you see now, the way a fresh chart makes them (one Undo step; nothing is saved until you Save)">Easier from Expert</button>
     <button id="secbtn" class="quiet small" title="Name the song's parts (Intro, Verse 1, Chorus 1, Guitar Solo…) from the audio and lyrics. Replaces the sections; one Undo step, nothing saved until you Save">Sections</button>
     <button id="tempobtn" class="quiet small" title="BPM and time-signature markers: edit them, tap a tempo, or drag beat lines on the waveform to line the chart up with the audio">Tempo</button>
     <button id="lyrbtn" class="quiet small" title="The song's lyrics: fix words, drag them on the waveform or tap along to time them, shift them all">Lyrics</button>
@@ -78,6 +77,7 @@
     <div class="popwrap">
       <button type="button" id="morebtn" class="quiet small icon" aria-expanded="false" aria-controls="morepop" aria-label="More tools">⋯</button>
       <div id="morepop" class="pop right" hidden>
+        <button id="lowerbtn" class="quiet small" title="Make Hard, Medium and Easy again from the Expert you see now, the way a fresh chart makes them (one Undo step; nothing is saved until you Save)">Easier from Expert</button>
         <button id="rptbtn" class="quiet small" title="Flag a place where the chart goes wrong (F), with a short note, for the feedback file">Report a spot <kbd>F</kbd></button>
       </div>
     </div>
@@ -178,7 +178,7 @@
     <summary><kbd>Space</kbd> play · <b>click</b> add note · <b>drag</b> move · <b>right-click</b> delete · <b>drag tail end</b> sustain · <kbd>Ctrl</kbd>+<kbd>S</kbd> save — all shortcuts</summary>
     <div class="keygrid">
       <div><h4>Navigate</h4>
-        <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> note speed (zoom) · <kbd>+</kbd><kbd>-</kbd> note speed · <kbd>G</kbd> game view</p>
+        <p><kbd>Wheel</kbd> scroll · <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> note speed (zoom) · <kbd>+</kbd><kbd>-</kbd> note speed · <kbd>G</kbd> game view · <kbd>P</kbd> play along (in the game view)</p>
         <p><kbd>&uarr;</kbd><kbd>&darr;</kbd> grid step · <kbd>PgUp</kbd><kbd>PgDn</kbd> bar · <kbd>Home</kbd><kbd>End</kbd></p>
         <p><kbd>[</kbd><kbd>]</kbd> speed · <kbd>V</kbd> all 4 · <kbd>Alt</kbd>+<kbd>1</kbd>–<kbd>4</kbd> difficulty · <kbd>I</kbd> song details</p>
         <p><kbd>C</kbd> note clap · <kbd>M</kbd> metronome</p>
@@ -216,5 +216,6 @@
 <script src="reports.js"></script>
 <script src="lyrics.js"></script>
 <script src="gameview.js"></script>
+<script src="playalong.js"></script>
 </body>
 </html>
