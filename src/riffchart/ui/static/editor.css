@@ -174,3 +174,10 @@ kbd { background: var(--panel2); border: 1px solid var(--line); border-bottom-wi
 .clock { min-width: 112px; }
 .toolbar { gap: 8px 12px; }
 .toolbar .nsrange input[type=range] { width: 104px; }
+.tempopanel li { grid-template-columns: 1fr auto auto auto; }
+.tempopanel li label { grid-column: 1 / span 2; }
+.tempopanel li .lockbtn { grid-row: 1 / span 2; grid-column: 3; }
+.tempopanel li .delbtn { grid-row: 1 / span 2; grid-column: 4; }
+.tempopanel li .lockbtn.on { color: var(--accent); }
+.tempopanel li input:disabled { opacity: .6; }
+.tempopanel .icon { width: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }

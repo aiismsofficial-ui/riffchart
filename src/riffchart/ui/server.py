@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 import yaml
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -393,7 +393,59 @@ def create_app(cfg: dict, make_charter=None, start_worker: bool = True) -> FastA
             if body.get("version") and body["version"] != _chart_version(folder):
                 raise HTTPException(409, "this chart was changed since the editor opened it (another tab, or "
                                          "Bring up to date). Reload the editor to see it; your edits aren't saved yet")
-            return _save_chart(folder, song, part, body)
+            out = _save_chart(folder, song, part, body)
+        draft_path(song_id, part).unlink(missing_ok=True)   # saved: the autosaved draft is done with
+        return out
+
+    # ---- autosave: the editor's unsaved work, kept outside the song folder (never exported), one per part
+    MAX_DRAFT = 40 * 1024 * 1024
+
+    def draft_path(song_id: str, part: str) -> Path:
+        return Path(cfg.get("cache", cfg["workspace"].parent / "cache")) / song_id / f"draft_{part}.json"
+
+    @app.post("/api/songs/{song_id}/draft")
+    async def put_draft(song_id: str, request: Request):
+        """{part, snap (the editor's own state, opaque here), version}: written atomically. Sent every 30 s
+        while there are unsaved changes and when the tab is hidden (also as a beacon, hence plain POST)."""
+        song_folder(song_id)
+        raw = await request.body()
+        if len(raw) > MAX_DRAFT:
+            raise HTTPException(413, "draft too large")
+        try:
+            d = json.loads(raw)
+            part = _part(str(d.get("part") or "guitar"))
+            snap = d["snap"]
+            if not isinstance(snap, str):
+                raise ValueError
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(400, "bad draft")
+        p = draft_path(song_id, part)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_suffix(".tmp")
+        tmp.write_text(json.dumps({"snap": snap, "version": str(d.get("version") or ""), "saved_at": time.time()}),
+                       encoding="utf-8")
+        tmp.replace(p)
+        return {"ok": True}
+
+    @app.get("/api/songs/{song_id}/draft")
+    def get_draft(song_id: str, part: str = "guitar"):
+        """The autosaved draft for a part, or {"draft": None}. `changed`: the chart file was written since the
+        draft's edits began (saved somewhere else)."""
+        folder = song_folder(song_id)
+        p = draft_path(song_id, _part(part))
+        if not p.is_file():
+            return {"draft": None}
+        try:
+            d = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {"draft": None}
+        return {"draft": d, "changed": bool(d.get("version")) and d["version"] != _chart_version(folder)}
+
+    @app.delete("/api/songs/{song_id}/draft")
+    def drop_draft(song_id: str, part: str = "guitar"):
+        song_folder(song_id)
+        draft_path(song_id, _part(part)).unlink(missing_ok=True)
+        return {"ok": True}
 
     def _chart_version(folder: Path) -> str:
         """Changes whenever notes.chart / notes.mid is written: the editor sends it back with a save."""

@@ -287,6 +287,42 @@ def _charted(env, name="Muse - Uprising"):
     return env.cfg["workspace"] / name
 
 
+def test_autosave_draft_kept_until_saved(env):
+    """The editor's draft is stored outside the song folder, given back on open, and removed by a save."""
+    c, folder = env.client, _charted(env)
+    sid = "Muse - Uprising"
+    assert c.get(f"/api/songs/{sid}/draft").json() == {"draft": None}
+    d = c.get(f"/api/songs/{sid}/chart").json()
+    assert c.post(f"/api/songs/{sid}/draft", json={"part": "guitar", "snap": '{"x": 1}', "version": d["version"]}).status_code == 200
+    got = c.get(f"/api/songs/{sid}/draft").json()
+    assert got["draft"]["snap"] == '{"x": 1}' and got["changed"] is False
+    assert not list(folder.rglob("draft_*"))                       # never in the song folder (exports)
+    assert c.post(f"/api/songs/{sid}/draft", json={"part": "drums", "snap": "{}"}).status_code == 400
+    assert c.post(f"/api/songs/{sid}/draft", json={"part": "guitar", "snap": 5}).status_code == 400
+    assert c.post(f"/api/songs/{sid}/chart", json=d).status_code == 200
+    assert c.get(f"/api/songs/{sid}/draft").json() == {"draft": None}
+    c.post(f"/api/songs/{sid}/draft", json={"part": "guitar", "snap": "{}"})
+    assert c.delete(f"/api/songs/{sid}/draft?part=guitar").status_code == 200
+    assert c.get(f"/api/songs/{sid}/draft").json() == {"draft": None}
+
+
+def test_locked_tempo_markers_saved_and_ts_check(env):
+    c, folder = env.client, _charted(env)
+    sid = "Muse - Uprising"
+    d = c.get(f"/api/songs/{sid}/chart").json()
+    res = d["resolution"]
+    d["tempo"] = [[0, 120.0], [res * 8, 100.0]]
+    d["anchors"] = [res * 8]
+    d["ts"] = [[0, 4, 4], [res * 6, 3, 4]]                          # starts 2 beats into a 4/4 bar
+    assert c.post(f"/api/songs/{sid}/chart", json=d).status_code == 200
+    text = (folder / "notes.chart").read_text(encoding="utf-8")
+    assert f"  {res * 8} = A 4000000\n  {res * 8} = B 100000" in text
+    assert c.get(f"/api/songs/{sid}/chart").json()["anchors"] == [res * 8]
+    chk = c.post("/api/check", json=d).json()
+    off = [x for x in chk["expert"]["issues"] if x["rule"] == "ts_off_bar"]
+    assert off and off[0]["tick"] == res * 6 and off[0]["severity"] == "warning"
+
+
 def test_save_writes_chart_keeps_history_and_types(env):
     c, folder = env.client, _charted(env)
     before = (folder / "notes.chart").read_text(encoding="utf-8")

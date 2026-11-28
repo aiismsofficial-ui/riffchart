@@ -32,8 +32,11 @@ def write_chart_text(song: Song, *, name: str = "", artist: str = "", charter: s
     for t, n, d in zip(tm.ts_ticks, tm.ts_num, tm.ts_den):
         exp = int(round(np.log2(d)))
         sync.append((int(t), 0, f"TS {int(n)}" + (f" {exp}" if exp != 2 else "")))
+    anchors = getattr(tm, "anchors", None) or {}
     for t, b in zip(tm.ticks, tm.bpm):
-        sync.append((int(t), 1, f"B {int(round(b * 1000))}"))
+        if int(t) in anchors and int(t) > 0:              # a locked marker: Moonscraper's anchor line first
+            sync.append((int(t), 1, f"A {int(round(float(tm.tick_to_sec(int(t))) * 1e6))}"))
+        sync.append((int(t), 2, f"B {int(round(b * 1000))}"))
     for t, _, txt in sorted(sync):
         out.append(f"  {t} = {txt}")
     out += ["}", "[Events]", "{"]

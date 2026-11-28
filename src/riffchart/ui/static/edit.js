@@ -46,6 +46,65 @@ function initEdit(chart) {
   initSync();
   updateButtons();
   if (typeof scheduleCheck === "function") scheduleCheck(0);
+  offerDraft();
+}
+
+// ---------------------------------------------------------------- autosave (drafts)
+// Unsaved work is sent to the server every 30 s (and when the tab is hidden or closed) as a draft kept outside
+// the song folder. Saving deletes it. Opening the song again with a draft waiting offers to restore it.
+const DRAFT_EVERY_MS = 30000;
+const draftUrl = () => `/api/songs/${encodeURIComponent(songId)}/draft`;
+E.draftSent = null;
+function sendDraft(beacon = false) {
+  if (!S.chart || E.saving) return;
+  if (!E.dirty) {                                   // back to the saved state (Undo): no draft to keep
+    if (E.draftSent !== null) { E.draftSent = null; fetch(`${draftUrl()}?part=${PART}`, { method: "DELETE", keepalive: true }).catch(() => {}); }
+    return;
+  }
+  const snap = contentSnap();
+  if (snap === E.draftSent) return;
+  const body = JSON.stringify({ part: PART, snap, version: E.version || "" });
+  if (beacon && navigator.sendBeacon) navigator.sendBeacon(draftUrl(), new Blob([body], { type: "application/json" }));
+  else fetch(draftUrl(), { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: body.length < 60000 }).catch(() => {});
+  E.draftSent = snap;
+}
+setInterval(() => sendDraft(), DRAFT_EVERY_MS);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") sendDraft(true); });
+window.addEventListener("pagehide", () => sendDraft(true));
+async function offerDraft() {
+  let r;
+  try { r = await (await fetch(`${draftUrl()}?part=${PART}`)).json(); } catch { return; }
+  const d = r && r.draft;
+  if (!d || !d.snap || d.snap === E.clean) return;
+  const when = new Date(d.saved_at * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  const dlg = document.createElement("dialog");
+  dlg.className = "dialog";
+  dlg.innerHTML = `<h3>Restore unsaved changes?</h3>
+    <p>This ${PART !== "guitar" ? `${PART} part` : "chart"} has edits from <b>${esc(when)}</b> that were never saved
+      (the editor was closed or RiffChart stopped before Save).</p>
+    ${r.changed ? `<p class="warnc">The chart was saved somewhere else since then (another tab, Bring up to date or
+      Moonscraper). Restoring puts your unsaved edits back on top of that, and saving replaces it.</p>` : ""}
+    <p class="muted">Restoring is one Undo step; nothing is written until you Save.</p>
+    <div class="dlgbtns"><button class="ghost" data-k="drop">Discard them</button><button data-k="keep">Restore</button></div>`;
+  document.body.appendChild(dlg);
+  dlg.addEventListener("keydown", (e) => e.stopPropagation());
+  dlg.querySelector('[data-k="keep"]').addEventListener("click", () => {
+    dlg.close(); dlg.remove();
+    const o = JSON.parse(d.snap);
+    edit("restore the unsaved changes", () => {
+      S.edit = o.edit; S.chart.sections = o.sections; S.lyrics = o.lyrics || []; setTiming(o.timing);
+    });
+    showSync();
+    if (typeof tempoChanged === "function") tempoChanged();
+    if (typeof lyricsChanged === "function") lyricsChanged();
+    toast("Unsaved changes restored: Save to keep them");
+  });
+  dlg.querySelector('[data-k="drop"]').addEventListener("click", () => {
+    dlg.close(); dlg.remove();
+    fetch(`${draftUrl()}?part=${PART}`, { method: "DELETE" }).catch(() => {});
+    toast("Discarded the unsaved changes");
+  });
+  dlg.showModal();
 }
 function normalize(tr) {
   const by = new Map();
@@ -73,11 +132,13 @@ function rebuildAll() {
 
 // ---------------------------------------------------------------- undo / redo / dirty
 // timing = tempo map, time signatures, resolution and HOPO threshold (a sync nudge or a restored version)
-const timing = () => ({ tempo: S.chart.tempo, ts: S.chart.ts, res: S.chart.resolution, thr: S.chart.hopo_threshold });
+const timing = () => ({ tempo: S.chart.tempo, ts: S.chart.ts, res: S.chart.resolution, thr: S.chart.hopo_threshold,
+  anchors: S.chart.anchors || [] });
 const snapshot = () => JSON.stringify({ edit: S.edit, sections: S.chart.sections, lyrics: S.lyrics, timing: timing(), sel: [E.sel.diff, [...E.sel.ticks]] });
 function setTempo(tempo) { S.chart.tempo = tempo; S.tempo = new Tempo(S.chart.resolution, tempo, S.chart.ts); }
 function setTiming(t) {
-  S.chart.ts = t.ts; S.chart.resolution = t.res; S.chart.hopo_threshold = t.thr; setTempo(t.tempo);
+  S.chart.ts = t.ts; S.chart.resolution = t.res; S.chart.hopo_threshold = t.thr; S.chart.anchors = t.anchors || [];
+  setTempo(t.tempo);
 }
 function restore(snap) {
   const o = JSON.parse(snap);
@@ -131,7 +192,8 @@ function chartPayload() {      // what the server needs to write or check the ch
     const tr = S.edit[d], types = finalTypes(tr.notes);
     tracks[d] = { notes: tr.notes.map((n, i) => [n[0], n[1], n[2], types[i]]), star_power: tr.star_power, solos: tr.solos };
   }
-  return { resolution: S.chart.resolution, tempo: S.chart.tempo, ts: S.chart.ts, sections: S.chart.sections, tracks,
+  return { resolution: S.chart.resolution, tempo: S.chart.tempo, ts: S.chart.ts, anchors: S.chart.anchors || [],
+    sections: S.chart.sections, tracks,
     offset_s: S.chart.offset_s, audio_s: S.chart.stems.length ? S.chart.audio_s : null };
 }
 async function save() {
@@ -148,7 +210,7 @@ async function save() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j.detail || r.statusText);
     if (j.version) E.version = j.version;
-    E.clean = sent; E.lyricsClean = lyr; E.dirty = contentSnap() !== sent; E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    E.clean = sent; E.lyricsClean = lyr; E.dirty = contentSnap() !== sent; E.draftSent = null;   // server dropped the draft E.savedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const what = PART !== "guitar" ? `the ${PART} part in notes.chart` : "notes.chart";
     toast(j.warning ? `Saved ${what}. ${j.warning}` : `Saved ${what} (the previous version is kept: History lists it)`, !!j.warning);
     if (typeof historyChanged === "function") historyChanged(true);

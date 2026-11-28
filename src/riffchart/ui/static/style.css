@@ -346,3 +346,4 @@ a.btn.ghost:hover, label.btn.ghost:hover { background: var(--sel); filter: none;
 @media (max-width: 760px) { .details .dt-body, .details .dt-visual { grid-template-columns: 1fr; } .details .dt-cover { width: 100%; height: auto; aspect-ratio: 1; } }
 .details .dt-artbtns .btn, .details .dt-artbtns .dt-find { white-space: nowrap; padding: 5px 8px; }
 .details .dt-artbtns .linkbtn { width: 100%; text-align: center; font-size: 12px; }
+.warnc { color: var(--warn-text); }

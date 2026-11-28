@@ -3,7 +3,8 @@
 Format references: YARG.Core MoonscraperChartParser/IO/Chart/ChartReader*.cs and
 TheNathannator/GuitarGame_ChartFormats (.chart docs).
   [Song]       Resolution (default 192), Offset (seconds)
-  [SyncTrack]  `t = B bpm*1000`, `t = TS num [log2(den)]`, `t = A ...` (anchor, ignored)
+  [SyncTrack]  `t = B bpm*1000`, `t = TS num [log2(den)]`, `t = A microseconds` (anchor: the marker
+  is locked at that time; kept for editors)
   [Events]     `t = E "section name"` (lyrics and phrases kept in Song.lyrics)
   [<Diff>Single]  `t = N fret len` (0-4 frets, 5 forced, 6 tap, 7 open), `t = S 2 len` star power,
                   `t = E solo` / `t = E soloend`
@@ -121,6 +122,7 @@ def _sustain_cutoff(ini: dict[str, str] | None) -> int:
 def _parse_sync(lines: list[str], resolution: int, warnings: list[str]) -> TempoMap:
     bpm_ev: dict[int, float] = {}
     ts_ev: dict[int, tuple[int, int]] = {}
+    anchors: dict[int, float] = {}
     for line in lines:
         m = _LINE.match(line)
         if not m:
@@ -133,6 +135,8 @@ def _parse_sync(lines: list[str], resolution: int, warnings: list[str]) -> Tempo
                     warnings.append(f"non-positive BPM at {tick}")
                     continue
                 bpm_ev[tick] = bpm
+            elif kind == "A":
+                anchors[tick] = int(rest[0]) / 1e6
             elif kind == "TS":
                 num = int(rest[0])
                 den = 2 ** int(rest[1]) if len(rest) > 1 else 4
@@ -141,6 +145,10 @@ def _parse_sync(lines: list[str], resolution: int, warnings: list[str]) -> Tempo
             warnings.append(f"bad sync line: {line}")
     if not bpm_ev:
         warnings.append("no tempo events, assuming 120 BPM")
+    for t in sorted(anchors):                       # an anchor without a tempo marker gets one (as Moonscraper does)
+        if t not in bpm_ev and bpm_ev:
+            before = [x for x in bpm_ev if x < t]
+            bpm_ev[t] = bpm_ev[max(before)] if before else 120.0
     tk = sorted(bpm_ev)
     ts = sorted(ts_ev) or [0]
     if not ts_ev:
@@ -152,6 +160,7 @@ def _parse_sync(lines: list[str], resolution: int, warnings: list[str]) -> Tempo
         np.array(ts, np.int64),
         np.array([ts_ev[t][0] for t in ts], np.int64),
         np.array([ts_ev[t][1] for t in ts], np.int64),
+        anchors={t: v for t, v in anchors.items() if t in bpm_ev and t > 0},
     )
 
 

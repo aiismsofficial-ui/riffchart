@@ -40,6 +40,9 @@ class TempoMap:
     ts_ticks: np.ndarray = field(default_factory=lambda: np.zeros(1, np.int64))
     ts_num: np.ndarray = field(default_factory=lambda: np.full(1, 4, np.int64))
     ts_den: np.ndarray = field(default_factory=lambda: np.full(1, 4, np.int64))
+    # locked tempo markers (Moonscraper's anchors): tick -> the time in seconds the marker is held at. Only
+    # editors use them (they keep the marker there when an earlier tempo changes); playback ignores them.
+    anchors: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.ticks = np.asarray(self.ticks, np.int64)

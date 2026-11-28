@@ -13,11 +13,12 @@ from ..paths import project_path
 # error: can't be played as written in Clone Hero; warning: playable but awkward or odd
 SEVERITY = {"open_chord": "error", "stacked": "error", "chord_size": "error", "too_fast": "error",
             "sustain_overlap": "error", "bad_hopo": "error", "out_of_audio": "error",
-            "chord_span": "warning", "fast_jump": "warning", "tiny_sustain": "warning"}
+            "chord_span": "warning", "fast_jump": "warning", "tiny_sustain": "warning", "ts_off_bar": "warning"}
 TITLE = {"open_chord": "Open note in a chord", "stacked": "Stacked notes", "chord_size": "Chord too big",
          "chord_span": "Chord too wide", "too_fast": "Too fast", "fast_jump": "Fast jump",
          "sustain_overlap": "Sustain runs into the next note", "tiny_sustain": "Tiny sustain",
-         "bad_hopo": "HOPO on the same frets", "out_of_audio": "Outside the audio"}
+         "bad_hopo": "HOPO on the same frets", "out_of_audio": "Outside the audio",
+         "ts_off_bar": "Time signature off the bar line"}
 FRETS = "GRYBO"
 
 
@@ -57,16 +58,34 @@ def describe(rule: str, i: int, ev: Events, r: dict) -> str:
     return ""
 
 
+def timing_issues(song: Song, offset_s: float) -> list[dict]:
+    """Song-wide timing problems (shown in every difficulty's list). A time signature has to start on a bar line
+    of the one before it: Clone Hero and YARG draw the bars from there (Moonscraper's validator checks it too)."""
+    tm, out = song.tempo, []
+    ts = list(zip(tm.ts_ticks.tolist(), tm.ts_num.tolist(), tm.ts_den.tolist()))
+    for (t0, n0, d0), (t1, n1, d1) in zip(ts, ts[1:]):
+        bar = song.resolution * 4 / d0 * n0
+        rel = (t1 - t0) / bar
+        if abs(rel - round(rel)) > 1e-6:
+            beats = (t1 - t0) / (song.resolution * 4 / d0) % n0
+            out.append({"rule": "ts_off_bar", "tick": int(t1), "t": round(float(tm.tick_to_sec(t1)) + offset_s, 4),
+                        "severity": SEVERITY["ts_off_bar"], "title": TITLE["ts_off_bar"],
+                        "detail": f"{n1}/{d1} starts {beats:g} beats into a {n0}/{d0} bar; move it to a bar line "
+                                  "(or change the one before it)"})
+    return out
+
+
 def song_issues(song: Song, offset_s: float, audio_s: float | None, rules: dict) -> dict:
     out = {}
+    timing = timing_issues(song, offset_s)
     for d in DIFFICULTIES:
         tr = song.tracks.get(d)
         if tr is None or not len(tr):
-            out[d] = {"issues": [], "errors": 0, "warnings": 0}
+            out[d] = {"issues": list(timing), "errors": 0, "warnings": len(timing)}
             continue
         ev = Events.from_track(song, tr, offset_s)
         r = rules[d]
-        items = []
+        items = [dict(x) for x in timing]
         for rule, i in find_issues(ev, r, audio_s):
             items.append({"rule": rule, "tick": int(tr.tick[i]), "t": round(float(ev.t[i]), 4),
                           "severity": SEVERITY[rule], "title": TITLE[rule], "detail": describe(rule, i, ev, r)})

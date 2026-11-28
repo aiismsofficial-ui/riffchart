@@ -608,6 +608,7 @@ async function load() {
     S.chart = chart;
     E.version = chart.version;                          // sent back with Save: refused if the file changed
     showParts(chart.parts || ["guitar"]);
+    chart.anchors = chart.anchors || [];                 // locked tempo markers (ticks)
     S.tempo = new Tempo(chart.resolution, chart.tempo, chart.ts);
     initEdit(chart);                                    // edit.js: editable copy + prepared tracks
     S.peaks = peaks.filter((p) => p.data).map((p) => ({ ...p, bytes: Uint8Array.from(atob(p.data), (c) => c.charCodeAt(0)) }));

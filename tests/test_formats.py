@@ -26,6 +26,34 @@ def test_tempo_map_conversion_and_inverse():
     assert np.allclose(tm.sec_to_tick(tm.tick_to_sec(ticks)), ticks)
 
 
+def test_anchors_round_trip_like_moonscraper():
+    """A locked tempo marker (Moonscraper's `A <microseconds>`) is read, kept and written before its B line; an
+    anchor with no tempo marker gets one with the tempo before it."""
+    sync = "0 = TS 4\n0 = B 120000\n768 = A 2000000\n768 = B 90000\n1536 = A 3500000"
+    song = parse_chart_text(chart("  0 = N 0 0", sync=sync))
+    tm = song.tempo
+    assert list(tm.ticks) == [0, 768, 1536] and list(tm.bpm) == [120.0, 90.0, 90.0]
+    assert tm.anchors == {768: 2.0, 1536: 3.5}
+    text = write_chart_text(song)
+    sync_out = text.split("[SyncTrack]")[1].split("}")[0]
+    assert "768 = A 2000000\n  768 = B 90000" in sync_out
+    assert "1536 = A " in sync_out
+    again = parse_chart_text(text).tempo
+    assert again.anchors.keys() == {768, 1536}
+
+
+def test_editor_json_keeps_anchors():
+    from riffchart.ui.chartjson import json_to_song, song_to_json
+    song = parse_chart_text(chart("  0 = N 0 0", sync="0 = TS 4\n0 = B 120000\n768 = A 2000000\n768 = B 90000"))
+    d = song_to_json(song)
+    assert d["anchors"] == [768]
+    d["tempo"] = [[0, 60.0], [768, 90.0]]                 # an earlier tempo changed: the anchor is stamped anew
+    back = json_to_song(d).tempo
+    assert back.anchors == {768: 4.0}
+    d["anchors"] = [384]                                   # not a tempo marker: dropped
+    assert json_to_song(d).tempo.anchors == {}
+
+
 def test_tempo_defaults_to_120_before_first_event():
     tm = TempoMap(480, np.array([960]), np.array([60.0]))
     assert tm.tick_to_sec(960) == pytest.approx(1.0)

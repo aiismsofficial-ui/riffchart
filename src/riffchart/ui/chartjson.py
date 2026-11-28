@@ -49,6 +49,7 @@ def song_to_json(song: Song, ini: dict[str, str] | None = None, audio_s: float |
         "hopo_threshold": int(chart_hopo_threshold(song.resolution, ini)),
         "tempo": [[int(t), float(b)] for t, b in zip(tm.ticks, tm.bpm)],
         "ts": [[int(t), int(n), int(d)] for t, n, d in zip(tm.ts_ticks, tm.ts_num, tm.ts_den)],
+        "anchors": sorted(int(t) for t in (getattr(tm, "anchors", None) or {})),   # locked tempo markers (ticks)
         "sections": [[int(t), s] for t, s in song.sections],
         "tracks": tracks,
         "meta": {k: ini.get(k, "") for k in ("name", "artist", "album", "genre", "year", "charter")},
@@ -62,6 +63,8 @@ def json_to_song(d: dict) -> Song:
     ts = sorted((int(t), int(n), int(dd)) for t, n, dd in d.get("ts") or [[0, 4, 4]])
     tm = TempoMap(res, np.array([t for t, _ in tempo]), np.array([b for _, b in tempo]),
                   np.array([t for t, _, _ in ts]), np.array([n for _, n, _ in ts]), np.array([x for _, _, x in ts]))
+    marks = {t for t, _ in tempo}
+    tm.anchors = {t: float(tm.tick_to_sec(t)) for t in (int(x) for x in d.get("anchors") or []) if t in marks and t > 0}
     tracks = {}
     for diff, t in (d.get("tracks") or {}).items():
         if diff not in DIFFICULTIES:

@@ -7,10 +7,14 @@
 //    marker stays where it was in the song (nothing after it moves).
 //  - Tap tempo: tap the button (or B) along with the music; the average of the last taps can be used for the
 //    marker at the playhead.
+//  - Lock a marker (Moonscraper's anchor): it stays at its time in the song. Changing a tempo before it adjusts
+//    the tempo just before the locked marker to make up the difference, so the beats from there on don't move.
+//    Saved in notes.chart as Moonscraper's `A` lines (Clone Hero and YARG ignore them).
 // Everything is one undo step per change (a whole drag is one step).
 const TP = { open: false, drag: null, hover: null, taps: [] };
 const MIN_BPM = 10, MAX_TBPM = 2000, GRAB_PX = 6;
 
+const LOCK_SVG = (on) => `<svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" fill="${on ? "currentColor" : "none"}" stroke="currentColor" stroke-width="2"/><path d="${on ? "M8 11V8a4 4 0 0 1 8 0v3" : "M8 11V8a4 4 0 0 1 7.5-2"}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
 const tempoList = () => S.chart.tempo.map((x) => x.slice()).sort((a, b) => a[0] - b[0]);
 function fmtBar(tick) {
   const b = S.tempo.barBeat(tick);
@@ -38,27 +42,80 @@ function renderTempo() {
   for (const r of rows) {
     const li = document.createElement("li");
     const time = fmtTime(S.tempo.tickToSec(r.t) + off());
+    const locked = r.kind === "bpm" && isLocked(r.t), held = r.kind === "bpm" && lockAhead(r.t) != null;
     li.innerHTML = `<span class="ttl">${esc(fmtBar(r.t))}</span><span class="when">${time}</span>
-      <label>${r.kind === "bpm" ? "BPM" : "Time sig."} <input type="text" inputmode="decimal" value="${r.kind === "bpm" ? +(+r.v).toFixed(3) : r.v}"></label>
-      ${r.t === 0 ? "" : `<button class="ghost small icon" title="Delete this marker" aria-label="Delete">✕</button>`}`;
+      <label>${r.kind === "bpm" ? "BPM" : "Time sig."} <input type="text" inputmode="decimal" value="${r.kind === "bpm" ? +(+r.v).toFixed(3) : r.v}"${held ? ' disabled title="Set by the locked marker after it: unlock that one to type a tempo here"' : ""}></label>
+      ${r.kind === "bpm" && r.t > 0 ? `<button class="ghost small icon lockbtn${locked ? " on" : ""}" aria-pressed="${locked}" aria-label="${locked ? "Unlock" : "Lock"} this marker" title="${locked ? "Locked in time: changing an earlier tempo adjusts the one before this marker instead of moving it. Click to unlock" : "Lock this marker in time (like Moonscraper's anchor): changing an earlier tempo won't move it"}">${LOCK_SVG(locked)}</button>` : ""}
+      ${r.t === 0 ? "" : `<button class="ghost small icon delbtn" title="Delete this marker" aria-label="Delete">✕</button>`}`;
+    const lk = li.querySelector(".lockbtn");
+    if (lk) lk.addEventListener("click", () => toggleLock(r.t));
     const inp = li.querySelector("input");
     inp.addEventListener("change", () => (r.kind === "bpm" ? setBpm(r.t, inp.value) : setTs(r.t, inp.value)));
     inp.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") inp.blur(); });
     li.querySelector(".ttl").addEventListener("click", () => S.player.seek(S.tempo.tickToSec(r.t) + off()));
-    const del = li.querySelector("button");
+    const del = li.querySelector(".delbtn");
     if (del) del.addEventListener("click", () => removeMarker(r.t, r.kind));
     ol.appendChild(li);
   }
   showTaps();
 }
+// ---------------------------------------------------------------- locked markers
+const isLocked = (t) => (S.chart.anchors || []).includes(t);
+function lockedTimes(except) {      // tick -> the time each locked marker has now
+  const m = new Map();
+  for (const t of S.chart.anchors || []) if (t !== except) m.set(t, S.tempo.tickToSec(t));
+  return m;
+}
+function nextMarker(tick) { return tempoList().find(([t]) => t > tick); }
+function lockAhead(tick) {          // the next marker is locked: the tempo at `tick` is set by that lock
+  const n = nextMarker(tick);
+  return n && isLocked(n[0]) ? n[0] : null;
+}
+// put every locked marker back at its time: the tempo just before each one is recalculated (in tick order, so
+// each fix sees the ones before it). Returns how many couldn't be kept (they'd need an impossible tempo).
+function fixLocks(times) {
+  const res = S.chart.resolution;
+  let missed = 0;
+  for (const a of [...times.keys()].sort((x, y) => x - y)) {
+    const tempo = tempoList(), prev = tempo.filter(([t]) => t < a).pop();
+    if (!prev || !tempo.some(([t]) => t === a)) continue;
+    const dt = times.get(a) - S.tempo.tickToSec(prev[0]);
+    let bpm = dt > 1e-4 ? (a - prev[0]) / res * 60 / dt : MAX_TBPM;
+    if (bpm < MIN_BPM || bpm > MAX_TBPM) { missed++; bpm = Math.min(MAX_TBPM, Math.max(MIN_BPM, bpm)); }
+    prev[1] = Math.round(bpm * 1000) / 1000;
+    setTempo(tempo);
+  }
+  return missed;
+}
+function lockWarn(missed) {
+  if (missed) toast(`${missed} locked marker${missed > 1 ? "s" : ""} couldn't stay put (it would need a tempo under ${MIN_BPM} or over ${MAX_TBPM} BPM)`, true);
+}
+function toggleLock(tick) {
+  const on = !isLocked(tick);
+  edit(`${on ? "lock" : "unlock"} the tempo marker at ${fmtBar(tick)}`, () => {
+    S.chart.anchors = on ? [...(S.chart.anchors || []), tick].sort((a, b) => a - b) : S.chart.anchors.filter((t) => t !== tick);
+  });
+  renderTempo();
+  toast(on ? `Locked at ${fmtTime(S.tempo.tickToSec(tick) + off())}: changing an earlier tempo won't move it` : "Unlocked");
+}
+
 function setBpm(tick, text) {
   const b = parseFloat(String(text).replace(",", "."));
   if (!(b >= MIN_BPM && b <= MAX_TBPM)) { toast(`BPM must be between ${MIN_BPM} and ${MAX_TBPM}`, true); return renderTempo(); }
+  const ahead = lockAhead(tick);
+  if (ahead != null && tempoList().some(([t]) => t === tick)) {
+    toast(`The next marker (${fmtBar(ahead)}) is locked, so this tempo follows from it: unlock it to type one here`, true);
+    return renderTempo();
+  }
+  const times = lockedTimes(tick);
+  let missed = 0;
   edit(`tempo ${+b.toFixed(3)} at ${fmtBar(tick)}`, () => {
     const tempo = tempoList().filter(([t]) => t !== tick);
     tempo.push([tick, Math.round(b * 1000) / 1000]);
     setTempo(tempo.sort((x, y) => x[0] - y[0]));
+    missed = fixLocks(times);
   });
+  lockWarn(missed);
   renderTempo();
 }
 function setTs(tick, text) {
@@ -72,10 +129,16 @@ function setTs(tick, text) {
   renderTempo();
 }
 function removeMarker(tick, kind) {
+  const times = lockedTimes(tick);
+  let missed = 0;
   edit(kind === "bpm" ? `remove tempo at ${fmtBar(tick)}` : `remove time signature at ${fmtBar(tick)}`, () => {
-    if (kind === "bpm") setTempo(tempoList().filter(([t]) => t !== tick));
-    else setTiming({ ...timing(), ts: S.chart.ts.filter(([t]) => t !== tick) });
+    if (kind === "bpm") {
+      S.chart.anchors = (S.chart.anchors || []).filter((t) => t !== tick);
+      setTempo(tempoList().filter(([t]) => t !== tick));
+      missed = fixLocks(times);
+    } else setTiming({ ...timing(), ts: S.chart.ts.filter(([t]) => t !== tick) });
   });
+  lockWarn(missed);
   renderTempo();
 }
 function addBpmHere(bpm) {
@@ -189,6 +252,11 @@ function tempoOverlay(L, now, lines) {
     const y = yAtTick(t, L);
     if (y < -10 || y > H + 10) continue;
     ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w - 7, y - 5); ctx.lineTo(x + w - 7, y + 5); ctx.fill();
+    if (isLocked(t)) {                               // locked: a small padlock beside it
+      ctx.fillRect(x + w - 19, y - 2, 8, 6);
+      ctx.strokeStyle = colors.accent; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(x + w - 15, y - 2, 2.6, Math.PI, 0); ctx.stroke();
+    }
   }
   if (TP.drag) {
     ctx.font = "600 11px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
