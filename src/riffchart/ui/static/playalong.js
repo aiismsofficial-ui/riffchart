@@ -20,7 +20,7 @@ function paStart() {
   if (!S.chart || !paTrack()) return;
   if (!S.game) setGame(true);
   Object.assign(PA, { on: true, hit: new Set(), miss: new Set(), streak: 0, best: 0, score: 0, hits: 0, misses: 0,
-    overstrums: 0, lastHit: -1, flashes: [], muted: false });
+    overstrums: 0, lastHit: -1, heldAtHit: -1, flashes: [], muted: false });
   const t = Math.max(0, S.player.time() - 2);            // two seconds to get ready
   S.player.seek(t);
   PA.from = t; PA.lastNow = t; paResync(t);
@@ -56,7 +56,7 @@ function paHit(i, now) {
   const tr = paTrack(), m = tr.notes[i][1];
   PA.hit.add(i); PA.hits++; PA.streak++; PA.best = Math.max(PA.best, PA.streak);
   PA.score += 50 * paMult() * Math.max(1, m & 31 ? [0, 1, 2, 3, 4].filter((f) => m & (1 << f)).length : 1);
-  PA.lastHit = i;
+  PA.lastHit = i; PA.heldAtHit = paHeld();
   PA.flashes.push({ m, t: now });
   paUnmute();
 }
@@ -76,20 +76,85 @@ function paStrum() {
   if (PA.lastHit >= 0 && tr.notes[PA.lastHit][3] !== 0 && now - tr.on[PA.lastHit] < PA_WINDOW * 1.5) return;
   PA.overstrums++; paBreak();
 }
-function paFrets() {                                      // a fret pressed or released: HOPOs and taps
-  if (!PA.on || !S.player.playing) return;
-  const now = S.player.time(), tr = paTrack(), i = paCandidate(now);
+// HOPOs and taps: hit by the frets alone (no strum) when the right frets are held inside the window. That counts
+// on a fret press / release and also when the note arrives with the frets already down (pressed a little early),
+// as long as the hand changed since the last hit (holding one fret can't hit a run by itself). A HOPO needs the
+// streak going and the note before it hit; a tap always works.
+function paFretHit(now) {
+  const tr = paTrack(), i = paCandidate(now);
   if (i < 0) return;
-  const nt = tr.notes[i][3];
-  if ((nt === 2 || (nt === 1 && PA.streak > 0 && PA.lastHit === i - 1)) && paMatches(tr.notes[i][1], paHeld())) paHit(i, now);
+  const nt = tr.notes[i][3], held = paHeld();
+  if (!(nt === 2 || (nt === 1 && PA.streak > 0 && PA.lastHit === i - 1))) return;
+  if (held === PA.heldAtHit && PA.lastHit >= 0) return;
+  if (paMatches(tr.notes[i][1], held)) paHit(i, now);
+}
+function paFrets() {                                      // a fret pressed or released
+  if (!PA.on || !S.player.playing) return;
+  paFretHit(S.player.time());
+}
+
+// ---------------------------------------------------------------- controller mapping
+// Guitars differ (button numbers, strum bar on a hat switch or a stick), so each controller gets a mapping, saved
+// per controller in this browser. An input is {b: button} or {a: axis, v: value} (hat switches report fixed values).
+// "Controller setup" (C, or on its own the first time a non-standard controller is used) asks for each fret and
+// both strum directions and records what the guitar sends.
+const PAD_KEY = "riffchart.padmap.";
+const PAD_STEPS = ["GREEN fret", "RED fret", "YELLOW fret", "BLUE fret", "ORANGE fret", "strum DOWN", "strum UP"];
+const PAD_DEFAULT = { frets: [{ b: 0 }, { b: 1 }, { b: 3 }, { b: 2 }, { b: 4 }],
+  strum: [{ b: 12 }, { b: 13 }, { a: 1, v: -1 }, { a: 1, v: 1 }] };
+function padMap(p) {
+  try { const m = JSON.parse(localStorage.getItem(PAD_KEY + p.id) || "null"); if (m && m.frets) return m; } catch { /* none */ }
+  return null;
+}
+function padOn(p, inp) {
+  if (!inp) return false;
+  if (inp.b != null) return !!(p.buttons[inp.b] && p.buttons[inp.b].pressed);
+  const v = p.axes[inp.a];
+  return v != null && Math.abs(v - inp.v) < 0.2;
+}
+function padStartSetup(p) {
+  PA.cal = { step: 0, base: p ? { b: p.buttons.map((x) => x.pressed), ax: p.axes.slice() } : null, wait: false,
+    id: p ? p.id : null, map: { frets: [], strum: [] } };   // "nothing pressed" = how it is right now
+  if (S.player.playing) togglePlay();
+}
+function padSetupFrame(p) {                              // one step: wait for a new input, then for its release
+  const c = PA.cal, b = p.buttons.map((x) => x.pressed), ax = p.axes.slice();
+  if (!c.base) { c.base = { b, ax }; return; }
+  const newBtn = b.findIndex((v, k) => v && !c.base.b[k]);
+  const newAx = ax.findIndex((v, k) => Math.abs(v - c.base.ax[k]) > 0.4);
+  if (c.wait) {                                          // released: back to how it was
+    if (newBtn < 0 && newAx < 0) c.wait = false;
+    return;
+  }
+  let inp = null;
+  if (newBtn >= 0) inp = { b: newBtn };
+  else if (newAx >= 0) inp = { a: newAx, v: Math.round(ax[newAx] * 1000) / 1000 };
+  if (!inp) return;
+  if (c.step < 5) c.map.frets.push(inp); else c.map.strum.push(inp);
+  c.step++; c.wait = true;
+  if (c.step >= PAD_STEPS.length) {
+    try { localStorage.setItem(PAD_KEY + c.id, JSON.stringify(c.map)); } catch { /* still used this session */ }
+    PA.padMaps = Object.assign(PA.padMaps || {}, { [c.id]: c.map });
+    PA.cal = null;
+    toast("Controller set up. Press Space to play (C sets it up again)");
+  }
 }
 
 function paPoll() {                                       // guitar controllers: frets and strum edges
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   if (!pads.length) return;
-  const p = pads[0], b = (k) => !!(p.buttons[k] && p.buttons[k].pressed);
-  const frets = [b(0), b(1), b(3), b(2), b(4)];
-  const strum = b(12) || b(13) || (p.mapping !== "standard" && (b(10) || b(11))) || Math.abs(p.axes[1] || 0) > 0.6;
+  const p = pads[0];
+  PA.padInfo = { id: p.id, mapping: p.mapping || "non-standard",                     // shown in the corner: for mapping help
+    down: p.buttons.map((x, k) => (x.pressed ? k : -1)).filter((k) => k >= 0),
+    axes: p.axes.map((v, k) => (Math.abs(v) > 0.5 && Math.abs(v) <= 1.01 ? `${k}:${v.toFixed(2)}` : "")).filter(Boolean) };
+  if (PA.cal) { padSetupFrame(p); return; }
+  let map = (PA.padMaps && PA.padMaps[p.id]) || padMap(p);
+  if (!map) {
+    if (p.mapping !== "standard" && !PA.askedSetup) { PA.askedSetup = true; padStartSetup(p); return; }
+    map = PAD_DEFAULT;
+  }
+  const frets = map.frets.map((inp) => padOn(p, inp));
+  const strum = map.strum.some((inp) => padOn(p, inp));
   const changed = frets.some((v, f) => v !== PA.pad[f]);
   PA.pad = frets;
   if (changed) paFrets();
@@ -106,6 +171,7 @@ function paFrame(now) {
   if (Math.abs(now - PA.lastNow) > 0.5) paResync(now);     // jumped (wheel, overview)
   PA.lastNow = now;
   if (!S.player.playing) return;
+  paFretHit(now);                                         // a HOPO / tap arriving with the frets already down
   while (PA.next < tr.on.length && tr.on[PA.next] < now - PA_WINDOW) {
     const i = PA.next++;
     if (PA.hit.has(i) || PA.miss.has(i)) continue;
@@ -137,6 +203,21 @@ function paHud(g, w, h) {
   const mult = paMult();
   g.font = "800 22px system-ui, sans-serif"; g.fillStyle = ["#ffffff", "#ffffff", "#f5a524", "#22c55e", "#67e8f9"][mult];
   g.fillText(`×${mult}`, w - 24, 102);
+  g.textAlign = "right"; g.font = "500 12px system-ui, sans-serif"; g.fillStyle = "rgba(255,255,255,.55)";
+  const pi = PA.padInfo;
+  g.fillText(pi ? `Controller: ${pi.id.slice(0, 48)} (${pi.mapping}) · buttons ${pi.down.join(" ") || "-"}${pi.axes.length ? " · axes " + pi.axes.join(" ") : ""}`
+    : "No controller seen yet: press any button on it", w - 24, h - 12);
+  if (PA.cal) {                                          // controller setup prompt
+    const bw = 420, bh = 170, x = (w - bw) / 2, y = h * 0.22;
+    g.globalAlpha = 0.94; g.fillStyle = "#151821"; g.beginPath(); g.roundRect ? g.roundRect(x, y, bw, bh, 14) : g.rect(x, y, bw, bh); g.fill();
+    g.globalAlpha = 1; g.textAlign = "center"; g.fillStyle = "rgba(255,255,255,.7)";
+    g.font = "600 13px system-ui, sans-serif"; g.fillText(`CONTROLLER SETUP · step ${PA.cal.step + 1} of ${PAD_STEPS.length}`, w / 2, y + 36);
+    g.fillStyle = "#ffffff"; g.font = "700 30px system-ui, sans-serif";
+    g.fillText(PA.cal.wait ? "Let go…" : `Press ${PAD_STEPS[PA.cal.step]}`, w / 2, y + 88);
+    g.font = "500 13px system-ui, sans-serif"; g.fillStyle = "rgba(255,255,255,.6)";
+    g.fillText("One at a time · Esc cancels", w / 2, y + 130);
+    return;
+  }
   if (!S.player.playing && judged) {                     // paused or the song ended: results
     const bw = 360, bh = 200, x = (w - bw) / 2, y = h * 0.22;
     g.globalAlpha = 0.92; g.fillStyle = "#151821"; g.beginPath(); g.roundRect ? g.roundRect(x, y, bw, bh, 14) : g.rect(x, y, bw, bh); g.fill();
@@ -146,7 +227,7 @@ function paHud(g, w, h) {
     g.fillText(`${PA.hits} hit · ${PA.misses} missed · ${PA.overstrums} overstrum${PA.overstrums === 1 ? "" : "s"}`, w / 2, y + 96);
     g.fillText(`Best streak ${PA.best} · Score ${PA.score.toLocaleString()}`, w / 2, y + 122);
     g.font = "500 13px system-ui, sans-serif"; g.fillStyle = "rgba(255,255,255,.6)";
-    g.fillText("Space to keep playing · P to start over from here · Esc to stop", w / 2, y + 162);
+    g.fillText("Space to keep playing · P to start over from here · C controller setup · Esc to stop", w / 2, y + 162);
   }
 }
 
@@ -161,9 +242,16 @@ window.addEventListener("keydown", (e) => {
     e.preventDefault(); e.stopImmediatePropagation();
     if (!e.repeat) paStrum();
   } else if (e.key === "Escape") {
-    e.preventDefault(); e.stopImmediatePropagation(); paStop();
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (PA.cal) { PA.cal = null; toast("Controller setup cancelled"); } else paStop();
+  } else if (e.key === "c" || e.key === "C") {
+    e.preventDefault(); e.stopImmediatePropagation();
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    if (pads.length) padStartSetup(pads[0]); else toast("No controller seen yet: press a button on it first", true);
   } else if (e.key === "p" || e.key === "P") {
     e.preventDefault(); e.stopImmediatePropagation(); paStart();
+  } else if (e.key === " " && PA.cal) {
+    e.preventDefault(); e.stopImmediatePropagation();
   } else if (e.key !== " ") {
     e.stopImmediatePropagation();                       // no other shortcuts mid-song
   }
